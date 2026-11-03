@@ -1,5 +1,5 @@
 {
-  "name": "glass-cockpit",
+  "name": "glass-cockpit-web",
   "version": "0.1.0",
   "description": "A working glass cockpit for the browser: PFD and MFD with bezel, softkey menus, radios, transponder, timer, nearest airports and nav map. Ported from FlightGear's FG1000.",
   "license": "GPL-2.0-or-later",

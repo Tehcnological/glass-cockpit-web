@@ -1,4 +1,4 @@
-# glass-cockpit
+# glass-cockpit-web
 
 A working glass cockpit for the browser: PFD and MFD in a bezel whose knobs, buttons and softkey menus work with the mouse. No dependencies.
 
@@ -10,7 +10,7 @@ It is a TypeScript port of [FlightGear](https://www.flightgear.org/)'s FG1000, b
 ## Use
 
 ```js
-import { GlassPfd, GlassMfd } from "glass-cockpit";
+import { GlassPfd, GlassMfd } from "glass-cockpit-web";
 
 const pfd = new GlassPfd(document.getElementById("pfd"), { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74 } });
 pfd.set({ pitch: 5, roll: 15, ias: 95, alt: 3000, heading: 270, course: 260, cdiDots: -1, cdiSource: "NAV1",
