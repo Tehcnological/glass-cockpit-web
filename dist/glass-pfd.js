@@ -7,12 +7,12 @@
 // tf() rebuilds that as one SVG transform string.
 import SVG from "./pfd-svg.js";
 const DEFAULTS = {
-    pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: 0, vsi: 0,
+    pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
     baro: 29.92, oat: 15, heading: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
     cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: null, brg2: null, marker: "", fd: null,
 };
 // Parts of the FG1000 PFD this port does not drive.
-const HIDDEN = ["Failures", "GSPD", "PFD-Map", "PFD-Map-bg", "WindData", "PFD-Multilines", "Annunciation", "DME1", "WindData-NODATA", "WindData-NODATA-bg",
+const HIDDEN = ["Failures", "GSPD", "PFD-Map", "PFD-Map-bg", "WindData", "PFD-Multilines", "Annunciation", "DME1", "WindData-NODATA", "WindData-NODATA-bg", "WindData-OPTN1", "WindData-OPTN2", "WindData-OPTN3",
     "XPDR-TIME", "SelectedALT-meters", "SelectedSPD-bug", "SelectedSPD-bg", "SelectedSPD-text", "SelectedSPD-symbol"];
 // Tape clipping, as "rect(top, right, bottom, left)" in screen coordinates.
 const CLIPS = {
@@ -58,7 +58,10 @@ export class GlassPfd {
         this.updateVSI(s.vsi);
         this.text("TAS-text", `${Math.round(s.tas)}KT`);
         this.updateALT(s.alt, s.altTrend, s.selectedAlt);
-        this.text("SelectedALT-text", String(Math.round(s.selectedAlt)));
+        this.show("SelectedALT", s.selectedAlt !== null);
+        this.show("SelectedALT-bug", s.selectedAlt !== null);
+        if (s.selectedAlt !== null)
+            this.text("SelectedALT-text", String(Math.round(s.selectedAlt)));
         this.text("BARO-text", `${s.baro.toFixed(2)}IN`);
         this.text("OAT-text", Math.abs(s.oat) < 10 ? `${s.oat.toFixed(1)} °C` : `${Math.trunc(s.oat)} °C`);
         this.tf("Rose", { rot: -s.heading });
@@ -140,7 +143,8 @@ export class GlassPfd {
         }
         trend = clamp(trend, -15, 15);
         this.tf("Altitude-Trend-Indicator", { sy: trend, ty: -284.5 * (trend - 1) });
-        this.tf("SelectedALT-bug", { ty: clamp(alt - selected, -300, 300) * 0.567 });
+        if (selected !== null)
+            this.tf("SelectedALT-bug", { ty: clamp(alt - selected, -300, 300) * 0.567 });
     }
     setCDISource(source) {
         for (const s of ["GPS", "NAV1", "NAV2"]) {

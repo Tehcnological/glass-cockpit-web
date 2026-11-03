@@ -14,7 +14,7 @@ export interface PfdState {
     /** Knots. */ tas: number;
     /** Feet. */ alt: number;
     /** Predicted altitude change over 6 seconds, feet. */ altTrend: number;
-    /** Feet. */ selectedAlt: number;
+    /** Feet; null hides the selected altitude box and bug. */ selectedAlt: number | null;
     /** Feet per minute. */ vsi: number;
     /** Inches of mercury. */ baro: number;
     /** Degrees Celsius. */ oat: number;
