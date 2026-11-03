@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>glass-pfd demo</title>
+<style>
+  body { margin: 0; padding: 16px; background: #17191c; color: #d9dadc; font: 14px system-ui, sans-serif; }
+  #pfd { max-width: 1024px; background: #000; }
+  #pfd svg { display: block; width: 100%; height: auto; }
+  form { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 16px; max-width: 1024px; margin-top: 12px; }
+  label { display: grid; grid-template-columns: 90px 1fr 48px; gap: 8px; align-items: center; }
+</style>
+<div id="pfd"></div>
+<form id="f"></form>
+<script type="module">
+  import { GlassPfd } from "./dist/glass-pfd.js";
+  const pfd = new GlassPfd(document.getElementById("pfd"), { vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 } });
+  const ctl = {
+    pitch: [-30, 30, 0], roll: [-60, 60, 0], ias: [0, 200, 100], alt: [-500, 15000, 3000], vsi: [-2000, 2000, 0],
+    heading: [0, 359, 90], headingBug: [0, 359, 120], course: [0, 359, 100], cdiDots: [-2.4, 2.4, 0.5], selectedAlt: [0, 15000, 4000],
+  };
+  const f = document.getElementById("f");
+  for (const [k, [min, max, v]] of Object.entries(ctl)) {
+    f.insertAdjacentHTML("beforeend", `<label>${k}<input type="range" name="${k}" min="${min}" max="${max}" step="${max - min > 10 ? 1 : 0.1}" value="${v}"><output>${v}</output></label>`);
+  }
+  const update = () => {
+    const s = Object.fromEntries([...new FormData(f)].map(([k, v]) => [k, Number(v)]));
+    f.querySelectorAll("label").forEach((l) => (l.querySelector("output").value = l.querySelector("input").value));
+    pfd.set({ ...s, cdiSource: "NAV1", gs: 0.3, brg1: { source: "ADF", id: "344", bearing: 200 }, tas: s.ias + 6 });
+  };
+  f.addEventListener("input", update);
+  update();
+</script>
