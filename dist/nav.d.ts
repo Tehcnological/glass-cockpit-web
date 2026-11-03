@@ -1,3 +1,4 @@
+import type { MapPoint } from "./map.js";
 export interface Runway {
     id: string; /** Feet. */
     length: number; /** Feet. */
@@ -68,3 +69,7 @@ export declare const latLon: (v: number, pos: string, neg: string) => string;
 export declare function bestApproach(a: Airport): string;
 /** The frequency the PFD's NRST window shows: approach, else tower, else unicom or CTAF (NearestAirportsPFD). */
 export declare function nrstFreq(a: Airport): [string, string];
+/** A flight plan entry as a point: an id of `points` or `airports`, or a point of its own. */
+export declare function routePoint(r: string | MapPoint, points: MapPoint[], airports: Airport[]): MapPoint | undefined;
+/** A flight plan's name: origin / destination, the first and last airports, so a loaded approach's fixes don't replace the destination. */
+export declare function planName(legs: (MapPoint | undefined)[]): string;

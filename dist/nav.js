@@ -43,3 +43,19 @@ export function nrstFreq(a) {
     }
     return ["", ""];
 }
+/** A flight plan entry as a point: an id of `points` or `airports`, or a point of its own. */
+export function routePoint(r, points, airports) {
+    if (typeof r !== "string")
+        return r;
+    const p = points.find((x) => x.id === r);
+    if (p)
+        return p;
+    const a = airports.find((x) => x.id === r);
+    return a && { id: a.id, type: "APT", lat: a.lat, lon: a.lon, name: a.name };
+}
+/** A flight plan's name: origin / destination, the first and last airports, so a loaded approach's fixes don't replace the destination. */
+export function planName(legs) {
+    const apts = legs.filter((p) => p?.type === "APT");
+    const ids = (apts.length > 1 ? apts : legs.filter(Boolean)).map((p) => p.id);
+    return ids.length ? `${ids[0]} / ${ids[ids.length - 1]}` : "";
+}

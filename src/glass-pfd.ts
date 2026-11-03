@@ -5,13 +5,14 @@ import PFD from "./svg/pfd.js";
 import SURROUND from "./svg/surround-pfd.js";
 import NRST from "./svg/nrst-pfd.js";
 import NRST_INFO from "./svg/nrst-info-pfd.js";
+import FPL from "./svg/fpl-pfd.js";
 import { buildDisplay, type DisplayOptions } from "./display.js";
 import { Page, clamp, deg3, mod, pad } from "./page.js";
 import { RADIOS, Surround, type Radios } from "./surround.js";
 import { adjust, bezelInput, type Input } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type MapGeometry, type MapPoint } from "./map.js";
-import { bestApproach, latLon, nearest, nrstFreq, type Airport } from "./nav.js";
-import { BLANK as blank, CYAN, Highlighter, NS, esc, key as k, screenBox, type Key } from "./ui.js";
+import { bearingDistance, bestApproach, latLon, nearest, nrstFreq, planName, routePoint, type Airport } from "./nav.js";
+import { BLANK as blank, CYAN, Highlighter, ListView, NS, esc, key as k, screenBox, type Key } from "./ui.js";
 
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
 export type { Checklist } from "./mfd-pages.js";
@@ -59,14 +60,18 @@ export interface PfdState {
   /** Marker beacon: "", "O", "M", "I". */ marker: "" | "O" | "M" | "I";
   /** Flight director command bars; null hides them. */ fd: { pitch: number; roll: number } | null;
   radios: Radios;
+  /** NAV and COM volume, 0 to 1; a change shows on the radios for 2 seconds. */ navVolume: number;
+  comVolume: number;
+  /** NAV station identifier audio, switched by pushing the NAV volume knob. */ navIdent: boolean;
   /** Active flight plan leg in the top bar; `from` null is a direct-to. Null blanks it. */
   leg: { from: string | null; to: string; /** nm */ dis: number; /** degrees */ brg: number } | null;
   /** Aircraft position, for the inset map and the NRST window. */ lat: number;
   lon: number;
   /** Inset map contents (see the MFD's map). */ points: MapPoint[];
   airspaces: Airspace[];
+  /** Flight plan, for the inset map and the FPL window: ids of `points` or `airports`, or points of its own. */
   route: (string | MapPoint)[];
-  activeLeg: number;
+  /** Index into `route` of the active waypoint. */ activeLeg: number;
   /** Airports the NRST window lists, nearest first after sorting here. */ airports: Airport[];
   /** Magnetic variation, degrees east positive: bearings to stations are magnetic. */ magVar: number;
   /** Wind, true direction it blows from and knots; null shows NO DATA. */ wind: { direction: number; speed: number } | null;
@@ -89,7 +94,7 @@ const DEFAULTS: PfdState = {
   pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
   baro: 29.92, oat: 15, heading: 0, turnRate: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
   cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null,
-  radios: RADIOS, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], activeLeg: 1, airports: [], magVar: 0, wind: null,
+  radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], activeLeg: 1, airports: [], magVar: 0, wind: null,
   xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
   vspeedsOn: { Vglide: true, Vr: true, Vx: true, Vy: true }, minimums: null,
 };
@@ -122,6 +127,8 @@ export class GlassPfd {
   private p: Page;
   private surround: Surround;
   private nrst: Page;
+  private fpl: Page;
+  private fplRows: ListView;
   private turnTrend: SVGPathElement;
   private minBug: SVGGraphicsElement;
   private inset: SVGGElement;
@@ -135,17 +142,20 @@ export class GlassPfd {
     menu: "top" as Menu, inset: false, insetRange: 10, dcltr: 0, window: null as Window, cursor: 0, nrstInfo: false,
     layers: { TRAFFIC: false, TOPO: false, TERRAIN: false } as Record<string, boolean>,
     synvis: { PATHWAY: false, "SYN TERR": false, "HRZN HDG": false, APTSIGNS: false } as Record<string, boolean>,
-    wind: 0, meters: false, hpa: false, xpdrEdit: null as string | null,
+    wind: 0, meters: false, hpa: false, xpdrEdit: null as string | null, fpl: false,
     timer: { up: true, running: false, base: 0, since: 0 },
   };
 
   /** The container must be visible: layout is measured once here. */
   constructor(container: HTMLElement, private options: PfdOptions = {}) {
-    const { svg, screen } = buildDisplay(container, [PFD, SURROUND, NRST, NRST_INFO], "Primary flight display", options);
+    const { svg, screen } = buildDisplay(container, [PFD, SURROUND, NRST, NRST_INFO, FPL], "Primary flight display", options);
     this.svg = svg;
     this.p = new Page(screen, "PFDInstruments");
     this.surround = new Surround(screen);
     this.nrst = new Page(screen, "NearestAirportsPFD");
+    this.fpl = new Page(screen, "PFDInstrumentsFlightPlan");
+    this.fpl.show("Group", true); // measured for the scroll bar, then hidden until FPL
+    this.fplRows = new ListView(this.fpl, ["Arrow", "ID", "Type", "DTK", "DIS"], 5, "Arrow", true, { trough: "ScrollTrough", thumb: "ScrollThumb" });
     // The inset map fills its frame (PFD-Map-bg); its range is the frame's half width.
     const frame = screenBox(screen, this.p.el("PFD-Map-bg")!);
     const half = Math.min(frame.width, frame.height) / 2;
@@ -190,6 +200,7 @@ export class GlassPfd {
   destroy(): void {
     clearInterval(this.clock);
     this.timers.forEach(clearTimeout);
+    this.surround.destroy();
   }
 
   private input(i: Input) {
@@ -217,8 +228,14 @@ export class GlassPfd {
         if (u.window === "NRST" && u.nrstInfo) u.nrstInfo = false;
         else if (u.window) u.window = null;
         return this.set({});
+      case "FPL":
+        // PFDInstrumentsController.handleFPL: shows or hides the flight plan window.
+        u.fpl = !u.fpl;
+        return this.set({});
     }
-    const patch = adjust(i, this.state, this.surround.sel);
+    const src = this.state.cdiSource;
+    const toStation = src === `NAV${this.surround.sel.nav}` ? this.state.bearings[src as "NAV1" | "NAV2"]?.bearing : null;
+    const patch = adjust(i, this.state, this.surround.sel, toStation);
     if (patch) this.change(patch);
   }
 
@@ -431,6 +448,8 @@ export class GlassPfd {
     this.p.show("OMI", s.marker !== "");
     this.p.text("MarkerText", s.marker);
     this.surround.setRadios(s.radios, s.cdiSource === "NAV1" ? 1 : s.cdiSource === "NAV2" ? 2 : null);
+    this.surround.setVolume("Nav", s.navVolume);
+    this.surround.setVolume("Comm", s.comVolume);
     const keys = this.menu();
     this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit));
     this.updateLeg(s.leg);
@@ -438,7 +457,30 @@ export class GlassPfd {
     this.updateWind(s);
     this.updateInset(s);
     this.updateNrst();
+    this.updateFlightPlan(s);
     this.drawWindow();
+  }
+
+  // setFlightPlan / updateFlightPlan: the flight plan window, shown by FPL while there is a flight plan. The arrow marks
+  // the active waypoint; legs already flown show blanks.
+  private updateFlightPlan(s: PfdState) {
+    const legs = s.route.map((r) => routePoint(r, s.points, s.airports));
+    this.fpl.show("Group", this.ui.fpl && legs.length > 0);
+    if (!this.ui.fpl || !legs.length) return;
+    const rows = legs.map((p, i) => {
+      const prev = legs[i - 1];
+      const leg = prev && p ? bearingDistance(prev.lat, prev.lon, p.lat, p.lon) : null;
+      const flown = i < s.activeLeg;
+      return {
+        ID: (p?.id ?? String(s.route[i])).slice(0, 7),
+        Type: (p?.role ?? "").slice(0, 4),
+        DTK: flown ? "___°" : leg ? deg3(leg.brg - s.magVar) : "",
+        DIS: flown ? "___nm" : leg ? `${leg.dist.toFixed(1)}nm` : "",
+      };
+    });
+    this.fplRows.sel = s.activeLeg;
+    this.fplRows.draw(rows, false, this.hl);
+    this.fpl.text("Name", planName(legs));
   }
 
   // updateTransponder and updateTime: white in OFF, STBY, TEST; green in GND, ON, ALT. A code being entered shows

@@ -22,10 +22,20 @@ export declare class Surround {
         nav: 1 | 2;
         com: 1 | 2;
     };
+    private volume;
+    private volumeTimers;
     constructor(screen: SVGGElement);
     /** Pushing a tuning knob moves its box to the other radio (handleNavToggle, handleComToggle). */
     toggle(radio: "nav" | "com"): void;
     private showSelected;
+    /**
+     * A changed volume shows for 2 seconds in place of the radio 2 standby frequency, as the manual says. The first value
+     * set is the starting volume and does not show.
+     */
+    setVolume(kind: "Nav" | "Comm", v: number): void;
+    private showVolume;
+    /** Stops the volume timers. */
+    destroy(): void;
     /** `navSource` is the NAV radio driving the CDI; its active frequency shows green. */
     setRadios(r: Radios, navSource: 1 | 2 | null): void;
     /** Twelve labels, left to right; "" leaves a key blank. A lit key (an option that is on) is black on grey. */

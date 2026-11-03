@@ -53,6 +53,9 @@ export interface PfdState {
         roll: number;
     } | null;
     radios: Radios;
+    /** NAV and COM volume, 0 to 1; a change shows on the radios for 2 seconds. */ navVolume: number;
+    comVolume: number;
+    /** NAV station identifier audio, switched by pushing the NAV volume knob. */ navIdent: boolean;
     /** Active flight plan leg in the top bar; `from` null is a direct-to. Null blanks it. */
     leg: {
         from: string | null;
@@ -64,8 +67,9 @@ export interface PfdState {
     lon: number;
     /** Inset map contents (see the MFD's map). */ points: MapPoint[];
     airspaces: Airspace[];
+    /** Flight plan, for the inset map and the FPL window: ids of `points` or `airports`, or points of its own. */
     route: (string | MapPoint)[];
-    activeLeg: number;
+    /** Index into `route` of the active waypoint. */ activeLeg: number;
     /** Airports the NRST window lists, nearest first after sorting here. */ airports: Airport[];
     /** Magnetic variation, degrees east positive: bearings to stations are magnetic. */ magVar: number;
     /** Wind, true direction it blows from and knots; null shows NO DATA. */ wind: {
@@ -96,6 +100,8 @@ export declare class GlassPfd {
     private p;
     private surround;
     private nrst;
+    private fpl;
+    private fplRows;
     private turnTrend;
     private minBug;
     private inset;
@@ -129,6 +135,7 @@ export declare class GlassPfd {
     private tick;
     /** Merge new values into the state and redraw. */
     set(patch: Partial<PfdState>): void;
+    private updateFlightPlan;
     private updateXpdr;
     private updateWind;
     private updateInset;

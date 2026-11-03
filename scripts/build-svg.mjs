@@ -12,10 +12,11 @@ const FILES = {
   bezel: "fascia.svg",
   "nrst-pfd": "NearestAirportsPFD.svg",
   "nrst-info-pfd": "NearestAirportsInfoPFD.svg",
+  "fpl-pfd": "FlightPlanPFD.svg",
 };
 // The MFD pages, in one module (src/svg/mfd-pages.ts): name to markup, each in a hidden group with id Page-<name>.
 const MFD_PAGES = ["NearestAirports", "NearestVOR", "NearestNDB", "NearestIntersections", "NearestFrequencies", "AirportInfo",
-  "VORInfo", "NDBInfo", "IntersectionInfo", "TrafficMap", "Checklist", "DirectTo", "ActiveFlightPlanNarrow"];
+  "VORInfo", "NDBInfo", "IntersectionInfo", "TrafficMap", "Checklist", "DirectTo", "ActiveFlightPlanNarrow", "WaypointEntry"];
 
 const font = (family) => {
   const f = family.trim();

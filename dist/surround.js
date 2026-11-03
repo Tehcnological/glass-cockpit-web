@@ -17,6 +17,9 @@ export class Surround {
     raw;
     /** The radios the tuning knobs work on (the cyan box); the selected COM is the one transmitting. */
     sel = { nav: 1, com: 1 };
+    // showNavVolume / showCommVolume: the last volume shown, and the timers that put the standby frequency back.
+    volume = { Nav: null, Comm: null };
+    volumeTimers = { Nav: undefined, Comm: undefined };
     constructor(screen) {
         this.p = new Page(screen, "Surround");
         this.raw = new Page(screen, "");
@@ -38,6 +41,35 @@ export class Surround {
             this.p.show(`Comm${n}Selected`, this.sel.com === n);
         }
         this.p.show("Comm1SelectedArrow", this.sel.com === 1);
+    }
+    /**
+     * A changed volume shows for 2 seconds in place of the radio 2 standby frequency, as the manual says. The first value
+     * set is the starting volume and does not show.
+     */
+    setVolume(kind, v) {
+        const text = `${Math.trunc(v * 100)}%`;
+        const before = this.volume[kind];
+        this.volume[kind] = text;
+        if (before === null || before === text)
+            return;
+        this.showVolume(kind, true);
+        this.p.text(`${kind}Volume`, text);
+        clearTimeout(this.volumeTimers[kind]);
+        this.volumeTimers[kind] = setTimeout(() => this.showVolume(kind, false), 2000);
+    }
+    showVolume(kind, on) {
+        this.p.show(`${kind}Volume`, on);
+        this.p.show(`${kind}VolumeLabel`, on);
+        this.p.show(`${kind}2StandbyFreq`, !on);
+        this.p.show(`${kind}2Label`, !on);
+        this.showSelected();
+        if (on && this.sel[kind === "Nav" ? "nav" : "com"] === 2)
+            this.p.show(`${kind}2Selected`, false);
+    }
+    /** Stops the volume timers. */
+    destroy() {
+        clearTimeout(this.volumeTimers.Nav);
+        clearTimeout(this.volumeTimers.Comm);
     }
     /** `navSource` is the NAV radio driving the CDI; its active frequency shows green. */
     setRadios(r, navSource) {

@@ -2,7 +2,7 @@
 // GPL-2.0-or-later): the wheel turns a knob (with shift, the outer ring of a dual knob), a click pushes it or a
 // button (with shift, a long press), and the twelve keys under the screen are softkeys 1 to 12.
 // Knob and button behavior: Nasal/MFDPages/Surround/SurroundController.nas.
-import { mod } from "./page.js";
+import { clamp, mod } from "./page.js";
 // GUI.nas WHEEL_HOT_SPOTS and CLICK_HOT_SPOTS merged per control, in bezel pixels (top left, bottom right).
 const SPOTS = [
     { box: [65, 45, 112, 90], wheel: "NAV_VOL", click: "NAV_ID" },
@@ -72,10 +72,20 @@ export function bezelInput(svg, onInput) {
 // NAV and COM bands in whole MHz (Constants.nas). Frequencies are worked in kHz to keep them exact.
 const NAV = [108, 117];
 const COM = [118, 136];
-/** The knob and button changes SurroundController makes, as a patch; null when the input does not change these values. */
-export function adjust({ control, value }, k, sel) {
+/**
+ * The knob and button changes SurroundController makes, as a patch; null when the input does not change these values.
+ * `toStation` is the magnetic bearing to the station of the NAV radio the CDI shows, if the host gives one.
+ */
+export function adjust({ control, value }, k, sel, toStation) {
     const d = value > 0 ? 1 : -1;
     switch (control) {
+        // handleCRSCenter sets the selected NAV's course to the bearing to its station, which moves the CDI only when that
+        // radio drives it.
+        case "CRS_CENTER": return toStation == null ? null : { course: Math.round(mod(toStation, 360)) % 360 };
+        // handleNavVol / handleComVol: 1% a detent. handleNavID switches the identifier audio.
+        case "NAV_VOL": return { navVolume: clamp(Math.round(k.navVolume * 100) + d, 0, 100) / 100 };
+        case "COM_VOL": return { comVolume: clamp(Math.round(k.comVolume * 100) + d, 0, 100) / 100 };
+        case "NAV_ID": return { navIdent: !k.navIdent };
         case "HEADING": return { headingBug: mod(Math.round(k.headingBug) + d, 360) };
         case "HEADING_PRESS": return { headingBug: Math.round(mod(k.heading, 360)) % 360 };
         case "CRS": return { course: mod(Math.round(k.course) + d, 360) };

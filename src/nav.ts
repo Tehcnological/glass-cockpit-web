@@ -1,6 +1,7 @@
 // Navigation data the pages show, and the arithmetic they share. The host supplies the data (instrumentready.com uses
 // FAA NASR and CIFP); FlightGear reads its own navigation database instead.
 import { mod } from "./page.js";
+import type { MapPoint } from "./map.js";
 
 export interface Runway { /** "07L-25R" */ id: string; /** Feet. */ length: number; /** Feet. */ width: number; /** e.g. "CONC", "ASPH" */ surface: string; /** e.g. "MED", "HIGH" */ lights?: string }
 /** A frequency and what it is for, e.g. { use: "TOWER", freq: "118.700" }. */
@@ -91,4 +92,20 @@ export function nrstFreq(a: Airport): [string, string] {
     if (f) return [type === "CTAF" ? "UNICOM" : type, f.freq];
   }
   return ["", ""];
+}
+
+/** A flight plan entry as a point: an id of `points` or `airports`, or a point of its own. */
+export function routePoint(r: string | MapPoint, points: MapPoint[], airports: Airport[]): MapPoint | undefined {
+  if (typeof r !== "string") return r;
+  const p = points.find((x) => x.id === r);
+  if (p) return p;
+  const a = airports.find((x) => x.id === r);
+  return a && { id: a.id, type: "APT", lat: a.lat, lon: a.lon, name: a.name };
+}
+
+/** A flight plan's name: origin / destination, the first and last airports, so a loaded approach's fixes don't replace the destination. */
+export function planName(legs: (MapPoint | undefined)[]): string {
+  const apts = legs.filter((p) => p?.type === "APT");
+  const ids = (apts.length > 1 ? apts : legs.filter(Boolean)).map((p) => p!.id);
+  return ids.length ? `${ids[0]} / ${ids[ids.length - 1]}` : "";
 }

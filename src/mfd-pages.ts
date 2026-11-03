@@ -1,9 +1,9 @@
 // The MFD's pages: ports of FG1000 Nasal/MFDPages/* (Copyright 2018 Stuart Buchanan), GPL-2.0-or-later. Each page
 // draws into its FG1000 SVG (src/fg1000/<page>.svg, prefix <page>) and takes the FMS knob, CRSR, ENT and CLR while its
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
-import { Page, clamp, mod } from "./page.js";
+import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
-import { bearingDistance, latLon, nearest, type Airport, type Procedure } from "./nav.js";
+import { bearingDistance, latLon, nearest, planName, routePoint, type Airport, type Procedure } from "./nav.js";
 import { BLANK, Highlighter, IdEntry, ListView, NS, firstRow, key, type Key } from "./ui.js";
 import type { MfdState } from "./glass-mfd.js";
 
@@ -19,6 +19,7 @@ export interface MfdUi {
   /** Declutter level, 0 to 3. */ dcltr: number;
   /** Airways key state, 0 to 3. */ airways: number;
   /** MAP menu toggles. */ layers: Record<string, boolean>;
+  /** Waypoints entered in DIRECT TO and WAYPOINT ENTRY, latest first: their RECENT list. */ recent: string[];
 }
 
 /** What the MFD gives its pages. */
@@ -31,7 +32,8 @@ export interface Mfd {
   /** Puts a frequency in the standby of the selected NAV or COM, by band. */ tune(freq: number): void;
   /** ENGINE and MAP, plus the page's own keys by index. */ topKeys(extra?: Record<number, Key>): Key[];
   /** Draws the map into a page's own map window. */ drawMap(g: SVGGElement, geom: MapGeometry, center?: LatLon): void;
-  /** Closes DIRECT TO or PROC. */ close(): void;
+  /** Opens a window over the page (WAYPOINT ENTRY). */ open(p: MfdPage): void;
+  /** Closes DIRECT TO, PROC or WAYPOINT ENTRY. */ close(): void;
 }
 
 // Surround.PAGE_GROUPS
@@ -54,6 +56,7 @@ const TITLES: Record<string, string> = {
   NearestAirports: "NRST - NEAREST AIRPORTS", NearestIntersections: "NRST - NEAREST INTERSECTIONS", NearestNDB: "NRST - NEAREST NDB",
   NearestVOR: "NRST - NEAREST VOR", NearestUserWaypoints: "NRST - NEAREST USER WPTS", NearestFrequencies: "NRST - NEAREST FREQUENCIES",
   NearestAirspaces: "NRST - NEAREST AIRSPACES", DirectTo: "DIRECT TO", Procedures: "PROC - PROCEDURES",
+  WaypointEntry: "FPL - ACTIVE FLIGHT PLAN", // a window over the flight plan page, which keeps its title
 };
 
 // The map windows of pages with their own map (their <page>NavMap-bg, in screen pixels); FG1000 keeps the full map's
@@ -94,7 +97,7 @@ export class MfdPage {
   }
 
   /** The text shown on pages with no data source, or "". */
-  frame() {
+  frame(): string {
     return this.root ? "" : "NO DATA";
   }
 
@@ -134,7 +137,7 @@ export class MfdPage {
 
 /** A page with its own map window beside its data. */
 class MapPage extends MfdPage {
-  private g: SVGGElement;
+  protected g: SVGGElement;
 
   constructor(m: Mfd, name: string, screen: SVGGElement, private geom: MapGeometry) {
     super(m, name, screen);
@@ -153,6 +156,9 @@ class MapPage extends MfdPage {
 // NavigationMap.topMenu
 class NavigationMapPage extends MfdPage {
   navMap = "full" as const;
+  frame(): string {
+    return ""; // its page is the map, drawn by the MFD
+  }
   keys() {
     const u = this.m.ui;
     return this.m.topKeys({
@@ -680,8 +686,7 @@ class ChecklistPage extends MfdPage {
 }
 
 /** A flight plan entry resolved to a point. */
-const resolve = (s: MfdState, r: string | MapPoint): MapPoint | undefined =>
-  typeof r === "string" ? s.points.find((p) => p.id === r) ?? airportPoint(s, r) : r;
+const resolve = (s: MfdState, r: string | MapPoint) => routePoint(r, s.points, s.airports);
 const airportPoint = (s: MfdState, id: string): MapPoint | undefined => {
   const a = s.airports.find((x) => x.id === id);
   return a && { id: a.id, type: "APT", lat: a.lat, lon: a.lon, name: a.name };
@@ -690,14 +695,14 @@ const airportPoint = (s: MfdState, id: string): MapPoint | undefined => {
 const findPoint = (s: MfdState, id: string): MapPoint | undefined =>
   s.points.find((p) => p.id === id) ?? s.route.find((r): r is MapPoint => typeof r === "object" && r.id === id) ?? airportPoint(s, id);
 
-// ActiveFlightPlanNarrow: the legs with desired track, distance and altitude; the arrow marks the active leg.
-// shortcut: waypoints are typed into the leg row (no WAYPOINT ENTRY window), ENT on a leg activates it (no MENU), and
-// CLR deletes without asking.
+// ActiveFlightPlanNarrow: the legs with desired track, distance and altitude; the arrow marks the active leg. With the
+// cursor on, the outer knob moves it and the inner knob opens WAYPOINT ENTRY, which adds a waypoint after the selected one.
+// shortcut: ENT on a leg activates it (the real unit's MENU > Activate Leg; FG1000's ENT does nothing), and CLR deletes
+// without asking.
 class FlightPlanPage extends MapPage {
   private rows = new ListView(this.p, ["Header", "Leg", "DTK", "DIS", "ALT"], 11, "Leg", false, { trough: "ScrollTrough", thumb: "ScrollThumb" });
-  private entry = new IdEntry(this.p, 5, "Leg");
 
-  constructor(m: Mfd, screen: SVGGElement) {
+  constructor(m: Mfd, screen: SVGGElement, private entry: WaypointEntryPage) {
     super(m, "ActiveFlightPlanNarrow", screen, FPL_MAP);
   }
 
@@ -710,39 +715,35 @@ class FlightPlanPage extends MapPage {
   }
 
   fms(outer: boolean, d: number) {
-    if (this.entry.editing) {
-      if (outer) this.entry.outer(d);
-      else this.entry.inner(d);
-    } else if (outer) this.rows.move(d, this.s.route.length + 1);
-    else this.entry.inner(d);
+    if (outer) this.rows.move(d, this.s.route.length + 1);
+    else {
+      // handleWaypointEntry: the new waypoint goes after the selected one (on the empty last row, at the end).
+      const at = Math.min(this.rows.sel + 1, this.s.route.length);
+      this.m.open(this.entry);
+      this.entry.open((p) => this.insert(at, p), d);
+    }
     return true;
   }
 
-  ent() {
+  private insert(at: number, p: MapPoint) {
     const s = this.s;
+    const route = [...s.route];
+    route.splice(at, 0, s.points.includes(p) || p.type === "APT" ? p.id : p);
+    this.m.change({ route, activeLeg: at <= s.activeLeg && s.route.length ? s.activeLeg + 1 : s.activeLeg });
+    this.rows.sel = at;
+  }
+
+  ent() {
     const at = this.rows.sel;
-    if (this.entry.editing) {
-      const id = this.entry.ent();
-      const p = id && findPoint(s, id);
-      if (!p) return;
-      const route = [...s.route];
-      route.splice(at, 0, s.points.includes(p) || p.type === "APT" ? p.id : p);
-      this.m.change({ route, activeLeg: at <= s.activeLeg && s.route.length ? s.activeLeg + 1 : s.activeLeg });
-    } else if (this.crsr && at > 0 && at < s.route.length) this.m.change({ activeLeg: at, directFrom: null });
+    if (this.crsr && at > 0 && at < this.s.route.length) this.m.change({ activeLeg: at, directFrom: null });
   }
 
   clr() {
     const s = this.s;
     const at = this.rows.sel;
-    if (this.entry.editing) return this.entry.cancel();
     if (!this.crsr || at >= s.route.length) return;
     const route = s.route.filter((_, i) => i !== at);
     this.m.change({ route, activeLeg: clamp(at < s.activeLeg ? s.activeLeg - 1 : s.activeLeg, 0, Math.max(0, route.length - 1)) });
-  }
-
-  toggleCrsr() {
-    super.toggleCrsr();
-    this.entry.cancel();
   }
 
   draw() {
@@ -754,21 +755,16 @@ class FlightPlanPage extends MapPage {
       return {
         Header: "",
         Leg: p ? p.id.slice(0, 7) : String(s.route[i]),
-        DTK: leg ? `${String(Math.round(mod(leg.brg - s.magVar, 360)) % 360).padStart(3, "0")}°` : "",
+        DTK: leg ? deg3(leg.brg - s.magVar) : "",
         DIS: leg ? dis(leg.dist) : "",
         ALT: p?.alt ? `${p.alt}ft` : "_____ft",
       };
     });
-    // The empty row after the last waypoint, where one is added.
-    rows.push({ Header: "", Leg: this.entry.editing && this.rows.sel === legs.length ? this.entry.value : "_____", DTK: "", DIS: "", ALT: "" });
-    if (this.entry.editing && this.rows.sel < legs.length) rows.splice(this.rows.sel, 0, { Header: "", Leg: this.entry.value, DTK: "", DIS: "", ALT: "" });
+    rows.push({ Header: "", Leg: "_____", DTK: "", DIS: "", ALT: "" }); // the empty row after the last waypoint
     this.rows.draw(rows, this.crsr, this.m.hl);
     const top = firstRow(this.rows.sel, rows.length, 11);
     for (let i = 0; i < 11; i++) this.p.show(`Arrow${i}`, legs.length > 1 && top + i === s.activeLeg);
-    // Origin / destination: the first and last airports, so a loaded approach's fixes don't replace the destination.
-    const apts = legs.filter((p) => p?.type === "APT");
-    const ids = (apts.length > 1 ? apts : legs.filter(Boolean)).map((p) => p!.id);
-    this.p.text("Name", ids.length ? `${ids[0]} / ${ids[ids.length - 1]}` : "");
+    this.p.text("Name", planName(legs));
     const act = legs[s.activeLeg];
     this.p.text("ActiveWPTID", act?.id ?? "");
     this.p.text("ActiveWPTAlt", act?.alt ? `${act.alt}ft` : "");
@@ -778,12 +774,168 @@ class FlightPlanPage extends MapPage {
   }
 }
 
+/** Adds a waypoint to the RECENT list. */
+const remember = (m: Mfd, id: string) => (m.ui.recent = [id, ...m.ui.recent.filter((r) => r !== id)].slice(0, 20));
+
+const SHORTCUTS = ["FPL", "NRST", "RECENT", "USER", "AIRWAY"];
+// DefaultStyle SCROLL_AVAILABLE / SCROLL_UNAVAILABLE: the arrows beside the list name.
+const SCROLL_AVAILABLE = "#80ffff";
+const SCROLL_UNAVAILABLE = "#eeeeee";
+
+// The waypoint submenu of DIRECT TO and WAYPOINT ENTRY (WaypointSubmenuGroup), opened by turning the inner knob left on
+// the identifier before typing. The inner knob picks the list, the outer moves into it and scrolls, ENT takes the
+// waypoint, CLR closes it. There are no user waypoints or airways here, so USER and AIRWAY are empty.
+class WaypointSubmenu {
+  open = false;
+  private type = 0;
+  private onList = false;
+  private list: ListView;
+
+  constructor(private p: Page, private m: Mfd) {
+    this.list = new ListView(p, ["WaypointSubmenuScroll"], 4, "WaypointSubmenuScroll", false, {
+      trough: "WaypointSubmenuScrollTrough", thumb: "WaypointSubmenuScrollThumb",
+    });
+  }
+
+  show() {
+    [this.open, this.onList, this.list.sel] = [true, false, 0];
+  }
+
+  close() {
+    this.open = false;
+  }
+
+  private items(): string[] {
+    const s = this.m.s;
+    switch (SHORTCUTS[this.type]) {
+      case "FPL": return s.route.map((r) => (typeof r === "string" ? r : r.id));
+      case "NRST": return nearest(s.airports, s.lat, s.lon, 0).map((n) => n.item.id);
+      case "RECENT": return this.m.ui.recent;
+    }
+    return [];
+  }
+
+  fms(outer: boolean, d: number) {
+    if (!outer) [this.type, this.onList, this.list.sel] = [clamp(this.type + d, 0, SHORTCUTS.length - 1), false, 0];
+    else if (this.onList) this.list.move(d, this.items().length);
+    else this.onList = true;
+  }
+
+  /** The waypoint under the cursor (the first in the list until the outer knob moves into it). */
+  value(): string | null {
+    return this.items()[this.list.sel] ?? null;
+  }
+
+  draw(hl: Highlighter) {
+    this.p.show("WaypointSubmenuGroup", this.open);
+    if (!this.open) return;
+    this.p.text("WaypointSubmenuSelect", SHORTCUTS[this.type]);
+    hl.set(this.p.el("WaypointSubmenuSelect"), !this.onList);
+    const arrow = (id: string, on: boolean) => {
+      const e = this.p.el(id);
+      for (const x of e ? [e, ...e.querySelectorAll<SVGElement>("*")] : []) x.style.fill = x.style.stroke = on ? SCROLL_AVAILABLE : SCROLL_UNAVAILABLE;
+    };
+    arrow("WaypointSubmenuSelectLeft", this.type > 0);
+    arrow("WaypointSubmenuSelectRight", this.type < SHORTCUTS.length - 1);
+    this.list.draw(this.items().map((id) => ({ WaypointSubmenuScroll: id })), this.onList, hl);
+  }
+}
+
+// WaypointEntry: the window FPL opens over itself to add a waypoint. The FMS knobs type an identifier (or the submenu
+// picks one), ENT shows the waypoint, ENT again adds it, CLR cancels.
+class WaypointEntryPage extends MapPage {
+  private dest: MapPoint | null = null;
+  private entry = new IdEntry(this.p, 4);
+  private sub = new WaypointSubmenu(this.p, this.m);
+  private done: (p: MapPoint) => void = () => {};
+
+  constructor(m: Mfd, screen: SVGGElement) {
+    super(m, "WaypointEntry", screen, DTO_MAP);
+  }
+
+  /** Opens blank, then takes the inner knob turn `d` that opened it. */
+  open(done: (p: MapPoint) => void, d: number) {
+    [this.done, this.dest, this.crsr] = [done, null, true];
+    this.entry.cancel();
+    this.sub.close();
+    this.fms(false, d);
+  }
+
+  center() {
+    return this.dest;
+  }
+
+  keys() {
+    return this.m.topKeys();
+  }
+
+  toggleCrsr() {} // handleCRSR: no effect
+
+  fms(outer: boolean, d: number) {
+    if (this.sub.open) this.sub.fms(outer, d);
+    else if (this.entry.editing) {
+      if (outer) this.entry.outer(d);
+      else this.entry.inner(d);
+    } else if (!outer && d < 0) this.sub.show();
+    else if (!outer) this.entry.inner(d);
+    return true;
+  }
+
+  ent() {
+    if (this.sub.open) {
+      const id = this.sub.value();
+      if (id) this.load(id);
+      this.sub.close();
+    } else if (this.entry.editing) this.load(this.entry.ent());
+    else {
+      if (this.dest) this.done(this.dest);
+      this.m.close();
+    }
+  }
+
+  clr() {
+    if (this.sub.open) this.sub.close();
+    else if (this.entry.editing) this.entry.cancel();
+    else this.m.close();
+  }
+
+  // loadDestination: nothing typed clears it; an identifier not found leaves the last one.
+  private load(id: string | null) {
+    if (!id) return void (this.dest = null);
+    const p = findPoint(this.s, id);
+    if (!p) return;
+    this.dest = p;
+    remember(this.m, p.id);
+  }
+
+  draw() {
+    const p = this.dest;
+    const s = this.s;
+    this.entry.draw(p?.id ?? "____", this.crsr && !this.sub.open, this.m.hl);
+    const apt = p?.type === "APT" ? s.airports.find((a) => a.id === p.id) : undefined;
+    const bd = p && bearingDistance(s.lat, s.lon, p.lat, p.lon);
+    // displayDestination, with its blanks when there is no waypoint.
+    this.p.text("Name", p ? (p.name ?? p.id).toUpperCase() : "___");
+    this.p.text("City", p ? (apt?.city ?? p.city ?? "").toUpperCase() : "____________");
+    this.p.text("Region", p ? apt?.region ?? p.region ?? "" : "____________");
+    this.p.text("LocationBRG", bd ? deg3(bd.brg - s.magVar) : "___°");
+    this.p.text("LocationDIS", bd ? `${Math.trunc(bd.dist)}nm` : "__._nm");
+    this.p.text("LocationLat", p ? latLon(p.lat, "N", "S") : "_ __°__.__'");
+    this.p.text("LocationLon", p ? latLon(p.lon, "E", "W") : "____°__.__'");
+    this.g.style.display = p ? "inline" : "none";
+    this.sub.draw(this.m.hl);
+    this.drawOwnMap();
+  }
+}
+
 // DirectTo: the waypoint (the one selected on the page it was opened from, or the active one), its bearing and
-// distance, then ACTIVATE?. ENT on ACTIVATE? flies direct from present position.
+// distance, then ACTIVATE?. ENT on ACTIVATE? flies direct from present position. The inner knob turned left before
+// typing opens the waypoint submenu.
 class DirectToPage extends MapPage {
   private id: string | null = null;
   private onActivate = false;
   private entry = new IdEntry(this.p, 5);
+  private sub = new WaypointSubmenu(this.p, this.m);
 
   constructor(m: Mfd, screen: SVGGElement) {
     super(m, "DirectTo", screen, DTO_MAP);
@@ -792,6 +944,7 @@ class DirectToPage extends MapPage {
   open(id: string | null) {
     [this.id, this.onActivate, this.crsr] = [id, !!id, true];
     this.entry.cancel();
+    this.sub.close();
   }
 
   private point() {
@@ -811,20 +964,28 @@ class DirectToPage extends MapPage {
   }
 
   fms(outer: boolean, d: number) {
-    if (this.entry.editing) {
+    if (this.sub.open) this.sub.fms(outer, d);
+    else if (this.entry.editing) {
       if (outer) this.entry.outer(d);
       else this.entry.inner(d);
     } else if (outer) this.onActivate = d > 0;
+    else if (!this.onActivate && d < 0) this.sub.show();
     else if (!this.onActivate) this.entry.inner(d);
     return true;
   }
 
+  private pick(id: string | null) {
+    if (!id) return;
+    [this.id, this.onActivate] = [id, true];
+    remember(this.m, id);
+  }
+
   ent() {
-    if (this.entry.editing) {
-      const v = this.entry.ent();
-      if (v) [this.id, this.onActivate] = [v, true];
-      return;
+    if (this.sub.open) {
+      this.pick(this.sub.value());
+      return this.sub.close();
     }
+    if (this.entry.editing) return this.pick(this.entry.ent());
     if (!this.onActivate) return void (this.onActivate = !!this.point());
     const p = this.point();
     if (!p) return;
@@ -836,14 +997,15 @@ class DirectToPage extends MapPage {
   }
 
   clr() {
-    if (this.entry.editing) this.entry.cancel();
+    if (this.sub.open) this.sub.close();
+    else if (this.entry.editing) this.entry.cancel();
     else this.m.close();
   }
 
   draw() {
     const p = this.point();
     const s = this.s;
-    this.entry.draw(p?.id ?? this.id ?? "_____", this.crsr && !this.onActivate, this.m.hl);
+    this.entry.draw(p?.id ?? this.id ?? "_____", this.crsr && !this.onActivate && !this.sub.open, this.m.hl);
     const apt = p?.type === "APT" ? s.airports.find((a) => a.id === p.id) : undefined;
     this.p.text("Name", p ? (p.name ?? "").toUpperCase() : "");
     this.p.text("City", (apt?.city ?? p?.city ?? "").toUpperCase());
@@ -852,10 +1014,11 @@ class DirectToPage extends MapPage {
     const crs = bd ? mod(bd.brg - s.magVar, 360) : null;
     this.p.text("LocationBRG", brg(crs));
     this.p.text("LocationDIS", dis(bd?.dist));
-    this.p.text("Course", crs === null ? "___°" : `${String(Math.round(crs) % 360).padStart(3, "0")}°`);
+    this.p.text("Course", crs === null ? "___°" : deg3(crs));
     this.p.text("VNVAlt", "_____");
     this.p.text("VNVOffset", "+0");
-    for (const id of ["Course0", "Course1", "Course2", "VNVAlt0", "VNVAlt1", "VNVAlt2", "VNVAlt3", "VNVAlt4", "VNVOffset0", "VNVOffset1", "WaypointSubmenuGroup"]) this.p.show(id, false);
+    for (const id of ["Course0", "Course1", "Course2", "VNVAlt0", "VNVAlt1", "VNVAlt2", "VNVAlt3", "VNVAlt4", "VNVOffset0", "VNVOffset1"]) this.p.show(id, false);
+    this.sub.draw(this.m.hl);
     this.m.hl.set(this.p.el("Activate"), this.onActivate);
     this.drawOwnMap();
   }
@@ -956,7 +1119,7 @@ class ProceduresPage extends MfdPage {
     const legs = [...(p.transitions[this.transitions()[this.trans]] ?? []), ...p.legs];
     const pts: MapPoint[] = legs
       .filter((l, i) => i === 0 || l.fix !== legs[i - 1].fix)
-      .map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, name: l.role }));
+      .map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, role: l.role }));
     const enroute = s.route.filter((r) => typeof r === "string" || s.points.includes(r));
     const route = [...enroute, ...pts];
     this.m.change(activate ? { route, activeLeg: enroute.length, directFrom: { lat: s.lat, lon: s.lon } } : { route });
@@ -988,12 +1151,14 @@ export interface Pages {
   groups: MfdPage[][];
   directTo: DirectToPage;
   procedures: ProceduresPage;
+  waypointEntry: WaypointEntryPage;
 }
 
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
 export function makePages(m: Mfd, screen: SVGGElement): Pages {
   const roots = [...screen.querySelectorAll<SVGGElement>('[id^="Page-"]')];
   for (const r of roots) r.style.display = "inline";
+  const waypointEntry = new WaypointEntryPage(m, screen);
   const make = (name: string): MfdPage => {
     switch (name) {
       case "NavigationMap": return new NavigationMapPage(m, name, screen);
@@ -1008,7 +1173,7 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
       case "IntersectionInfo": return new NavInfoPage(m, name, screen, "FIX", 5);
       case "AirportInfo": return new AirportInfoPage(m, screen);
       case "Checklist": return new ChecklistPage(m, screen);
-      case "ActiveFlightPlanNarrow": return new FlightPlanPage(m, screen);
+      case "ActiveFlightPlanNarrow": return new FlightPlanPage(m, screen, waypointEntry);
     }
     // No data: the map pages keep the navigation map under their title.
     const p = new MfdPage(m, name, screen);
@@ -1019,5 +1184,5 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
   const directTo = new DirectToPage(m, screen);
   const procedures = new ProceduresPage(m, screen, roots[roots.length - 1].parentNode as Element);
   for (const r of roots) r.style.display = "none";
-  return { groups, directTo, procedures };
+  return { groups, directTo, procedures, waypointEntry };
 }

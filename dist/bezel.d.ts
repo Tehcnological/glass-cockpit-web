@@ -14,11 +14,17 @@ export interface Knobs {
     /** Feet. */ alt: number;
     /** Feet; null hides the selected altitude. */ selectedAlt: number | null;
     radios: Radios;
+    /** NAV and COM volume, 0 to 1 (both radios of a kind share one, as in FG1000). */ navVolume: number;
+    comVolume: number;
+    /** NAV station identifier audio, switched by pushing the NAV volume knob. */ navIdent: boolean;
 }
 /** Adds the hotspots to a display drawn with its bezel and reports each input. */
 export declare function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void): void;
-/** The knob and button changes SurroundController makes, as a patch; null when the input does not change these values. */
+/**
+ * The knob and button changes SurroundController makes, as a patch; null when the input does not change these values.
+ * `toStation` is the magnetic bearing to the station of the NAV radio the CDI shows, if the host gives one.
+ */
 export declare function adjust({ control, value }: Input, k: Knobs, sel: {
     nav: 1 | 2;
     com: 1 | 2;
-}): Partial<Knobs> | null;
+}, toStation?: number | null): Partial<Knobs> | null;

@@ -55,6 +55,8 @@ export interface MfdState extends Knobs {
   /** Set by DIRECT TO: where the direct leg to the active waypoint starts. */ directFrom: LatLon | null;
   engine: Engine;
   /** Which NAV shows green as the CDI source. */ cdiSource: CdiSource;
+  /** Bearing to each NAV radio's station, magnetic (the PFD's `bearings` fit): CRS push sets the course to the CDI radio's. */
+  bearings: Partial<Record<"NAV1" | "NAV2", { bearing: number }>>;
   /** For LST - CHECKLIST. */ checklists: Checklist[];
 }
 
@@ -63,7 +65,7 @@ const DEFAULTS: MfdState = {
   lat: 0, lon: 0, magVar: 0, range: 10, orientation: "NORTH UP",
   points: [], airspaces: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null,
   engine: { rpm: 0, fuelFlow: 0, oilPressure: 0, oilTemp: 0, egt: 0, vacuum: 0, fuelLeft: 0, fuelRight: 0, volts: 0, engineHours: 0 },
-  radios: RADIOS, cdiSource: "NAV1", checklists: [],
+  radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, cdiSource: "NAV1", bearings: {}, checklists: [],
 };
 
 // EIS.new: pointer name, min, max, travel in px (PFD.PointerElement).
@@ -97,12 +99,12 @@ export class GlassMfd {
   private mapPartial: SVGGElement;
   private frame: SVGTextElement;
   private pages: Pages;
-  /** DIRECT TO or PROC, over the page. */ private overlay: MfdPage | null = null;
+  /** DIRECT TO, PROC or WAYPOINT ENTRY, over the page. */ private overlay: MfdPage | null = null;
   private timers = { menu: 0, load: 0 };
   private hl = new Highlighter();
   private ui: MfdUi = {
     group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, airways: 0,
-    layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false },
+    layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false }, recent: [],
   };
 
   /** The container must be visible: layout is measured once here. */
@@ -134,6 +136,7 @@ export class GlassMfd {
   destroy(): void {
     clearTimeout(this.timers.menu);
     clearTimeout(this.timers.load);
+    this.surround.destroy();
   }
 
   // What the pages may use.
@@ -150,6 +153,7 @@ export class GlassMfd {
       tune: (freq) => this.tune(freq),
       topKeys: (extra) => this.topKeys(extra),
       drawMap: (g, geom, center) => drawMap(g, { ...this.state, center }, geom, this.ui.dcltr),
+      open: (p) => this.openOverlay(p),
       close: () => this.closeOverlay(),
     };
   }
@@ -210,7 +214,9 @@ export class GlassMfd {
         this.pages.procedures.open();
         return this.set({});
     }
-    const patch = adjust(i, this.state, this.surround.sel);
+    const src = this.state.cdiSource;
+    const toStation = src === `NAV${this.surround.sel.nav}` ? this.state.bearings[src as "NAV1" | "NAV2"]?.bearing : null;
+    const patch = adjust(i, this.state, this.surround.sel, toStation);
     if (patch) this.change(patch);
   }
 
@@ -307,13 +313,15 @@ export class GlassMfd {
     const page = this.page;
     const under = this.groupPage;
     this.surround.setRadios(s.radios, s.cdiSource === "NAV1" ? 1 : s.cdiSource === "NAV2" ? 2 : null);
+    this.surround.setVolume("Nav", s.navVolume);
+    this.surround.setVolume("Comm", s.comVolume);
     const keys = this.softkeys();
     this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit));
     this.updateHeader(s);
     this.updateEIS(s.engine);
-    // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO is a
-    // window over the page, which stays drawn.
-    const base = page === this.pages.directTo ? under : page;
+    // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO and
+    // WAYPOINT ENTRY are windows over the page, which stays drawn.
+    const base = page === this.pages.directTo || page === this.pages.waypointEntry ? under : page;
     const mode = base.navMap;
     this.nav.show("Group", mode !== null);
     this.map.style.display = mode === "full" ? "inline" : "none";

@@ -39,6 +39,10 @@ export interface MfdState extends Knobs {
     /** Set by DIRECT TO: where the direct leg to the active waypoint starts. */ directFrom: LatLon | null;
     engine: Engine;
     /** Which NAV shows green as the CDI source. */ cdiSource: CdiSource;
+    /** Bearing to each NAV radio's station, magnetic (the PFD's `bearings` fit): CRS push sets the course to the CDI radio's. */
+    bearings: Partial<Record<"NAV1" | "NAV2", {
+        bearing: number;
+    }>>;
     /** For LST - CHECKLIST. */ checklists: Checklist[];
 }
 export interface MfdOptions extends DisplayOptions {
@@ -57,7 +61,7 @@ export declare class GlassMfd {
     private mapPartial;
     private frame;
     private pages;
-    /** DIRECT TO or PROC, over the page. */ private overlay;
+    /** DIRECT TO, PROC or WAYPOINT ENTRY, over the page. */ private overlay;
     private timers;
     private hl;
     private ui;
