@@ -4,8 +4,6 @@ A glass cockpit primary flight display for the browser: attitude, airspeed and a
 
 It is a TypeScript port of the PFD in [FlightGear](https://www.flightgear.org/)'s FG1000, by Stuart Buchanan. The SVG artwork is FG1000's, with editor metadata removed, and the display logic is ported from its Nasal code (`Aircraft/Instruments-3d/FG1000` in [fgdata](https://gitlab.com/flightgear/fgdata)). It is not affiliated with or endorsed by Garmin.
 
-Built for teaching instrument flying at [instrumentready.com](https://instrumentready.com).
-
 ## Use
 
 ```js
