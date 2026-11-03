@@ -1,31 +1,45 @@
 <!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>glass-pfd demo</title>
+<title>glass-cockpit demo</title>
 <style>
   body { margin: 0; padding: 16px; background: #17191c; color: #d9dadc; font: 14px system-ui, sans-serif; }
-  #pfd { max-width: 1024px; background: #000; }
-  #pfd svg { display: block; width: 100%; height: auto; }
-  form { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 16px; max-width: 1024px; margin-top: 12px; }
+  .units { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 16px; }
+  .units svg { display: block; width: 100%; height: auto; }
+  form { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 16px; margin-top: 12px; }
   label { display: grid; grid-template-columns: 90px 1fr 48px; gap: 8px; align-items: center; }
 </style>
-<div id="pfd"></div>
+<div class="units"><div id="pfd"></div><div id="mfd"></div></div>
 <form id="f"></form>
 <script type="module">
-  import { GlassPfd } from "./dist/glass-pfd.js";
-  const pfd = new GlassPfd(document.getElementById("pfd"), { vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 } });
+  import { GlassPfd, GlassMfd } from "./dist/glass-pfd.js";
+  const pfd = new GlassPfd(document.getElementById("pfd"), { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 } });
+  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true });
+  // Made-up points for the demo, not real navigation data.
+  const points = [
+    { id: "KAAA", type: "APT", lat: 33.40, lon: -112.00 }, { id: "ABC", type: "VOR", lat: 33.50, lon: -111.85 },
+    { id: "XY", type: "NDB", lat: 33.30, lon: -112.10 }, { id: "FIXEE", type: "FIX", lat: 33.55, lon: -112.05 },
+    { id: "WPONE", type: "WPT", lat: 33.45, lon: -111.95 },
+  ];
   const ctl = {
     pitch: [-30, 30, 0], roll: [-60, 60, 0], ias: [0, 200, 100], alt: [-500, 15000, 3000], vsi: [-2000, 2000, 0],
     heading: [0, 359, 90], headingBug: [0, 359, 120], course: [0, 359, 100], cdiDots: [-2.4, 2.4, 0.5], selectedAlt: [0, 15000, 4000],
+    range: [1, 50, 10], rpm: [0, 3000, 2400],
   };
   const f = document.getElementById("f");
   for (const [k, [min, max, v]] of Object.entries(ctl)) {
     f.insertAdjacentHTML("beforeend", `<label>${k}<input type="range" name="${k}" min="${min}" max="${max}" step="${max - min > 10 ? 1 : 0.1}" value="${v}"><output>${v}</output></label>`);
   }
+  f.insertAdjacentHTML("beforeend", `<label>hdg up<input type="checkbox" name="hdgUp"></label>`);
   const update = () => {
     const s = Object.fromEntries([...new FormData(f)].map(([k, v]) => [k, Number(v)]));
-    f.querySelectorAll("label").forEach((l) => (l.querySelector("output").value = l.querySelector("input").value));
-    pfd.set({ ...s, cdiSource: "NAV1", gs: 0.3, brg1: { source: "ADF", id: "344", bearing: 200 }, tas: s.ias + 6 });
+    f.querySelectorAll("label").forEach((l) => l.querySelector("output") && (l.querySelector("output").value = l.querySelector("input").value));
+    pfd.set({ ...s, cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 } });
+    mfd.set({
+      heading: s.heading, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
+      orientation: f.hdgUp.checked ? "HDG UP" : "NORTH UP", points, route: ["ABC", "WPONE", "KAAA"], activeLeg: 1,
+      engine: { rpm: s.rpm, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 },
+    });
   };
   f.addEventListener("input", update);
   update();

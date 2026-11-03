@@ -1,10 +1,33 @@
+import { type DisplayOptions } from "./display.js";
+import { type Radios } from "./surround.js";
+import { type Airspace, type MapPoint } from "./map.js";
+export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
+export type { MapPoint, Airspace } from "./map.js";
+export type { Radio, Radios } from "./surround.js";
+export type { DisplayOptions } from "./display.js";
+export type { Control, Input } from "./bezel.js";
 export type CdiSource = "GPS" | "NAV1" | "NAV2" | "OFF";
-export type Bearing = {
-    source: "NAV1" | "NAV2" | "GPS" | "ADF";
+export type BrgSource = "OFF" | "NAV1" | "NAV2" | "GPS" | "ADF";
+/** What a bearing source points at: a station or waypoint, its bearing (magnetic) and distance (nm). */
+export interface Pointer {
     id: string;
     bearing: number;
     distance?: number;
-} | null;
+}
+export type XpdrMode = "OFF" | "STBY" | "TEST" | "GND" | "ON" | "ALT";
+export type VSpeed = "Vglide" | "Vr" | "Vx" | "Vy";
+/** An airport for the NRST window. */
+export interface NearestAirport {
+    id: string;
+    name: string;
+    lat: number;
+    lon: number;
+    /** Feet. */ elev: number;
+    /** Best approach: "ILS" or "VFR" (NearestAirportsPFD). */ appr: string;
+    /** "APPROACH", "TOWER" or "UNICOM", with its frequency; "" if none. */ freqType: string;
+    freq: string;
+    /** Longest runway, feet. */ rwy: number;
+}
 export interface PfdState {
     /** Degrees, nose up positive. */ pitch: number;
     /** Degrees, right wing down positive. */ roll: number;
@@ -19,6 +42,7 @@ export interface PfdState {
     /** Inches of mercury. */ baro: number;
     /** Degrees Celsius. */ oat: number;
     /** Magnetic heading, degrees. */ heading: number;
+    /** Rate of turn, degrees per second, positive right. */ turnRate: number;
     /** Degrees. */ headingBug: number;
     cdiSource: CdiSource;
     /** Selected course, degrees. */ course: number;
@@ -28,27 +52,99 @@ export interface PfdState {
     /** GPS annunciation, e.g. ENR, TERM, LPV. */ gpsMode: string;
     /** GPS cross-track error, nm; shown beyond 2 dots. */ xtk: number;
     /** Glideslope, -1 to 1 full scale; null hides it. */ gs: number | null;
-    brg1: Bearing;
-    brg2: Bearing;
+    /** Bearing pointer sources, picked with PFD > BRG1 / BRG2. */ brg1: BrgSource;
+    brg2: BrgSource;
+    /** What each bearing source points at; a source with nothing here shows dashes. */
+    bearings: Partial<Record<Exclude<BrgSource, "OFF">, Pointer>>;
     /** Marker beacon: "", "O", "M", "I". */ marker: "" | "O" | "M" | "I";
     /** Flight director command bars; null hides them. */ fd: {
         pitch: number;
         roll: number;
     } | null;
+    radios: Radios;
+    /** Active flight plan leg in the top bar; `from` null is a direct-to. Null blanks it. */
+    leg: {
+        from: string | null;
+        to: string; /** nm */
+        dis: number; /** degrees */
+        brg: number;
+    } | null;
+    /** Aircraft position, for the inset map and the NRST window. */ lat: number;
+    lon: number;
+    /** Inset map contents (see the MFD's map). */ points: MapPoint[];
+    airspaces: Airspace[];
+    route: string[];
+    activeLeg: number;
+    /** Airports the NRST window lists, nearest first after sorting here. */ airports: NearestAirport[];
+    /** Wind, true direction it blows from and knots; null shows NO DATA. */ wind: {
+        direction: number;
+        speed: number;
+    } | null;
+    xpdr: {
+        mode: XpdrMode; /** Four digits. */
+        code: string;
+        ident: boolean;
+    };
+    /** Time of day in seconds for the TIME field; null uses the computer's clock. */ time: number | null;
+    /** GPS OBS mode (OBS softkey): course set with the CRS knob instead of the flight plan. */ obs: boolean;
+    /** Messages for the ALERTS window. */ alerts: string[];
+    /** Which speed references (options.vspeeds) show on the tape, set in TMR/REF. */ vspeedsOn: Record<VSpeed, boolean>;
+    /** Barometric minimums, feet (TMR/REF); null is off. */ minimums: number | null;
 }
-export interface PfdOptions {
+export interface PfdOptions extends DisplayOptions {
+    /** Called when a bezel input changes the state (heading bug, course, baro, selected altitude, radios, CDI source). */
+    onChange?: (patch: Partial<PfdState>) => void;
     /** IAS box turns red above this. */ vne?: number;
-    /** Speed references shown on the tape. */ vspeeds?: Partial<Record<"Vx" | "Vy" | "Vr" | "Vglide", number>>;
+    /** Speed references, switched on and off in TMR/REF. */ vspeeds?: Partial<Record<VSpeed, number>>;
 }
 export declare class GlassPfd {
     private options;
     readonly svg: SVGSVGElement;
     private state;
-    private cache;
-    private base;
+    private p;
+    private surround;
+    private nrst;
+    private turnTrend;
+    private minBug;
+    private inset;
+    private insetGeom;
+    private win;
+    private winBox;
+    private clock;
+    private timers;
+    private ui;
+    /** The container must be visible: layout is measured once here. */
     constructor(container: HTMLElement, options?: PfdOptions);
+    private updateTurnRate;
+    /** Stops the clock. Call when the display is removed. */
+    destroy(): void;
+    private input;
+    /** Apply a change the pilot made and report it. */
+    private change;
+    private go;
+    private openWindow;
+    private menu;
+    private xpdrDigit;
+    private ident;
+    private later;
+    private defaults;
+    private nearest;
+    private fms;
+    private timerValue;
+    private timerField;
+    private timerAction;
+    private timerLabel;
+    private tick;
     /** Merge new values into the state and redraw. */
     set(patch: Partial<PfdState>): void;
+    private updateXpdr;
+    private updateWind;
+    private updateInset;
+    private updateNrst;
+    private highlights;
+    private highlight;
+    private drawWindow;
+    private updateLeg;
     private updateAI;
     private updateFD;
     private updateIAS;
@@ -57,11 +153,4 @@ export declare class GlassPfd {
     private setCDISource;
     private updateCDI;
     private updateBRG;
-    private el;
-    private show;
-    private text;
-    private tf;
-    private centers;
-    private center;
-    private clip;
 }

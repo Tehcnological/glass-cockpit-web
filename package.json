@@ -1,7 +1,7 @@
 {
-  "name": "glass-pfd",
+  "name": "glass-cockpit",
   "version": "0.1.0",
-  "description": "Glass cockpit primary flight display for the browser, ported from FlightGear's FG1000.",
+  "description": "A working glass cockpit for the browser: PFD and MFD with bezel, softkey menus, radios, transponder, timer, nearest airports and nav map. Ported from FlightGear's FG1000.",
   "license": "GPL-2.0-or-later",
   "type": "module",
   "main": "dist/glass-pfd.js",
@@ -9,6 +9,7 @@
   "exports": { ".": "./dist/glass-pfd.js" },
   "files": ["dist", "src", "LICENSE"],
   "scripts": {
+    "test": "tsc && node --test test/",
     "build": "node scripts/build-svg.mjs && tsc -p tsconfig.json"
   },
   "devDependencies": {

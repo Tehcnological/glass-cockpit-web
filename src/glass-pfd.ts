@@ -1,14 +1,36 @@
 // Glass PFD for the browser: a TypeScript port of the display logic in FlightGear's FG1000
 // (Aircraft/Instruments-3d/FG1000/Nasal/MFDPages/PFDInstruments/PFDInstruments.nas, Copyright 2018 Stuart Buchanan),
 // driving the same SVG. GPL-2.0-or-later, like the original.
-//
-// FlightGear's Canvas composes an element's transforms as: its SVG transform, then translation/scale, then a
-// rotation about a center (bounding box center plus Inkscape's transform-center offset, unless set explicitly).
-// tf() rebuilds that as one SVG transform string.
-import SVG from "./pfd-svg.js";
+import PFD from "./svg/pfd.js";
+import SURROUND from "./svg/surround-pfd.js";
+import NRST from "./svg/nrst-pfd.js";
+import NRST_INFO from "./svg/nrst-info-pfd.js";
+import { buildDisplay, type DisplayOptions } from "./display.js";
+import { Page, deg3, mod, pad } from "./page.js";
+import { RADIOS, Surround, type Radios } from "./surround.js";
+import { adjust, bezelInput, type Input } from "./bezel.js";
+import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type MapGeometry, type MapPoint } from "./map.js";
+
+export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
+export type { MapPoint, Airspace } from "./map.js";
+export type { Radio, Radios } from "./surround.js";
+export type { DisplayOptions } from "./display.js";
+export type { Control, Input } from "./bezel.js";
 
 export type CdiSource = "GPS" | "NAV1" | "NAV2" | "OFF";
-export type Bearing = { source: "NAV1" | "NAV2" | "GPS" | "ADF"; id: string; bearing: number; distance?: number } | null;
+export type BrgSource = "OFF" | "NAV1" | "NAV2" | "GPS" | "ADF";
+/** What a bearing source points at: a station or waypoint, its bearing (magnetic) and distance (nm). */
+export interface Pointer { id: string; bearing: number; distance?: number }
+export type XpdrMode = "OFF" | "STBY" | "TEST" | "GND" | "ON" | "ALT";
+export type VSpeed = "Vglide" | "Vr" | "Vx" | "Vy";
+/** An airport for the NRST window. */
+export interface NearestAirport {
+  id: string; name: string; lat: number; lon: number;
+  /** Feet. */ elev: number;
+  /** Best approach: "ILS" or "VFR" (NearestAirportsPFD). */ appr: string;
+  /** "APPROACH", "TOWER" or "UNICOM", with its frequency; "" if none. */ freqType: string; freq: string;
+  /** Longest runway, feet. */ rwy: number;
+}
 
 export interface PfdState {
   /** Degrees, nose up positive. */ pitch: number;
@@ -24,6 +46,7 @@ export interface PfdState {
   /** Inches of mercury. */ baro: number;
   /** Degrees Celsius. */ oat: number;
   /** Magnetic heading, degrees. */ heading: number;
+  /** Rate of turn, degrees per second, positive right. */ turnRate: number;
   /** Degrees. */ headingBug: number;
   cdiSource: CdiSource;
   /** Selected course, degrees. */ course: number;
@@ -33,26 +56,59 @@ export interface PfdState {
   /** GPS annunciation, e.g. ENR, TERM, LPV. */ gpsMode: string;
   /** GPS cross-track error, nm; shown beyond 2 dots. */ xtk: number;
   /** Glideslope, -1 to 1 full scale; null hides it. */ gs: number | null;
-  brg1: Bearing;
-  brg2: Bearing;
+  /** Bearing pointer sources, picked with PFD > BRG1 / BRG2. */ brg1: BrgSource;
+  brg2: BrgSource;
+  /** What each bearing source points at; a source with nothing here shows dashes. */
+  bearings: Partial<Record<Exclude<BrgSource, "OFF">, Pointer>>;
   /** Marker beacon: "", "O", "M", "I". */ marker: "" | "O" | "M" | "I";
   /** Flight director command bars; null hides them. */ fd: { pitch: number; roll: number } | null;
+  radios: Radios;
+  /** Active flight plan leg in the top bar; `from` null is a direct-to. Null blanks it. */
+  leg: { from: string | null; to: string; /** nm */ dis: number; /** degrees */ brg: number } | null;
+  /** Aircraft position, for the inset map and the NRST window. */ lat: number;
+  lon: number;
+  /** Inset map contents (see the MFD's map). */ points: MapPoint[];
+  airspaces: Airspace[];
+  route: string[];
+  activeLeg: number;
+  /** Airports the NRST window lists, nearest first after sorting here. */ airports: NearestAirport[];
+  /** Wind, true direction it blows from and knots; null shows NO DATA. */ wind: { direction: number; speed: number } | null;
+  xpdr: { mode: XpdrMode; /** Four digits. */ code: string; ident: boolean };
+  /** Time of day in seconds for the TIME field; null uses the computer's clock. */ time: number | null;
+  /** GPS OBS mode (OBS softkey): course set with the CRS knob instead of the flight plan. */ obs: boolean;
+  /** Messages for the ALERTS window. */ alerts: string[];
+  /** Which speed references (options.vspeeds) show on the tape, set in TMR/REF. */ vspeedsOn: Record<VSpeed, boolean>;
+  /** Barometric minimums, feet (TMR/REF); null is off. */ minimums: number | null;
 }
 
-export interface PfdOptions {
+export interface PfdOptions extends DisplayOptions {
+  /** Called when a bezel input changes the state (heading bug, course, baro, selected altitude, radios, CDI source). */
+  onChange?: (patch: Partial<PfdState>) => void;
   /** IAS box turns red above this. */ vne?: number;
-  /** Speed references shown on the tape. */ vspeeds?: Partial<Record<"Vx" | "Vy" | "Vr" | "Vglide", number>>;
+  /** Speed references, switched on and off in TMR/REF. */ vspeeds?: Partial<Record<VSpeed, number>>;
 }
 
 const DEFAULTS: PfdState = {
   pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
-  baro: 29.92, oat: 15, heading: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
-  cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: null, brg2: null, marker: "", fd: null,
+  baro: 29.92, oat: 15, heading: 0, turnRate: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
+  cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null,
+  radios: RADIOS, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], activeLeg: 1, airports: [], wind: null,
+  xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
+  vspeedsOn: { Vglide: true, Vr: true, Vx: true, Vy: true }, minimums: null,
 };
 
+type Menu = "top" | "inset" | "pfd" | "wind" | "synvis" | "hsi" | "altunit" | "xpdr" | "code";
+type Window = "TMR/REF" | "NRST" | "ALERTS" | null;
+type Key = { label: string; act?: () => void; lit?: boolean };
+const BRG_SOURCES: BrgSource[] = ["OFF", "NAV1", "NAV2", "GPS", "ADF"];
+const VSPEEDS: VSpeed[] = ["Vglide", "Vr", "Vx", "Vy"];
+const CYAN = "#00ffff";
+const NS = "http://www.w3.org/2000/svg";
+const TMR_FIELDS = ["time", "dir", "action", "Vglide", "Vr", "Vx", "Vy", "minimums", "minalt"] as const;
+const FONT = `font-family="'Liberation Sans',Arial,sans-serif" font-size="18"`;
+
 // Parts of the FG1000 PFD this port does not drive.
-const HIDDEN = ["Failures", "GSPD", "PFD-Map", "PFD-Map-bg", "WindData", "PFD-Multilines", "Annunciation", "DME1", "WindData-NODATA", "WindData-NODATA-bg", "WindData-OPTN1", "WindData-OPTN2", "WindData-OPTN3",
-  "XPDR-TIME", "SelectedALT-meters", "SelectedSPD-bug", "SelectedSPD-bg", "SelectedSPD-text", "SelectedSPD-symbol"];
+const HIDDEN = ["Failures", "GSPD", "PFD-Multilines", "Annunciation", "DME1", "SelectedALT-meters", "SelectedSPD-bug", "SelectedSPD-bg", "SelectedSPD-text", "SelectedSPD-symbol"];
 
 // Tape clipping, as "rect(top, right, bottom, left)" in screen coordinates.
 const CLIPS: Record<string, [number, number, number, number]> = {
@@ -66,30 +122,288 @@ const CLIPS: Record<string, [number, number, number, number]> = {
 const MAGENTA = "#ff00ff";
 const GREEN = "#00ff00";
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-const mod = (a: number, b: number) => a - b * Math.floor(a / b); // Nasal math.mod: result has the sign of b
-const pad = (s: string | number, n: number, c = " ") => String(s).padStart(n, c);
-const deg3 = (d: number) => pad(Math.round(mod(d, 360)) % 360, 3, "0") + "°";
-
-type Tf = { tx?: number; ty?: number; sx?: number; sy?: number; rot?: number; center?: [number, number] };
 
 export class GlassPfd {
   readonly svg: SVGSVGElement;
   private state: PfdState = { ...DEFAULTS };
-  private cache = new Map<string, SVGGraphicsElement | null>();
-  private base = new WeakMap<Element, string>();
+  private p: Page;
+  private surround: Surround;
+  private nrst: Page;
+  private turnTrend: SVGPathElement;
+  private minBug: SVGGraphicsElement;
+  private inset: SVGGElement;
+  private insetGeom: MapGeometry;
+  private win: SVGGElement;
+  private winBox: DOMRect;
+  private clock: ReturnType<typeof setInterval>;
+  private timers: ReturnType<typeof setTimeout>[] = [];
+  // Display settings the menus change, as FG1000 keeps them in the page and its controller.
+  private ui = {
+    menu: "top" as Menu, inset: false, insetRange: 10, dcltr: 0, window: null as Window, cursor: 0, nrstInfo: false,
+    layers: { TRAFFIC: false, TOPO: false, TERRAIN: false } as Record<string, boolean>,
+    synvis: { PATHWAY: false, "SYN TERR": false, "HRZN HDG": false, APTSIGNS: false } as Record<string, boolean>,
+    wind: 0, meters: false, hpa: false, xpdrEdit: null as string | null,
+    timer: { up: true, running: false, base: 0, since: 0 },
+  };
 
+  /** The container must be visible: layout is measured once here. */
   constructor(container: HTMLElement, private options: PfdOptions = {}) {
-    container.innerHTML = SVG;
-    this.svg = container.querySelector("svg")!;
-    this.svg.removeAttribute("width");
-    this.svg.removeAttribute("height");
-    this.svg.setAttribute("viewBox", "0 0 1024 768");
-    this.svg.setAttribute("role", "img");
-    this.svg.setAttribute("aria-label", "Primary flight display");
-    for (const id of HIDDEN) this.show(id, false);
-    for (const [id, r] of Object.entries(CLIPS)) this.clip(id, r);
+    const { svg, screen } = buildDisplay(container, [PFD, SURROUND, NRST, NRST_INFO], "Primary flight display", options);
+    this.svg = svg;
+    this.p = new Page(screen, "PFDInstruments");
+    this.surround = new Surround(screen);
+    this.nrst = new Page(screen, "NearestAirportsPFD");
+    // The inset map fills its frame (PFD-Map-bg); its range is the frame's half width.
+    const frame = screenBox(screen, this.p.el("PFD-Map-bg")!);
+    const half = Math.min(frame.width, frame.height) / 2;
+    this.insetGeom = { x: frame.x, y: frame.y, w: frame.width, h: frame.height, cx: frame.x + frame.width / 2, cy: frame.y + frame.height / 2, px: half };
+    this.inset = mapGroup(screen, this.p.el("PFD-Map-Display")!.nextElementSibling!, this.insetGeom); // over the frame's black fill
+    // TMR/REF and ALERTS open where FG1000 puts the NRST window.
+    this.winBox = screenBox(screen, this.nrst.el("Group")!);
+    this.win = screen.appendChild(document.createElementNS(NS, "g"));
+    // Minimums bug: the selected altitude bug, in cyan.
+    const bug = this.p.el("SelectedALT-bug")!;
+    this.minBug = bug.cloneNode(true) as SVGGraphicsElement;
+    for (const e of [this.minBug, ...this.minBug.querySelectorAll<SVGElement>("*")]) {
+      e.removeAttribute("id");
+      e.style.fill = CYAN;
+    }
+    bug.parentNode!.parentNode!.appendChild(this.minBug); // outside SelectedALT, which hides with no selected altitude
+    this.clock = setInterval(() => this.tick(), 1000);
+    for (const id of HIDDEN) this.p.show(id, false);
+    for (const [id, r] of Object.entries(CLIPS)) this.p.clip(id, r);
+    // Autopilot annunciations start blank, as Surround.new() leaves them.
+    for (const id of ["APLateralArmed", "APLateralActive", "APVerticalArmed", "APVerticalActive", "APVerticalReference", "APStatus"]) {
+      this.surround.p.text(`Header${id}`, "");
+    }
+    if (options.bezel) bezelInput(svg, (i) => this.input(i));
+    // FG1000 draws the turn rate scale but never drives it; the trend vector is drawn here.
+    const scale = this.p.el("turnrate-indicator")!;
+    this.turnTrend = scale.parentNode!.insertBefore(document.createElementNS("http://www.w3.org/2000/svg", "path"), scale.nextSibling);
+    for (const [k, v] of Object.entries({ fill: "none", stroke: MAGENTA, "stroke-width": "5" })) this.turnTrend.setAttribute(k, v);
     this.set({});
   }
+
+  // Turn rate trend vector: the heading 6 seconds ahead, along the arc above the compass rose (center 459.5, 586.5).
+  // The scale spans about 24° each side, so standard rate (3°/s) reaches 18°.
+  private updateTurnRate(rate: number) {
+    const a = (Math.max(-24, Math.min(24, rate * 6)) * Math.PI) / 180;
+    const [cx, cy, r] = [459.5, 586.5, 157];
+    const d = Math.abs(a) < 0.005 ? "" : `M ${cx} ${cy - r} A ${r} ${r} 0 0 ${a > 0 ? 1 : 0} ${cx + r * Math.sin(a)} ${cy - r * Math.cos(a)}`;
+    this.turnTrend.setAttribute("d", d);
+  }
+
+  /** Stops the clock. Call when the display is removed. */
+  destroy(): void {
+    clearInterval(this.clock);
+    this.timers.forEach(clearTimeout);
+  }
+
+  private input(i: Input) {
+    this.options.onInput?.(i);
+    const u = this.ui;
+    switch (i.control) {
+      case "NAV_TOGGLE":
+      case "COM_TOGGLE":
+        this.surround.toggle(i.control === "NAV_TOGGLE" ? "nav" : "com");
+        return this.set({});
+      case "SOFTKEY":
+        this.menu()[i.value - 1]?.act?.();
+        return this.set({});
+      case "RANGE":
+        if (u.inset) u.insetRange = stepRange(u.insetRange, i.value);
+        return this.set({});
+      case "FMS_OUTER":
+      case "FMS_INNER":
+        return this.fms(i.control === "FMS_OUTER", i.value > 0 ? 1 : -1);
+      case "ENT":
+        if (u.window === "NRST" && this.nearest().length) u.nrstInfo = !u.nrstInfo;
+        if (u.window === "TMR/REF") this.timerAction();
+        return this.set({});
+      case "CLR":
+        if (u.window === "NRST" && u.nrstInfo) u.nrstInfo = false;
+        else if (u.window) u.window = null;
+        return this.set({});
+    }
+    const patch = adjust(i, this.state, this.surround.sel);
+    if (patch) this.change(patch);
+  }
+
+  /** Apply a change the pilot made and report it. */
+  private change(patch: Partial<PfdState>) {
+    this.set(patch);
+    this.options.onChange?.(patch);
+  }
+
+  private go(menu: Menu) {
+    this.ui.menu = menu;
+  }
+
+  private openWindow(w: Window) {
+    this.ui.window = this.ui.window === w ? null : w;
+    this.ui.cursor = 0;
+    this.ui.nrstInfo = false;
+  }
+
+  // The softkey menus: PFDInstruments.topMenu, insetMenu, PFDMenu, windMenu, transponderMenu, codeMenu. FG1000 leaves
+  // SYN VIS, HSI FRMT, ALT UNIT, OBS, TMR/REF and ALERTS as TODO; they follow the real unit here.
+  private menu(): Key[] {
+    const u = this.ui;
+    const s = this.state;
+    const k = (label: string, act?: () => void, lit = false): Key => ({ label, act, lit });
+    const blank = k("");
+    const alerts = k("ALERTS", () => this.openWindow("ALERTS"), u.window === "ALERTS");
+    const back = (to: Menu) => k("BACK", () => this.go(to));
+    const toggle = (set: Record<string, boolean>, name: string) => k(name, () => (set[name] = !set[name]), set[name]);
+    switch (u.menu) {
+      case "top": {
+        const cdi: CdiSource[] = ["GPS", "NAV1", "NAV2"];
+        return [
+          blank, k("INSET", () => { u.inset = true; this.go("inset"); }), blank, k("PFD", () => this.go("pfd")),
+          k("OBS", () => this.change({ obs: !s.obs }), s.obs),
+          // PFDInstrumentsController.incrCDISource: GPS, NAV1, NAV2.
+          k("CDI", () => this.change({ cdiSource: cdi[(cdi.indexOf(s.cdiSource) + 1) % 3] })),
+          blank, k("XPDR", () => this.go("xpdr")), k("IDENT", () => this.ident()),
+          k("TMR/REF", () => this.openWindow("TMR/REF"), u.window === "TMR/REF"),
+          k("NRST", () => this.openWindow("NRST"), u.window === "NRST"), alerts,
+        ];
+      }
+      case "inset":
+        return [
+          k("OFF", () => { u.inset = false; this.go("top"); }), k(DCLTR[u.dcltr], () => (u.dcltr = (u.dcltr + 1) % 4)), blank,
+          toggle(u.layers, "TRAFFIC"), toggle(u.layers, "TOPO"), toggle(u.layers, "TERRAIN"), blank, blank, blank, blank, back("top"), alerts,
+        ];
+      case "pfd": {
+        const next = (b: BrgSource) => BRG_SOURCES[(BRG_SOURCES.indexOf(b) + 1) % BRG_SOURCES.length];
+        return [
+          k("SYN VIS", () => this.go("synvis")), k("DFLTS", () => this.defaults()), k("WIND", () => this.go("wind")), blank,
+          k("BRG1", () => this.change({ brg1: next(s.brg1) }), s.brg1 !== "OFF"), k("HSI FRMT", () => this.go("hsi")),
+          k("BRG2", () => this.change({ brg2: next(s.brg2) }), s.brg2 !== "OFF"), blank, k("ALT UNIT", () => this.go("altunit")),
+          k("STD BARO", () => this.change({ baro: 29.92 })), back("top"), alerts,
+        ];
+      }
+      case "wind": {
+        const opt = (label: string, n: number) => k(label, () => (u.wind = n), u.wind === n);
+        return [blank, blank, opt("OPTN1", 1), opt("OPTN2", 2), opt("OPTN3", 3), opt("OFF", 0), blank, blank, blank, blank, back("pfd"), alerts];
+      }
+      case "synvis":
+        // shortcut: no terrain data, so these switch only the setting (onInput reports the key); draw synthetic vision once there is a terrain source.
+        return [toggle(u.synvis, "PATHWAY"), toggle(u.synvis, "SYN TERR"), toggle(u.synvis, "HRZN HDG"), toggle(u.synvis, "APTSIGNS"),
+          blank, blank, blank, blank, blank, blank, back("pfd"), alerts];
+      case "hsi":
+        // shortcut: only the 360° HSI is drawn; ARC HSI needs its own artwork.
+        return [blank, blank, blank, blank, blank, k("360 HSI", undefined, true), blank, blank, blank, blank, back("pfd"), alerts];
+      case "altunit":
+        return [blank, blank, blank, blank, blank, k("METERS", () => (u.meters = !u.meters), u.meters), blank,
+          k("IN", () => (u.hpa = false), !u.hpa), k("HPA", () => (u.hpa = true), u.hpa), blank, back("pfd"), alerts];
+      case "xpdr": {
+        const mode = (m: XpdrMode) => k(m, () => this.change({ xpdr: { ...s.xpdr, mode: m } }), s.xpdr.mode === m);
+        return [blank, blank, mode("STBY"), mode("ON"), mode("ALT"), mode("GND"),
+          k("VFR", () => this.change({ xpdr: { ...s.xpdr, code: "1200" } })), k("CODE", () => this.go("code")),
+          k("IDENT", () => this.ident()), blank, back("top"), alerts];
+      }
+      case "code":
+        return [...[0, 1, 2, 3, 4, 5, 6, 7].map((d) => k(String(d), () => this.xpdrDigit(String(d)))),
+          k("IDENT", () => this.ident()), k("BKSP", () => this.xpdrDigit("BKSP")), back("xpdr"), alerts];
+    }
+  }
+
+  // PFDInstrumentsController.setTransponderDigit: four digits set the code; BKSP takes one back.
+  private xpdrDigit(d: string) {
+    const u = this.ui;
+    const code = d === "BKSP" ? (u.xpdrEdit ?? "").slice(0, -1) : (u.xpdrEdit ?? "") + d;
+    if (code.length === 4) {
+      u.xpdrEdit = null;
+      this.go("top");
+      this.change({ xpdr: { ...this.state.xpdr, code } });
+    } else {
+      u.xpdrEdit = code;
+      this.later(45, () => { u.xpdrEdit = null; }); // transponderEditResetTimer
+    }
+  }
+
+  // setTransponderIdent: IDNT for 18 seconds; cancels a code entry and returns to the top menu.
+  private ident() {
+    this.ui.xpdrEdit = null;
+    this.go("top");
+    this.change({ xpdr: { ...this.state.xpdr, ident: true } });
+    this.later(18, () => this.change({ xpdr: { ...this.state.xpdr, ident: false } }));
+  }
+
+  private later(sec: number, f: () => void) {
+    this.timers.push(setTimeout(() => { f(); this.set({}); }, sec * 1000));
+  }
+
+  private defaults() {
+    Object.assign(this.ui, { inset: false, wind: 0, meters: false, hpa: false, dcltr: 0 });
+    for (const set of [this.ui.layers, this.ui.synvis]) for (const k of Object.keys(set)) set[k] = false;
+    this.change({ brg1: "OFF", brg2: "OFF" });
+  }
+
+  private nearest() {
+    const s = this.state;
+    return s.airports
+      .map((a) => ({ a, ...bearingDistance(s.lat, s.lon, a.lat, a.lon) }))
+      .sort((x, y) => x.dist - y.dist)
+      .slice(0, 25);
+  }
+
+  // FMS knob in a window: the outer ring moves the cursor, the inner changes the field (NRST: both scroll the list).
+  private fms(outer: boolean, d: number) {
+    const u = this.ui;
+    if (u.window === "NRST" && !u.nrstInfo) u.cursor = clamp(u.cursor + d, 0, Math.max(0, this.nearest().length - 1));
+    if (u.window === "TMR/REF") {
+      if (outer) u.cursor = mod(u.cursor + d, TMR_FIELDS.length);
+      else this.timerField(d);
+    }
+    this.set({});
+  }
+
+  private timerValue() {
+    const t = this.ui.timer;
+    const run = t.running ? (Date.now() - t.since) / 1000 : 0;
+    return Math.max(0, t.up ? t.base + run : t.base - run);
+  }
+
+  // The inner FMS knob on a TMR/REF field (TMR_FIELDS order).
+  private timerField(d: number) {
+    const u = this.ui;
+    const t = u.timer;
+    const s = this.state;
+    switch (TMR_FIELDS[u.cursor]) {
+      case "time": if (!t.running) t.base = Math.max(0, t.base + d * 60); break;
+      case "dir": t.base = this.timerValue(); t.since = Date.now(); t.up = !t.up; break;
+      case "action": break;
+      case "minimums": this.change({ minimums: s.minimums === null ? Math.round(s.alt / 100) * 100 : null }); break;
+      case "minalt": if (s.minimums !== null) this.change({ minimums: Math.max(0, s.minimums + d * 10) }); break;
+      default: {
+        const v = TMR_FIELDS[u.cursor] as VSpeed;
+        this.change({ vspeedsOn: { ...s.vspeedsOn, [v]: !s.vspeedsOn[v] } });
+      }
+    }
+  }
+
+  // ENT on the timer's action field: START?, STOP?, RESET?.
+  private timerAction() {
+    const t = this.ui.timer;
+    if (TMR_FIELDS[this.ui.cursor] !== "action") return;
+    if (t.running) Object.assign(t, { base: this.timerValue(), running: false });
+    else if (t.base > 0 && t.up) t.base = 0;
+    else Object.assign(t, { running: true, since: Date.now() });
+  }
+
+  private timerLabel() {
+    const t = this.ui.timer;
+    return t.running ? "STOP?" : t.base > 0 && t.up ? "RESET?" : "START?";
+  }
+
+  private tick() {
+    const t = this.ui.timer;
+    if (t.running && !t.up && this.timerValue() === 0) Object.assign(t, { up: true, base: 0, since: Date.now() }); // counts down to zero, then up
+    this.updateXpdr();
+    if (this.ui.window === "TMR/REF") this.drawWindow();
+  }
+
 
   /** Merge new values into the state and redraw. */
   set(patch: Partial<PfdState>): void {
@@ -98,213 +412,314 @@ export class GlassPfd {
     this.updateFD(s);
     this.updateIAS(s.ias, s.iasTrend);
     this.updateVSI(s.vsi);
-    this.text("TAS-text", `${Math.round(s.tas)}KT`);
+    this.p.text("TAS-text", `${Math.round(s.tas)}KT`);
     this.updateALT(s.alt, s.altTrend, s.selectedAlt);
-    this.show("SelectedALT", s.selectedAlt !== null);
-    this.show("SelectedALT-bug", s.selectedAlt !== null);
-    if (s.selectedAlt !== null) this.text("SelectedALT-text", String(Math.round(s.selectedAlt)));
-    this.text("BARO-text", `${s.baro.toFixed(2)}IN`);
-    this.text("OAT-text", Math.abs(s.oat) < 10 ? `${s.oat.toFixed(1)} °C` : `${Math.trunc(s.oat)} °C`);
-    this.tf("Rose", { rot: -s.heading });
-    this.text("HDG-text", deg3(s.heading));
-    this.tf("Heading-bug", { rot: s.headingBug });
-    this.text("SelectedHDG-text", deg3(s.headingBug));
+    this.p.show("SelectedALT", s.selectedAlt !== null);
+    this.p.show("SelectedALT-bug", s.selectedAlt !== null);
+    if (s.selectedAlt !== null) this.p.text("SelectedALT-text", String(Math.round(s.selectedAlt)));
+    this.p.text("BARO-text", this.ui.hpa ? `${Math.round(s.baro * 33.8639)}HPA` : `${s.baro.toFixed(2)}IN`);
+    this.p.show("SelectedALT-meters", this.ui.meters && s.selectedAlt !== null);
+    if (this.ui.meters && s.selectedAlt !== null) this.p.text("SelectedALT-meters", `${Math.round(s.selectedAlt * 0.3048)}M`);
+    this.minBug.style.display = s.minimums === null ? "none" : "inline";
+    if (s.minimums !== null) this.minBug.setAttribute("transform", `translate(0 ${clamp(s.alt - s.minimums, -300, 300) * 0.567})`);
+    this.p.text("OAT-text", Math.abs(s.oat) < 10 ? `${s.oat.toFixed(1)} °C` : `${Math.trunc(s.oat)} °C`);
+    this.p.tf("Rose", { rot: -s.heading });
+    this.updateTurnRate(s.turnRate);
+    this.p.text("HDG-text", deg3(s.heading));
+    this.p.tf("Heading-bug", { rot: s.headingBug });
+    this.p.text("SelectedHDG-text", deg3(s.headingBug));
     this.setCDISource(s.cdiSource);
-    this.text("SelectedCRS-text", deg3(s.course), s.cdiSource === "GPS" ? MAGENTA : GREEN);
+    this.p.text("SelectedCRS-text", deg3(s.course), s.cdiSource === "GPS" ? MAGENTA : GREEN);
     this.updateCDI(s);
-    this.show("GS-ILS", s.gs !== null);
-    this.show("GS-type", s.gs !== null);
+    this.p.show("GS-ILS", s.gs !== null);
+    this.p.show("GS-type", s.gs !== null);
     if (s.gs !== null) {
-      this.tf("GS-ILS", { ty: -s.gs * 100 });
-      this.text("GS-type", "G");
+      this.p.tf("GS-ILS", { ty: -s.gs * 100 });
+      this.p.text("GS-type", "G");
     }
-    this.updateBRG("BRG1", s.brg1, s.heading);
-    this.updateBRG("BRG2", s.brg2, s.heading);
-    this.show("BRG-circle", !!(s.brg1 || s.brg2));
-    this.show("OMI", s.marker !== "");
-    this.text("MarkerText", s.marker);
+    this.updateBRG("BRG1", s.brg1, s);
+    this.updateBRG("BRG2", s.brg2, s);
+    this.p.show("BRG-circle", s.brg1 !== "OFF" || s.brg2 !== "OFF");
+    this.p.show("OMI", s.marker !== "");
+    this.p.text("MarkerText", s.marker);
+    this.surround.setRadios(s.radios, s.cdiSource === "NAV1" ? 1 : s.cdiSource === "NAV2" ? 2 : null);
+    const keys = this.menu();
+    this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit));
+    this.updateLeg(s.leg);
+    this.updateXpdr();
+    this.updateWind(s);
+    this.updateInset(s);
+    this.updateNrst();
+    this.drawWindow();
+  }
+
+  // updateTransponder and updateTime: white in OFF, STBY, TEST; green in GND, ON, ALT. A code being entered shows
+  // what is typed so far.
+  private updateXpdr() {
+    const x = this.state.xpdr;
+    const color = ["GND", "ON", "ALT"].includes(x.mode) ? "#33ff33" : "#ffffff";
+    this.p.text("XPDR-MODE-text", x.ident ? "IDNT" : x.mode, color);
+    const code = this.ui.xpdrEdit === null ? x.code.padStart(4, "0") : this.ui.xpdrEdit.padEnd(4, " ");
+    for (let i = 0; i < 4; i++) this.p.text(`XPDR-DIGIT-${3 - i}-text`, code[i], color);
+    const now = new Date();
+    const t = this.state.time ?? now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    const p2 = (n: number) => String(Math.floor(n)).padStart(2, "0");
+    this.p.text("TIME-text", `${p2(mod(t / 3600, 12))}:${p2(mod(t / 60, 60))}:${p2(mod(t, 60))}`); // FG1000 shows 12 hours
+  }
+
+  // setWindDisplay and updateWindData.
+  private updateWind(s: PfdState) {
+    const opt = this.ui.wind;
+    this.p.show("WindData", opt !== 0);
+    for (const n of [1, 2, 3]) this.p.show(`WindData-OPTN${n}`, opt === n && !!s.wind);
+    this.p.show("WindData-NODATA", opt !== 0 && !s.wind);
+    this.p.show("WindData-NODATA-bg", opt !== 0 && !s.wind);
+    if (!opt || !s.wind) return;
+    let { direction, speed } = s.wind;
+    let alpha = direction - s.heading;
+    if (speed < 1) alpha = direction = 0; // stops the arrows wandering in a calm
+    if (opt === 1) {
+      const cross = speed * Math.sin((alpha * Math.PI) / 180);
+      const head = speed * Math.cos((alpha * Math.PI) / 180);
+      this.p.text("WindData-OPTN1-crosswind-text", String(Math.trunc(Math.abs(cross))));
+      this.p.tf("WindData-OPTN1-crosswind", { rot: cross > 0.1 ? 180 : 0 });
+      this.p.text("WindData-OPTN1-headwind-text", String(Math.trunc(Math.abs(head))));
+      this.p.tf("WindData-OPTN1-headwind", { rot: head > 0.1 ? 180 : 0 });
+    } else if (opt === 2) {
+      this.p.tf("WindData-OPTN2-HDG", { rot: alpha + 180 });
+      this.p.text("WindData-OPTN2-SPD-text", String(Math.trunc(speed)));
+    } else {
+      this.p.tf("WindData-OPTN3-HDG", { rot: alpha + 180 });
+      this.p.text("WindData-OPTN3-HDG-text", `${pad(Math.trunc(mod(direction, 360)), 3, "0")}°T`);
+      this.p.text("WindData-OPTN3-SPD-text", `${Math.trunc(speed)}KT`);
+    }
+  }
+
+  // setInsetMapVisible and the inset NavMap: north up, the range on the RANGE knob.
+  private updateInset(s: PfdState) {
+    const u = this.ui;
+    for (const id of ["PFD-Map", "PFD-Map-bg", "PFD-Map-bg-1"]) this.p.show(id, u.inset);
+    this.inset.style.display = u.inset ? "inline" : "none";
+    if (!u.inset) return;
+    this.p.text("RangeDisplay", rangeLabel(u.insetRange));
+    this.p.text("OrientationDisplay", "NORTH UP");
+    drawMap(this.inset, { ...s, range: u.insetRange, orientation: "NORTH UP" }, this.insetGeom, u.dcltr);
+  }
+
+  // NearestAirportsPFD: three rows of the 25 nearest, scrolled with the FMS knob; ENT shows the selected airport.
+  private updateNrst() {
+    const u = this.ui;
+    const open = u.window === "NRST";
+    this.nrst.show("Group", open && !u.nrstInfo);
+    this.nrst.show("Info", open && u.nrstInfo);
+    if (!open) return;
+    const list = this.nearest();
+    const top = clamp(u.cursor - 1, 0, Math.max(0, list.length - 3));
+    for (let row = 0; row < 3; row++) {
+      const n = list[top + row];
+      const cells: Record<string, string> = n
+        ? { ID: n.a.id, BRG: `${Math.round(n.brg)}°`, DST: `${n.dist.toFixed(1)}nm`, APP: n.a.appr, CommsType: n.a.freqType, CommsFreq: n.a.freq, RWY: `${n.a.rwy}ft` }
+        : { ID: row === 0 ? "NONE WITHIN 200NM" : "", BRG: "", DST: "", APP: "", CommsType: "", CommsFreq: "", RWY: "" };
+      for (const [k, v] of Object.entries(cells)) this.nrst.text(`${k}${row}`, v);
+      this.highlight(this.nrst.el(`ID${row}`), !!n && top + row === u.cursor);
+    }
+    const thumb = this.nrst.el("Scroll");
+    if (thumb) this.nrst.tf("Scroll", { ty: list.length > 3 ? (top / (list.length - 3)) * 120 : 0 });
+    const sel = list[u.cursor]?.a;
+    if (u.nrstInfo && sel) {
+      this.nrst.text("InfoID", sel.id);
+      this.nrst.text("InfoName", sel.name.toUpperCase());
+      this.nrst.text("InfoFacility", "");
+      this.nrst.text("InfoUsage", "PUBLIC");
+      this.nrst.text("InfoTime", "");
+      this.nrst.text("InfoAlt", `${Math.round(sel.elev)}ft`);
+      this.nrst.text("InfoRegion", "");
+      this.nrst.text("InfoLat", latLon(sel.lat, "N", "S"));
+      this.nrst.text("InfoLon", latLon(sel.lon, "E", "W"));
+      this.nrst.text("InfoBack", "BACK");
+      this.highlight(this.nrst.el("InfoBack"), true);
+    }
+  }
+
+  private highlights = new Map<Element, SVGRectElement>();
+  // The FMS cursor: black text on a cyan box, as FG1000's highlightTextElement.
+  private highlight(t: SVGGraphicsElement | null, on: boolean) {
+    if (!t) return;
+    let box = this.highlights.get(t);
+    if (!box) {
+      box = document.createElementNS(NS, "rect");
+      box.setAttribute("fill", CYAN);
+      t.before(box);
+      this.highlights.set(t, box);
+    }
+    const target = (t.querySelector("tspan") ?? t) as SVGElement;
+    target.style.fill = on ? "#000000" : "";
+    box.style.display = on ? "inline" : "none";
+    if (!on) return;
+    const b = t.getBBox();
+    for (const [k, v] of Object.entries({ x: b.x - 2, y: b.y - 1, width: b.width + 4, height: b.height + 2 })) box.setAttribute(k, String(v));
+    if (t.getAttribute("transform")) box.setAttribute("transform", t.getAttribute("transform")!);
+  }
+
+  // TMR/REF (generic timer, speed references, minimums) and ALERTS, drawn in the NRST window's place. FG1000 has
+  // these as TODO, so the layout follows the real unit.
+  private drawWindow() {
+    const u = this.ui;
+    const s = this.state;
+    if (u.window !== "TMR/REF" && u.window !== "ALERTS") {
+      this.win.innerHTML = "";
+      return;
+    }
+    const { x, y, width: w, height: h } = this.winBox;
+    const rows: [string, string, string?][] = [];
+    if (u.window === "TMR/REF") {
+      const t = Math.round(this.timerValue());
+      const p2 = (n: number) => String(n).padStart(2, "0");
+      rows.push(["TIMER", `${p2(Math.floor(t / 3600))}:${p2(Math.floor(t / 60) % 60)}:${p2(t % 60)}`, "time"]);
+      rows.push(["", u.timer.up ? "UP" : "DN", "dir"]);
+      rows.push(["", this.timerLabel(), "action"]);
+      for (const v of VSPEEDS) {
+        const spd = this.options.vspeeds?.[v];
+        rows.push([`${v.toUpperCase()}  ${spd === undefined ? "---" : spd}KT`, s.vspeedsOn[v] ? "ON" : "OFF", v]);
+      }
+      rows.push(["MINIMUMS", s.minimums === null ? "OFF" : "BARO", "minimums"]);
+      rows.push(["", s.minimums === null ? "" : `${s.minimums}FT`, "minalt"]);
+    } else {
+      for (const a of s.alerts) rows.push([a, ""]);
+    }
+    const line = Math.min(22, (h - 8) / Math.max(rows.length, 1));
+    let out = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#000" stroke="#ffffff" stroke-width="2"/>`;
+    rows.forEach(([label, value, field], i) => {
+      const ty = y + 6 + line * (i + 0.8);
+      const cur = u.window === "TMR/REF" && TMR_FIELDS[u.cursor] === field;
+      out += `<text x="${x + 10}" y="${ty}" ${FONT} fill="#ffffff">${esc(label)}</text>`;
+      if (cur) out += `<rect x="${x + w - 112}" y="${ty - line * 0.8}" width="102" height="${line}" fill="${CYAN}"/>`;
+      out += `<text x="${x + w - 14}" y="${ty}" text-anchor="end" ${FONT} fill="${cur ? "#000" : CYAN}">${esc(value)}</text>`;
+    });
+    this.win.innerHTML = out;
+  }
+
+  // Surround.updateHeaderData, PFD half.
+  private updateLeg(leg: PfdState["leg"]) {
+    const sp = this.surround.p;
+    sp.text("HeaderTo", leg?.to ?? "");
+    sp.text("HeaderFrom", leg?.from ?? "");
+    sp.show("HeaderActiveLeg", !!leg && leg.from !== null);
+    sp.show("HeaderDTO", !!leg && leg.from === null);
+    sp.text("LegDistance", leg ? `${leg.dis.toFixed(1)}nm` : "");
+    sp.text("LegBRG", leg ? deg3(leg.brg) : "");
   }
 
   private updateAI(pitch: number, roll: number, slip: number) {
     pitch = clamp(pitch, -80, 80);
-    this.tf("Horizon", { ty: pitch * 6.849, rot: -roll, center: [459, 282.8 - 6.849 * pitch] });
-    this.tf("bankPointer", { rot: -roll });
-    this.tf("SlipSkid", { tx: -20 * slip });
+    this.p.tf("Horizon", { ty: pitch * 6.849, rot: -roll, center: [459, 282.8 - 6.849 * pitch] });
+    this.p.tf("bankPointer", { rot: -roll });
+    this.p.tf("SlipSkid", { tx: -20 * slip });
   }
 
   private updateFD({ fd, pitch, roll }: PfdState) {
     // Command bars disappear beyond -20/+30 pitch or 65 bank.
     const on = !!fd && pitch >= -20 && pitch <= 30 && Math.abs(roll) <= 65;
-    this.show("FlightDirector", on);
-    if (fd && on) this.tf("FlightDirector", { ty: -(fd.pitch - pitch) * 6.849, rot: -(roll - fd.roll), center: [459, 282.8] });
+    this.p.show("FlightDirector", on);
+    if (fd && on) this.p.tf("FlightDirector", { ty: -(fd.pitch - pitch) * 6.849, rot: -(roll - fd.roll), center: [459, 282.8] });
   }
 
   private updateIAS(ias: number, trend: number) {
-    this.text("Speed110", ias >= 10 ? pad(Math.floor(ias / 10), 2) : "");
-    this.tf("SpeedLint1", { ty: (mod(ias, 10) + (ias >= 10 ? 10 : 0)) * 36 });
-    this.tf("SpeedTape", { ty: ias * 5.711 });
+    const on = this.state.vspeedsOn;
+    this.p.text("Speed110", ias >= 10 ? pad(Math.floor(ias / 10), 2) : "");
+    this.p.tf("SpeedLint1", { ty: (mod(ias, 10) + (ias >= 10 ? 10 : 0)) * 36 });
+    this.p.tf("SpeedTape", { ty: ias * 5.711 });
     trend = clamp(trend, -30, 30);
-    this.tf("Airspeed-Trend-Indicator", { sy: trend, ty: -284.5 * (trend - 1) });
-    const bg = this.el("IAS-bg");
+    this.p.tf("Airspeed-Trend-Indicator", { sy: trend, ty: -284.5 * (trend - 1) });
+    const bg = this.p.el("IAS-bg");
     if (bg) bg.style.fill = this.options.vne !== undefined && ias > this.options.vne ? "#ff0000" : "#000000";
     for (const v of ["Vx", "Vy", "Vr", "Vglide"] as const) {
       const spd = this.options.vspeeds?.[v];
-      const on = spd !== undefined && Math.abs(spd - ias) < 30;
-      this.show(`IAS-${v}`, on);
-      if (on) this.tf(`IAS-${v}`, { ty: (ias - spd!) * 5.711 });
+      const show = spd !== undefined && on[v] && Math.abs(spd - ias) < 30;
+      this.p.show(`IAS-${v}`, show);
+      if (show) this.p.tf(`IAS-${v}`, { ty: (ias - spd!) * 5.711 });
     }
   }
 
   private updateVSI(vsi: number) {
-    this.tf("VSI", { ty: clamp(vsi, -4500, 4500) * -0.03465 });
-    this.text("VSIText", String(Math.round(vsi / 10) * 10));
+    this.p.tf("VSI", { ty: clamp(vsi, -4500, 4500) * -0.03465 });
+    this.p.text("VSIText", String(Math.round(vsi / 10) * 10));
   }
 
   private updateALT(alt: number, trend: number, selected: number | null) {
-    if (alt < 0) this.text("Alt11100", "-" + pad(Math.abs(Math.ceil(alt / 100)), 3));
-    else if (alt < 100) this.text("Alt11100", "");
-    else this.text("Alt11100", pad(Math.floor(alt / 100), 3));
+    if (alt < 0) this.p.text("Alt11100", "-" + pad(Math.abs(Math.ceil(alt / 100)), 3));
+    else if (alt < 100) this.p.text("Alt11100", "");
+    else this.p.text("Alt11100", pad(Math.floor(alt / 100), 3));
 
-    this.tf("AltLint00011", { ty: (alt % 100) * 1.24 }); // math.fmod keeps the sign of alt
+    this.p.tf("AltLint00011", { ty: (alt % 100) * 1.24 }); // math.fmod keeps the sign of alt
 
     if (alt > -1000 && alt < 1000000) {
       const neg = alt < 0;
       const a = Math.abs(alt);
-      this.tf("LintAlt", { ty: mod(a, 100) * (neg ? -0.57375 : 0.57375) });
+      this.p.tf("LintAlt", { ty: mod(a, 100) * (neg ? -0.57375 : 0.57375) });
       const central = (neg ? -1 : 1) * Math.trunc(a / 100) * 100;
-      this.text("AltBigC", "");
-      this.text("AltSmallC", "");
+      this.p.text("AltBigC", "");
+      this.p.text("AltSmallC", "");
       for (let place = 1; place <= 6; place++) {
         for (const [dir, value] of [["U", central + place * 100], ["D", central - place * 100]] as const) {
           const [big, small, offset] = altLabel(value);
-          this.text(`AltBig${dir}${place}`, big);
-          this.text(`AltSmall${dir}${place}`, small);
-          this.tf(`AltSmall${dir}${place}`, { tx: offset });
+          this.p.text(`AltBig${dir}${place}`, big);
+          this.p.text(`AltSmall${dir}${place}`, small);
+          this.p.tf(`AltSmall${dir}${place}`, { tx: offset });
         }
       }
     }
 
     trend = clamp(trend, -15, 15);
-    this.tf("Altitude-Trend-Indicator", { sy: trend, ty: -284.5 * (trend - 1) });
-    if (selected !== null) this.tf("SelectedALT-bug", { ty: clamp(alt - selected, -300, 300) * 0.567 });
+    this.p.tf("Altitude-Trend-Indicator", { sy: trend, ty: -284.5 * (trend - 1) });
+    if (selected !== null) this.p.tf("SelectedALT-bug", { ty: clamp(alt - selected, -300, 300) * 0.567 });
   }
 
   private setCDISource(source: CdiSource) {
     for (const s of ["GPS", "NAV1", "NAV2"]) {
-      for (const part of ["pointer", "CDI", "FROM", "TO"]) this.show(`${s}-${part}`, source === s);
+      for (const part of ["pointer", "CDI", "FROM", "TO"]) this.p.show(`${s}-${part}`, source === s);
     }
-    this.text("CDI-SRC-text", source, source === "GPS" ? MAGENTA : GREEN);
-    this.show("CDI-SRC-text", source !== "OFF");
+    this.p.text("CDI-SRC-text", source, source === "GPS" ? MAGENTA : GREEN);
+    this.p.show("CDI-SRC-text", source !== "OFF");
   }
 
   private updateCDI(s: PfdState) {
     const src = s.cdiSource;
     if (src === "OFF") return;
     if (!s.cdiValid) {
-      for (const part of ["CDI", "FROM", "TO", "pointer"]) this.show(`${src}-${part}`, false);
-      this.tf("CDI", { rot: 0 });
-      this.show("GPS-CTI-diamond", false);
-      this.show("CDI-GPS-XTK-text", false);
-      this.text("CDI-GPS-ANN-text", "NO DATA");
-      this.show("CDI-GPS-ANN-text", true);
+      for (const part of ["CDI", "FROM", "TO", "pointer"]) this.p.show(`${src}-${part}`, false);
+      this.p.tf("CDI", { rot: 0 });
+      this.p.show("GPS-CTI-diamond", false);
+      this.p.show("CDI-GPS-XTK-text", false);
+      this.p.text("CDI-GPS-ANN-text", "NO DATA");
+      this.p.show("CDI-GPS-ANN-text", true);
       return;
     }
-    this.tf("CDI", { rot: s.course - s.heading });
-    this.show("GPS-CTI-diamond", false); // shortcut: GPS course-to-intercept diamond not ported, needs a desired track input
+    this.p.tf("CDI", { rot: s.course - s.heading });
+    this.p.show("GPS-CTI-diamond", false); // shortcut: GPS course-to-intercept diamond not ported, needs a desired track input
     const xtk = src === "GPS" && Math.abs(s.cdiDots) > 2;
-    this.show("CDI-GPS-XTK-text", xtk);
-    if (xtk) this.text("CDI-GPS-XTK-text", `XTK ${Math.abs(s.xtk).toFixed(2)}NM`);
-    this.show("CDI-GPS-ANN-text", src === "GPS");
-    if (src === "GPS") this.text("CDI-GPS-ANN-text", s.gpsMode);
-    this.tf(`${src}-CDI`, { tx: (80 * clamp(s.cdiDots, -2.4, 2.4)) / 2.4 });
-    this.show(`${src}-TO`, !s.from);
-    this.show(`${src}-FROM`, s.from);
+    this.p.show("CDI-GPS-XTK-text", xtk);
+    if (xtk) this.p.text("CDI-GPS-XTK-text", `XTK ${Math.abs(s.xtk).toFixed(2)}NM`);
+    this.p.show("CDI-GPS-ANN-text", src === "GPS");
+    if (src === "GPS") this.p.text("CDI-GPS-ANN-text", s.obs ? "OBS" : s.gpsMode);
+    this.p.tf(`${src}-CDI`, { tx: (80 * clamp(s.cdiDots, -2.4, 2.4)) / 2.4 });
+    this.p.show(`${src}-TO`, !s.from);
+    this.p.show(`${src}-FROM`, s.from);
   }
 
-  private updateBRG(brg: "BRG1" | "BRG2", b: Bearing, heading: number) {
-    this.show(brg, !!b);
-    this.show(`${brg}-pointer`, !!b);
-    if (!b) return;
-    this.text(`${brg}-SRC-text`, b.source);
-    this.text(`${brg}-WPID-text`, b.id);
-    this.text(`${brg}-DST-text`, b.source === "ADF" || b.distance === undefined ? "" : `${b.distance.toFixed(1)}NM`);
-    this.tf(`${brg}-pointer`, { rot: b.bearing - heading });
-  }
-
-  // --- SVG helpers -------------------------------------------------------------------------------------------
-
-  private el(name: string): SVGGraphicsElement | null {
-    if (!this.cache.has(name)) this.cache.set(name, this.svg.querySelector<SVGGraphicsElement>(`[id="PFDInstruments${name}"]`));
-    return this.cache.get(name)!;
-  }
-
-  private show(name: string, on: boolean) {
-    const e = this.el(name);
-    if (e) e.style.display = on ? "" : "none";
-  }
-
-  private text(name: string, value: string, color?: string) {
-    const e = this.el(name);
-    if (!e) return;
-    const target = e.querySelector("tspan") ?? e;
-    if (target.textContent !== value) target.textContent = value;
-    if (color) target.style.fill = color;
-  }
-
-  private tf(name: string, t: Tf) {
-    const e = this.el(name);
-    if (!e) return;
-    if (!this.base.has(e)) this.base.set(e, e.getAttribute("transform") ?? "");
-    let out = this.base.get(e)!;
-    if (t.tx || t.ty || (t.sy !== undefined && t.sy !== 1) || (t.sx !== undefined && t.sx !== 1)) {
-      out += ` translate(${t.tx ?? 0} ${t.ty ?? 0}) scale(${t.sx ?? 1} ${t.sy ?? 1})`;
-    }
-    if (t.rot) {
-      const [cx, cy] = t.center ?? this.center(e);
-      out += ` rotate(${t.rot} ${cx} ${cy})`;
-    }
-    e.setAttribute("transform", out.trim());
-  }
-
-  // FlightGear's default rotation center: bounding box center plus Inkscape's offset (Inkscape's y points up).
-  private centers = new WeakMap<Element, [number, number]>();
-  private center(e: SVGGraphicsElement): [number, number] {
-    let c = this.centers.get(e);
-    if (!c) {
-      const b = e.getBBox();
-      c = [b.x + b.width / 2 + Number(e.dataset.tcx ?? 0), b.y + b.height / 2 - Number(e.dataset.tcy ?? 0)];
-      this.centers.set(e, c);
-    }
-    return c;
-  }
-
-  // Clip an element to a screen rectangle that stays put while the element moves, as FlightGear's clip does.
-  private clip(name: string, [top, right, bottom, left]: [number, number, number, number]) {
-    const e = this.el(name);
-    if (!e?.parentNode) return;
-    const ns = "http://www.w3.org/2000/svg";
-    const wrap = document.createElementNS(ns, "g") as SVGGElement;
-    e.parentNode.insertBefore(wrap, e);
-    wrap.appendChild(e);
-    // Map the screen rectangle (viewBox units) into the wrapper's coordinates: wrapper CTM⁻¹ × root user space CTM.
-    const probe = this.svg.appendChild(document.createElementNS(ns, "g"));
-    const toUser = wrap.getCTM()!.inverse().multiply(probe.getCTM()!);
-    probe.remove();
-    const id = `pfd-clip-${name}`;
-    const cp = document.createElementNS(ns, "clipPath");
-    cp.id = id;
-    cp.setAttribute("clipPathUnits", "userSpaceOnUse");
-    const r = document.createElementNS(ns, "rect");
-    r.setAttribute("x", String(left));
-    r.setAttribute("y", String(top));
-    r.setAttribute("width", String(right - left));
-    r.setAttribute("height", String(bottom - top));
-    r.setAttribute("transform", `matrix(${toUser.a} ${toUser.b} ${toUser.c} ${toUser.d} ${toUser.e} ${toUser.f})`);
-    cp.appendChild(r);
-    wrap.appendChild(cp);
-    wrap.setAttribute("clip-path", `url(#${id})`);
+  // _setBRG and _updateBRG: a source with nothing to point at shows dashes and no needle.
+  private updateBRG(brg: "BRG1" | "BRG2", source: BrgSource, s: PfdState) {
+    const b = source === "OFF" ? undefined : s.bearings[source];
+    this.p.show(brg, source !== "OFF");
+    this.p.show(`${brg}-pointer`, !!b);
+    if (source === "OFF") return;
+    this.p.text(`${brg}-SRC-text`, source);
+    this.p.text(`${brg}-WPID-text`, b?.id ?? "----");
+    this.p.text(`${brg}-DST-text`, source === "ADF" ? "" : b?.distance === undefined ? "--nm" : `${b.distance.toFixed(1)}NM`);
+    if (b) this.p.tf(`${brg}-pointer`, { rot: b.bearing - s.heading });
   }
 }
+
 
 // Altitude tape label for one 100 ft line: [thousands, hundreds, x offset of the hundreds], as FG1000 lays it out.
 function altLabel(v: number): [string, string, number] {
@@ -321,3 +736,30 @@ function altLabel(v: number): [string, string, number] {
   if (v < 10000) return [prefix + Math.trunc(v / 1000), String(v % 1000), offset + 15.039];
   return [prefix + Math.trunc(v / 1000), String(v % 1000), offset + 30.078];
 }
+
+/** An element's bounding box in screen coordinates. */
+function screenBox(screen: SVGGElement, e: SVGGraphicsElement): DOMRect {
+  const b = e.getBBox();
+  const m = screen.getCTM()!.inverse().multiply(e.getCTM()!);
+  const a = new DOMPoint(b.x, b.y).matrixTransform(m);
+  const c = new DOMPoint(b.x + b.width, b.y + b.height).matrixTransform(m);
+  return new DOMRect(Math.min(a.x, c.x), Math.min(a.y, c.y), Math.abs(c.x - a.x), Math.abs(c.y - a.y));
+}
+
+/** Initial great-circle bearing (true) and distance in nm. */
+function bearingDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const r = Math.PI / 180;
+  const dLon = (lon2 - lon1) * r;
+  const [p1, p2] = [lat1 * r, lat2 * r];
+  const brg = Math.atan2(Math.sin(dLon) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dLon)) / r;
+  const dist = (Math.acos(Math.min(1, Math.sin(p1) * Math.sin(p2) + Math.cos(p1) * Math.cos(p2) * Math.cos(dLon))) / r) * 60;
+  return { brg: mod(brg, 360), dist };
+}
+
+// setTextElementLat / Lon: N33°25.92'
+const latLon = (v: number, pos: string, neg: string) => {
+  const a = Math.abs(v);
+  return `${v >= 0 ? pos : neg}${Math.floor(a)}°${((a % 1) * 60).toFixed(2)}'`;
+};
+
+const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
