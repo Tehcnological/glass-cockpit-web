@@ -40,13 +40,14 @@ export function drawMap(g, s, m, declutter = 0) {
     const shown = (layer) => s.range <= LAYER_RANGE[layer] && declutter <= DECLUTTER[layer];
     const cos = Math.cos((s.lat * Math.PI) / 180);
     const rad = (up * Math.PI) / 180;
+    const c = s.center ?? s;
     const xy = (p) => {
-        const e = (p.lon - s.lon) * NM_PER_DEG * cos * scale;
-        const n = (p.lat - s.lat) * NM_PER_DEG * scale;
+        const e = (p.lon - c.lon) * NM_PER_DEG * cos * scale;
+        const n = (p.lat - c.lat) * NM_PER_DEG * scale;
         return [m.cx + e * Math.cos(rad) - n * Math.sin(rad), m.cy - (e * Math.sin(rad) + n * Math.cos(rad))];
     };
     const byId = new Map(s.points.map((p) => [p.id, p]));
-    const route = s.route.map((id) => byId.get(id)).filter((p) => !!p);
+    const route = s.route.map((r) => (typeof r === "string" ? byId.get(r) : r)).filter((p) => !!p);
     let out = "";
     if (shown("APT")) {
         for (const a of s.airspaces) {
@@ -56,11 +57,15 @@ export function drawMap(g, s, m, declutter = 0) {
     }
     // RTE: the active leg magenta, the rest white.
     for (let i = 1; i < route.length; i++) {
-        const [x1, y1] = xy(route[i - 1]);
+        const [x1, y1] = xy(i === s.activeLeg && s.directFrom ? s.directFrom : route[i - 1]);
         const [x2, y2] = xy(route[i]);
         out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${i === s.activeLeg ? "#ff00ff" : "#ffffff"}" stroke-width="2"/>`;
     }
-    for (const p of s.points) {
+    if (s.activeLeg === 0 && s.directFrom && route[0]) {
+        const [[x1, y1], [x2, y2]] = [xy(s.directFrom), xy(route[0])];
+        out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ff00ff" stroke-width="2"/>`;
+    }
+    for (const p of [...s.points, ...route.filter((r) => !byId.has(r.id))]) {
         const [x, y] = xy(p);
         if (!shown(p.type) && !route.includes(p))
             continue;
@@ -70,7 +75,8 @@ export function drawMap(g, s, m, declutter = 0) {
         out += `<g transform="translate(${x} ${y})">${SYMBOLS[p.type](p.id, active)}</g>`;
     }
     // APS_FG1000: the ownship icon at 30%, pointing along the heading relative to the map.
-    out += `<g transform="translate(${m.cx} ${m.cy}) rotate(${s.heading - up}) scale(0.3) translate(-43.92 -76)">${APS}</g>`;
+    const [ax, ay] = xy(s);
+    out += `<g transform="translate(${ax} ${ay}) rotate(${s.heading - up}) scale(0.3) translate(-43.92 -76)">${APS}</g>`;
     g.innerHTML = out;
     // Labels on a white box (text_mode FILLEDBOUNDINGBOX, text_padding 2).
     for (const t of g.querySelectorAll("text[data-box]")) {

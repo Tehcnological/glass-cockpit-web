@@ -1,8 +1,11 @@
 import { type DisplayOptions } from "./display.js";
 import { type Radios } from "./surround.js";
 import { type Airspace, type MapPoint } from "./map.js";
+import { type Airport } from "./nav.js";
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
-export type { MapPoint, Airspace } from "./map.js";
+export type { Checklist } from "./mfd-pages.js";
+export type { MapPoint, Airspace, LatLon } from "./map.js";
+export type { Airport, Runway, Freq, Station, Procedure, ProcLeg } from "./nav.js";
 export type { Radio, Radios } from "./surround.js";
 export type { DisplayOptions } from "./display.js";
 export type { Control, Input } from "./bezel.js";
@@ -16,18 +19,6 @@ export interface Pointer {
 }
 export type XpdrMode = "OFF" | "STBY" | "TEST" | "GND" | "ON" | "ALT";
 export type VSpeed = "Vglide" | "Vr" | "Vx" | "Vy";
-/** An airport for the NRST window. */
-export interface NearestAirport {
-    id: string;
-    name: string;
-    lat: number;
-    lon: number;
-    /** Feet. */ elev: number;
-    /** Best approach: "ILS" or "VFR" (NearestAirportsPFD). */ appr: string;
-    /** "APPROACH", "TOWER" or "UNICOM", with its frequency; "" if none. */ freqType: string;
-    freq: string;
-    /** Longest runway, feet. */ rwy: number;
-}
 export interface PfdState {
     /** Degrees, nose up positive. */ pitch: number;
     /** Degrees, right wing down positive. */ roll: number;
@@ -73,9 +64,10 @@ export interface PfdState {
     lon: number;
     /** Inset map contents (see the MFD's map). */ points: MapPoint[];
     airspaces: Airspace[];
-    route: string[];
+    route: (string | MapPoint)[];
     activeLeg: number;
-    /** Airports the NRST window lists, nearest first after sorting here. */ airports: NearestAirport[];
+    /** Airports the NRST window lists, nearest first after sorting here. */ airports: Airport[];
+    /** Magnetic variation, degrees east positive: bearings to stations are magnetic. */ magVar: number;
     /** Wind, true direction it blows from and knots; null shows NO DATA. */ wind: {
         direction: number;
         speed: number;
@@ -141,8 +133,7 @@ export declare class GlassPfd {
     private updateWind;
     private updateInset;
     private updateNrst;
-    private highlights;
-    private highlight;
+    private hl;
     private drawWindow;
     private updateLeg;
     private updateAI;

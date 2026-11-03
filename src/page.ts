@@ -9,6 +9,7 @@ export type Tf = { tx?: number; ty?: number; sx?: number; sy?: number; rot?: num
 const NS = "http://www.w3.org/2000/svg";
 let clipCount = 0;
 
+export const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 export const mod = (a: number, b: number) => a - b * Math.floor(a / b); // Nasal math.mod: result has the sign of b
 export const pad = (s: string | number, n: number, c = " ") => String(s).padStart(n, c);
 export const deg3 = (d: number) => pad(Math.round(mod(d, 360)) % 360, 3, "0") + "°";

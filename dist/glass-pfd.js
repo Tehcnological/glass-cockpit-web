@@ -6,23 +6,23 @@ import SURROUND from "./svg/surround-pfd.js";
 import NRST from "./svg/nrst-pfd.js";
 import NRST_INFO from "./svg/nrst-info-pfd.js";
 import { buildDisplay } from "./display.js";
-import { Page, deg3, mod, pad } from "./page.js";
+import { Page, clamp, deg3, mod, pad } from "./page.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
+import { bestApproach, latLon, nearest, nrstFreq } from "./nav.js";
+import { BLANK as blank, CYAN, Highlighter, NS, esc, key as k, screenBox } from "./ui.js";
 export { GlassMfd } from "./glass-mfd.js";
 const DEFAULTS = {
     pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
     baro: 29.92, oat: 15, heading: 0, turnRate: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
     cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null,
-    radios: RADIOS, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], activeLeg: 1, airports: [], wind: null,
+    radios: RADIOS, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], activeLeg: 1, airports: [], magVar: 0, wind: null,
     xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
     vspeedsOn: { Vglide: true, Vr: true, Vx: true, Vy: true }, minimums: null,
 };
 const BRG_SOURCES = ["OFF", "NAV1", "NAV2", "GPS", "ADF"];
 const VSPEEDS = ["Vglide", "Vr", "Vx", "Vy"];
-const CYAN = "#00ffff";
-const NS = "http://www.w3.org/2000/svg";
 const TMR_FIELDS = ["time", "dir", "action", "Vglide", "Vr", "Vx", "Vy", "minimums", "minalt"];
 const FONT = `font-family="'Liberation Sans',Arial,sans-serif" font-size="18"`;
 // Parts of the FG1000 PFD this port does not drive.
@@ -37,7 +37,6 @@ const CLIPS = {
 };
 const MAGENTA = "#ff00ff";
 const GREEN = "#00ff00";
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 export class GlassPfd {
     options;
     svg;
@@ -82,7 +81,7 @@ export class GlassPfd {
         this.minBug = bug.cloneNode(true);
         for (const e of [this.minBug, ...this.minBug.querySelectorAll("*")]) {
             e.removeAttribute("id");
-            e.style.fill = CYAN;
+            e.style.fill = "#00ffff";
         }
         bug.parentNode.parentNode.appendChild(this.minBug); // outside SelectedALT, which hides with no selected altitude
         this.clock = setInterval(() => this.tick(), 1000);
@@ -169,8 +168,6 @@ export class GlassPfd {
     menu() {
         const u = this.ui;
         const s = this.state;
-        const k = (label, act, lit = false) => ({ label, act, lit });
-        const blank = k("");
         const alerts = k("ALERTS", () => this.openWindow("ALERTS"), u.window === "ALERTS");
         const back = (to) => k("BACK", () => this.go(to));
         const toggle = (set, name) => k(name, () => (set[name] = !set[name]), set[name]);
@@ -259,10 +256,7 @@ export class GlassPfd {
     }
     nearest() {
         const s = this.state;
-        return s.airports
-            .map((a) => ({ a, ...bearingDistance(s.lat, s.lon, a.lat, a.lon) }))
-            .sort((x, y) => x.dist - y.dist)
-            .slice(0, 25);
+        return nearest(s.airports, s.lat, s.lon, s.magVar).map((n) => ({ ...n, a: n.item }));
     }
     // FMS knob in a window: the outer ring moves the cursor, the inner changes the field (NRST: both scroll the list).
     fms(outer, d) {
@@ -456,11 +450,11 @@ export class GlassPfd {
         for (let row = 0; row < 3; row++) {
             const n = list[top + row];
             const cells = n
-                ? { ID: n.a.id, BRG: `${Math.round(n.brg)}°`, DST: `${n.dist.toFixed(1)}nm`, APP: n.a.appr, CommsType: n.a.freqType, CommsFreq: n.a.freq, RWY: `${n.a.rwy}ft` }
+                ? { ID: n.a.id, BRG: `${Math.round(n.brg)}°`, DST: `${n.dist.toFixed(1)}nm`, APP: bestApproach(n.a), CommsType: nrstFreq(n.a)[0], CommsFreq: nrstFreq(n.a)[1], RWY: `${n.a.runways[0]?.length ?? 0}ft` }
                 : { ID: row === 0 ? "NONE WITHIN 200NM" : "", BRG: "", DST: "", APP: "", CommsType: "", CommsFreq: "", RWY: "" };
             for (const [k, v] of Object.entries(cells))
                 this.nrst.text(`${k}${row}`, v);
-            this.highlight(this.nrst.el(`ID${row}`), !!n && top + row === u.cursor);
+            this.hl.set(this.nrst.el(`ID${row}`), !!n && top + row === u.cursor);
         }
         const thumb = this.nrst.el("Scroll");
         if (thumb)
@@ -471,38 +465,17 @@ export class GlassPfd {
             this.nrst.text("InfoName", sel.name.toUpperCase());
             this.nrst.text("InfoFacility", "");
             this.nrst.text("InfoUsage", "PUBLIC");
+            this.nrst.text("InfoFacility", sel.city ?? "");
             this.nrst.text("InfoTime", "");
             this.nrst.text("InfoAlt", `${Math.round(sel.elev)}ft`);
             this.nrst.text("InfoRegion", "");
             this.nrst.text("InfoLat", latLon(sel.lat, "N", "S"));
             this.nrst.text("InfoLon", latLon(sel.lon, "E", "W"));
             this.nrst.text("InfoBack", "BACK");
-            this.highlight(this.nrst.el("InfoBack"), true);
+            this.hl.set(this.nrst.el("InfoBack"), true);
         }
     }
-    highlights = new Map();
-    // The FMS cursor: black text on a cyan box, as FG1000's highlightTextElement.
-    highlight(t, on) {
-        if (!t)
-            return;
-        let box = this.highlights.get(t);
-        if (!box) {
-            box = document.createElementNS(NS, "rect");
-            box.setAttribute("fill", CYAN);
-            t.before(box);
-            this.highlights.set(t, box);
-        }
-        const target = (t.querySelector("tspan") ?? t);
-        target.style.fill = on ? "#000000" : "";
-        box.style.display = on ? "inline" : "none";
-        if (!on)
-            return;
-        const b = t.getBBox();
-        for (const [k, v] of Object.entries({ x: b.x - 2, y: b.y - 1, width: b.width + 4, height: b.height + 2 }))
-            box.setAttribute(k, String(v));
-        if (t.getAttribute("transform"))
-            box.setAttribute("transform", t.getAttribute("transform"));
-    }
+    hl = new Highlighter();
     // TMR/REF (generic timer, speed references, minimums) and ALERTS, drawn in the NRST window's place. FG1000 has
     // these as TODO, so the layout follows the real unit.
     drawWindow() {
@@ -685,26 +658,3 @@ function altLabel(v) {
         return [prefix + Math.trunc(v / 1000), String(v % 1000), offset + 15.039];
     return [prefix + Math.trunc(v / 1000), String(v % 1000), offset + 30.078];
 }
-/** An element's bounding box in screen coordinates. */
-function screenBox(screen, e) {
-    const b = e.getBBox();
-    const m = screen.getCTM().inverse().multiply(e.getCTM());
-    const a = new DOMPoint(b.x, b.y).matrixTransform(m);
-    const c = new DOMPoint(b.x + b.width, b.y + b.height).matrixTransform(m);
-    return new DOMRect(Math.min(a.x, c.x), Math.min(a.y, c.y), Math.abs(c.x - a.x), Math.abs(c.y - a.y));
-}
-/** Initial great-circle bearing (true) and distance in nm. */
-function bearingDistance(lat1, lon1, lat2, lon2) {
-    const r = Math.PI / 180;
-    const dLon = (lon2 - lon1) * r;
-    const [p1, p2] = [lat1 * r, lat2 * r];
-    const brg = Math.atan2(Math.sin(dLon) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dLon)) / r;
-    const dist = (Math.acos(Math.min(1, Math.sin(p1) * Math.sin(p2) + Math.cos(p1) * Math.cos(p2) * Math.cos(dLon))) / r) * 60;
-    return { brg: mod(brg, 360), dist };
-}
-// setTextElementLat / Lon: N33°25.92'
-const latLon = (v, pos, neg) => {
-    const a = Math.abs(v);
-    return `${v >= 0 ? pos : neg}${Math.floor(a)}°${((a % 1) * 60).toFixed(2)}'`;
-};
-const esc = (t) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);

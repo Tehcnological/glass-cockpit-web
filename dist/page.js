@@ -1,5 +1,6 @@
 const NS = "http://www.w3.org/2000/svg";
 let clipCount = 0;
+export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 export const mod = (a, b) => a - b * Math.floor(a / b); // Nasal math.mod: result has the sign of b
 export const pad = (s, n, c = " ") => String(s).padStart(n, c);
 export const deg3 = (d) => pad(Math.round(mod(d, 360)) % 360, 3, "0") + "°";

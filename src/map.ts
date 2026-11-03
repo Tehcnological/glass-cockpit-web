@@ -2,7 +2,22 @@
 // NavigationMapStyles.nas, ConfigStore.nas; Copyright 2018 Stuart Buchanan, GPL-2.0-or-later) drawn from the points given.
 import { clipRect } from "./page.js";
 
-export interface MapPoint { id: string; type: "APT" | "VOR" | "NDB" | "FIX" | "WPT"; lat: number; lon: number }
+export interface MapPoint {
+  id: string;
+  type: "APT" | "VOR" | "NDB" | "FIX" | "WPT";
+  lat: number;
+  lon: number;
+  /** The rest is for the NRST and WPT pages. */ name?: string;
+  /** MHz or kHz as published, e.g. "113.80", "338". */ freq?: string;
+  /** e.g. "VORTAC", "VOR/DME", "NDB". */ kind?: string;
+  /** Service volume class, e.g. "H", "L", "T". */ cls?: string;
+  city?: string;
+  /** e.g. "AZ". */ region?: string;
+  /** Degrees, east positive. */ magVar?: number;
+  /** Flight plan legs: the published altitude, e.g. "3600+" (see `ProcLeg`). */ alt?: string | null;
+}
+/** A position only. */
+export interface LatLon { lat: number; lon: number }
 /** Class B, C or D airspace: outlines as rings of [lat, lon]. */
 export interface Airspace { cls: "B" | "C" | "D"; rings: [number, number][][] }
 
@@ -14,8 +29,10 @@ export interface MapData {
   orientation: "NORTH UP" | "HDG UP";
   points: MapPoint[];
   airspaces: Airspace[];
-  /** Flight plan as point ids, in order. */ route: string[];
+  /** Flight plan in order: ids of `points`, or points of its own (approach fixes). */ route: (string | MapPoint)[];
   /** Index into `route` of the active waypoint; the leg into it is magenta. */ activeLeg: number;
+  /** After a Direct-To: where it started; the magenta leg runs from here to the active waypoint. */ directFrom?: LatLon | null;
+  /** Map center when not the aircraft (WPT pages center on the waypoint). */ center?: LatLon;
 }
 
 /** Map window in screen pixels: clip box, aircraft position, and pixels per `range`. */
@@ -66,13 +83,14 @@ export function drawMap(g: SVGGElement, s: MapData, m: MapGeometry, declutter = 
 const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer] && declutter <= DECLUTTER[layer];
   const cos = Math.cos((s.lat * Math.PI) / 180);
   const rad = (up * Math.PI) / 180;
-  const xy = (p: { lat: number; lon: number }): [number, number] => {
-    const e = (p.lon - s.lon) * NM_PER_DEG * cos * scale;
-    const n = (p.lat - s.lat) * NM_PER_DEG * scale;
+  const c = s.center ?? s;
+  const xy = (p: LatLon): [number, number] => {
+    const e = (p.lon - c.lon) * NM_PER_DEG * cos * scale;
+    const n = (p.lat - c.lat) * NM_PER_DEG * scale;
     return [m.cx + e * Math.cos(rad) - n * Math.sin(rad), m.cy - (e * Math.sin(rad) + n * Math.cos(rad))];
   };
   const byId = new Map(s.points.map((p) => [p.id, p]));
-  const route = s.route.map((id) => byId.get(id)).filter((p): p is MapPoint => !!p);
+  const route = s.route.map((r) => (typeof r === "string" ? byId.get(r) : r)).filter((p): p is MapPoint => !!p);
 
   let out = "";
   if (shown("APT")) {
@@ -83,11 +101,15 @@ const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer]
   }
   // RTE: the active leg magenta, the rest white.
   for (let i = 1; i < route.length; i++) {
-    const [x1, y1] = xy(route[i - 1]);
+    const [x1, y1] = xy(i === s.activeLeg && s.directFrom ? s.directFrom : route[i - 1]);
     const [x2, y2] = xy(route[i]);
     out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${i === s.activeLeg ? "#ff00ff" : "#ffffff"}" stroke-width="2"/>`;
   }
-  for (const p of s.points) {
+  if (s.activeLeg === 0 && s.directFrom && route[0]) {
+    const [[x1, y1], [x2, y2]] = [xy(s.directFrom), xy(route[0])];
+    out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ff00ff" stroke-width="2"/>`;
+  }
+  for (const p of [...s.points, ...route.filter((r) => !byId.has(r.id))]) {
     const [x, y] = xy(p);
     if (!shown(p.type) && !route.includes(p)) continue;
     if (x < m.x - 150 || x > m.x + m.w + 150 || y < m.y - 150 || y > m.y + m.h + 150) continue;
@@ -95,7 +117,8 @@ const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer]
     out += `<g transform="translate(${x} ${y})">${SYMBOLS[p.type](p.id, active)}</g>`;
   }
   // APS_FG1000: the ownship icon at 30%, pointing along the heading relative to the map.
-  out += `<g transform="translate(${m.cx} ${m.cy}) rotate(${s.heading - up}) scale(0.3) translate(-43.92 -76)">${APS}</g>`;
+  const [ax, ay] = xy(s);
+  out += `<g transform="translate(${ax} ${ay}) rotate(${s.heading - up}) scale(0.3) translate(-43.92 -76)">${APS}</g>`;
   g.innerHTML = out;
   // Labels on a white box (text_mode FILLEDBOUNDINGBOX, text_padding 2).
   for (const t of g.querySelectorAll<SVGTextElement>("text[data-box]")) {

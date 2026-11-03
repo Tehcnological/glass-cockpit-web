@@ -3,7 +3,7 @@
 A working glass cockpit for the browser: PFD and MFD in a bezel whose knobs, buttons and softkey menus work with the mouse. No dependencies.
 
 - **PFD:** attitude, airspeed and altitude tapes, vertical speed, HSI with course deviation, glideslope, bearing pointers, marker beacons, NAV/COM radios and the active leg across the top, and the softkey menus: inset map, nearest airports, transponder, wind, timer and references with minimums, alerts.
-- **MFD:** engine strip, navigation map with the points and flight plan you give it, radios and GS/DTK/TRK/ETE across the top, softkey labels.
+- **MFD:** engine strip, radios and GS/DTK/TRK/ETE across the top, and the page groups the FMS knob steps through: navigation and traffic maps, NRST (airports, VORs, NDBs, intersections, frequencies), WPT information (airport, VOR, NDB, intersection), the active flight plan, checklists, DIRECT TO and PROC (approach loading). Pages with no data to show (weather, terrain, trip planning, GPS status and others) show their title and NO DATA.
 
 It is a TypeScript port of [FlightGear](https://www.flightgear.org/)'s FG1000, by Stuart Buchanan. The SVG artwork is FG1000's (PFD, surround, engine strip, map page, and the bezel from its GUI window), with editor metadata removed, and the display logic is ported from its Nasal code (`Aircraft/Instruments-3d/FG1000` and `Nasal/canvas/map` in [fgdata](https://gitlab.com/flightgear/fgdata)). It is not affiliated with or endorsed by Garmin.
 
@@ -25,6 +25,12 @@ mfd.set({
 
 The container must be in the page and visible when a display is created, since rotation centers and clipping are measured from the rendered SVG. `set()` takes any subset of the state; see `PfdState` in `src/glass-pfd.ts` and `MfdState` in `src/glass-mfd.ts` for every field and its units.
 
+### MFD
+
+The pages draw from what you pass in: `points` (with `name`, `freq` and the rest for the WPT and NRST details), `airports` (runways, frequencies, approach names), `stations` (ARTCC, FSS and weather frequencies), `procedures` (approach legs by transition, for PROC) and `checklists`. The FMS knob picks the page group and page (outer ring, then inner) and, with the cursor on (push), the field. ENT on a frequency tunes it to the standby of NAV or COM. FPL shows the active flight plan: the inner knob inserts a waypoint, CLR deletes one, ENT on a row makes it the active leg. DIRECT TO opens on the selected waypoint with ACTIVATE? highlighted, so ENT goes direct; the inner knob enters another. PROC opens on the destination's approaches: pick one, a transition, then LOAD? or ACTIVATE?. Its fixes join the flight plan after the en route waypoints. The MFD softkeys work: ENGINE (LEAN, SYSTEM), MAP (layers, airways, terrain and traffic switches), DCLTR, CHKLIST, and each page's own keys. CLR held goes to the navigation map. `onChange` reports `route`, `activeLeg` and `directFrom` when FPL, DIRECT TO or PROC change them.
+
+### Bezel
+
 With the bezel, the mouse works the controls as FlightGear's FG1000 window does: the wheel turns a knob, shift+wheel turns the outer ring of a dual knob, a click pushes a knob or button, shift+click is a long press. HDG (push: sync), CRS (push: `onInput` only, the display has no station bearing), BARO, ALT, NAV and COM tuning, frequency swap, and the tuning box work on both units; RANGE works the MFD map and the PFD inset. Every PFD softkey works: INSET (DCLTR, range), PFD (BRG1/BRG2 cycle OFF, NAV1, NAV2, GPS, ADF over `bearings`; WIND; ALT UNIT meters and hPa; STD BARO; DFLTS), OBS, CDI, XPDR (modes, code entry, IDENT), TMR/REF (FMS outer knob picks a field, inner changes it, ENT starts and stops the timer), NRST (FMS scrolls, ENT shows the airport, CLR goes back) and ALERTS. SYN VIS keys switch only their setting; there is no terrain to draw. NAV tunes in 50 kHz steps and COM in 25 kHz steps. `onChange(patch)` reports state the controls changed, so a host can keep a PFD and MFD in step; `onInput({ control, value })` reports every input, including the FMS knob, menu keys and joystick, which the display does not act on.
 
 FG1000 draws the turn rate scale above the compass rose but never moves anything on it; `turnRate` (degrees per second) draws a magenta trend vector there, the heading 6 seconds ahead, as the real unit does.
@@ -44,7 +50,7 @@ npm run build
 
 ## Not ported
 
-MFD menus and every MFD page but the navigation map, the PFD flight plan window, synthetic vision, the arc HSI, DME window, selected airspeed, autopilot annunciations, failure flags, the GPS course-to-intercept diamond, and map terrain, airways and declutter. FG1000 renders in Liberation Sans Narrow; without that font installed, some narrow labels fall back to a wider font.
+MFD pages that need data this package has no source for (weather, terrain, XM, trip planning, GPS status, stored flight plans, user waypoints, nearest airspaces), DIRECT TO's VNAV fields, approach suspend and missed-approach sequencing, the PFD flight plan window, synthetic vision, the arc HSI, DME window, selected airspeed, autopilot annunciations, failure flags, the GPS course-to-intercept diamond, and map terrain and airways. FG1000 renders in Liberation Sans Narrow; without that font installed, some narrow labels fall back to a wider font.
 
 ## License
 

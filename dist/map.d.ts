@@ -3,6 +3,19 @@ export interface MapPoint {
     type: "APT" | "VOR" | "NDB" | "FIX" | "WPT";
     lat: number;
     lon: number;
+    /** The rest is for the NRST and WPT pages. */ name?: string;
+    /** MHz or kHz as published, e.g. "113.80", "338". */ freq?: string;
+    /** e.g. "VORTAC", "VOR/DME", "NDB". */ kind?: string;
+    /** Service volume class, e.g. "H", "L", "T". */ cls?: string;
+    city?: string;
+    /** e.g. "AZ". */ region?: string;
+    /** Degrees, east positive. */ magVar?: number;
+    /** Flight plan legs: the published altitude, e.g. "3600+" (see `ProcLeg`). */ alt?: string | null;
+}
+/** A position only. */
+export interface LatLon {
+    lat: number;
+    lon: number;
 }
 /** Class B, C or D airspace: outlines as rings of [lat, lon]. */
 export interface Airspace {
@@ -17,8 +30,10 @@ export interface MapData {
     orientation: "NORTH UP" | "HDG UP";
     points: MapPoint[];
     airspaces: Airspace[];
-    /** Flight plan as point ids, in order. */ route: string[];
+    /** Flight plan in order: ids of `points`, or points of its own (approach fixes). */ route: (string | MapPoint)[];
     /** Index into `route` of the active waypoint; the leg into it is magenta. */ activeLeg: number;
+    /** After a Direct-To: where it started; the magenta leg runs from here to the active waypoint. */ directFrom?: LatLon | null;
+    /** Map center when not the aircraft (WPT pages center on the waypoint). */ center?: LatLon;
 }
 /** Map window in screen pixels: clip box, aircraft position, and pixels per `range`. */
 export interface MapGeometry {

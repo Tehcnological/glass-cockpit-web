@@ -6,13 +6,17 @@ import SURROUND from "./svg/surround-pfd.js";
 import NRST from "./svg/nrst-pfd.js";
 import NRST_INFO from "./svg/nrst-info-pfd.js";
 import { buildDisplay, type DisplayOptions } from "./display.js";
-import { Page, deg3, mod, pad } from "./page.js";
+import { Page, clamp, deg3, mod, pad } from "./page.js";
 import { RADIOS, Surround, type Radios } from "./surround.js";
 import { adjust, bezelInput, type Input } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type MapGeometry, type MapPoint } from "./map.js";
+import { bestApproach, latLon, nearest, nrstFreq, type Airport } from "./nav.js";
+import { BLANK as blank, CYAN, Highlighter, NS, esc, key as k, screenBox, type Key } from "./ui.js";
 
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
-export type { MapPoint, Airspace } from "./map.js";
+export type { Checklist } from "./mfd-pages.js";
+export type { MapPoint, Airspace, LatLon } from "./map.js";
+export type { Airport, Runway, Freq, Station, Procedure, ProcLeg } from "./nav.js";
 export type { Radio, Radios } from "./surround.js";
 export type { DisplayOptions } from "./display.js";
 export type { Control, Input } from "./bezel.js";
@@ -23,14 +27,6 @@ export type BrgSource = "OFF" | "NAV1" | "NAV2" | "GPS" | "ADF";
 export interface Pointer { id: string; bearing: number; distance?: number }
 export type XpdrMode = "OFF" | "STBY" | "TEST" | "GND" | "ON" | "ALT";
 export type VSpeed = "Vglide" | "Vr" | "Vx" | "Vy";
-/** An airport for the NRST window. */
-export interface NearestAirport {
-  id: string; name: string; lat: number; lon: number;
-  /** Feet. */ elev: number;
-  /** Best approach: "ILS" or "VFR" (NearestAirportsPFD). */ appr: string;
-  /** "APPROACH", "TOWER" or "UNICOM", with its frequency; "" if none. */ freqType: string; freq: string;
-  /** Longest runway, feet. */ rwy: number;
-}
 
 export interface PfdState {
   /** Degrees, nose up positive. */ pitch: number;
@@ -69,9 +65,10 @@ export interface PfdState {
   lon: number;
   /** Inset map contents (see the MFD's map). */ points: MapPoint[];
   airspaces: Airspace[];
-  route: string[];
+  route: (string | MapPoint)[];
   activeLeg: number;
-  /** Airports the NRST window lists, nearest first after sorting here. */ airports: NearestAirport[];
+  /** Airports the NRST window lists, nearest first after sorting here. */ airports: Airport[];
+  /** Magnetic variation, degrees east positive: bearings to stations are magnetic. */ magVar: number;
   /** Wind, true direction it blows from and knots; null shows NO DATA. */ wind: { direction: number; speed: number } | null;
   xpdr: { mode: XpdrMode; /** Four digits. */ code: string; ident: boolean };
   /** Time of day in seconds for the TIME field; null uses the computer's clock. */ time: number | null;
@@ -92,18 +89,15 @@ const DEFAULTS: PfdState = {
   pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
   baro: 29.92, oat: 15, heading: 0, turnRate: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
   cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null,
-  radios: RADIOS, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], activeLeg: 1, airports: [], wind: null,
+  radios: RADIOS, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], activeLeg: 1, airports: [], magVar: 0, wind: null,
   xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
   vspeedsOn: { Vglide: true, Vr: true, Vx: true, Vy: true }, minimums: null,
 };
 
 type Menu = "top" | "inset" | "pfd" | "wind" | "synvis" | "hsi" | "altunit" | "xpdr" | "code";
 type Window = "TMR/REF" | "NRST" | "ALERTS" | null;
-type Key = { label: string; act?: () => void; lit?: boolean };
 const BRG_SOURCES: BrgSource[] = ["OFF", "NAV1", "NAV2", "GPS", "ADF"];
 const VSPEEDS: VSpeed[] = ["Vglide", "Vr", "Vx", "Vy"];
-const CYAN = "#00ffff";
-const NS = "http://www.w3.org/2000/svg";
 const TMR_FIELDS = ["time", "dir", "action", "Vglide", "Vr", "Vx", "Vy", "minimums", "minalt"] as const;
 const FONT = `font-family="'Liberation Sans',Arial,sans-serif" font-size="18"`;
 
@@ -121,7 +115,6 @@ const CLIPS: Record<string, [number, number, number, number]> = {
 
 const MAGENTA = "#ff00ff";
 const GREEN = "#00ff00";
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 export class GlassPfd {
   readonly svg: SVGSVGElement;
@@ -166,7 +159,7 @@ export class GlassPfd {
     this.minBug = bug.cloneNode(true) as SVGGraphicsElement;
     for (const e of [this.minBug, ...this.minBug.querySelectorAll<SVGElement>("*")]) {
       e.removeAttribute("id");
-      e.style.fill = CYAN;
+      e.style.fill = "#00ffff";
     }
     bug.parentNode!.parentNode!.appendChild(this.minBug); // outside SelectedALT, which hides with no selected altitude
     this.clock = setInterval(() => this.tick(), 1000);
@@ -250,8 +243,6 @@ export class GlassPfd {
   private menu(): Key[] {
     const u = this.ui;
     const s = this.state;
-    const k = (label: string, act?: () => void, lit = false): Key => ({ label, act, lit });
-    const blank = k("");
     const alerts = k("ALERTS", () => this.openWindow("ALERTS"), u.window === "ALERTS");
     const back = (to: Menu) => k("BACK", () => this.go(to));
     const toggle = (set: Record<string, boolean>, name: string) => k(name, () => (set[name] = !set[name]), set[name]);
@@ -342,10 +333,7 @@ export class GlassPfd {
 
   private nearest() {
     const s = this.state;
-    return s.airports
-      .map((a) => ({ a, ...bearingDistance(s.lat, s.lon, a.lat, a.lon) }))
-      .sort((x, y) => x.dist - y.dist)
-      .slice(0, 25);
+    return nearest(s.airports, s.lat, s.lon, s.magVar).map((n) => ({ ...n, a: n.item }));
   }
 
   // FMS knob in a window: the outer ring moves the cursor, the inner changes the field (NRST: both scroll the list).
@@ -518,10 +506,10 @@ export class GlassPfd {
     for (let row = 0; row < 3; row++) {
       const n = list[top + row];
       const cells: Record<string, string> = n
-        ? { ID: n.a.id, BRG: `${Math.round(n.brg)}°`, DST: `${n.dist.toFixed(1)}nm`, APP: n.a.appr, CommsType: n.a.freqType, CommsFreq: n.a.freq, RWY: `${n.a.rwy}ft` }
+        ? { ID: n.a.id, BRG: `${Math.round(n.brg)}°`, DST: `${n.dist.toFixed(1)}nm`, APP: bestApproach(n.a), CommsType: nrstFreq(n.a)[0], CommsFreq: nrstFreq(n.a)[1], RWY: `${n.a.runways[0]?.length ?? 0}ft` }
         : { ID: row === 0 ? "NONE WITHIN 200NM" : "", BRG: "", DST: "", APP: "", CommsType: "", CommsFreq: "", RWY: "" };
       for (const [k, v] of Object.entries(cells)) this.nrst.text(`${k}${row}`, v);
-      this.highlight(this.nrst.el(`ID${row}`), !!n && top + row === u.cursor);
+      this.hl.set(this.nrst.el(`ID${row}`), !!n && top + row === u.cursor);
     }
     const thumb = this.nrst.el("Scroll");
     if (thumb) this.nrst.tf("Scroll", { ty: list.length > 3 ? (top / (list.length - 3)) * 120 : 0 });
@@ -531,35 +519,18 @@ export class GlassPfd {
       this.nrst.text("InfoName", sel.name.toUpperCase());
       this.nrst.text("InfoFacility", "");
       this.nrst.text("InfoUsage", "PUBLIC");
+      this.nrst.text("InfoFacility", sel.city ?? "");
       this.nrst.text("InfoTime", "");
       this.nrst.text("InfoAlt", `${Math.round(sel.elev)}ft`);
       this.nrst.text("InfoRegion", "");
       this.nrst.text("InfoLat", latLon(sel.lat, "N", "S"));
       this.nrst.text("InfoLon", latLon(sel.lon, "E", "W"));
       this.nrst.text("InfoBack", "BACK");
-      this.highlight(this.nrst.el("InfoBack"), true);
+      this.hl.set(this.nrst.el("InfoBack"), true);
     }
   }
 
-  private highlights = new Map<Element, SVGRectElement>();
-  // The FMS cursor: black text on a cyan box, as FG1000's highlightTextElement.
-  private highlight(t: SVGGraphicsElement | null, on: boolean) {
-    if (!t) return;
-    let box = this.highlights.get(t);
-    if (!box) {
-      box = document.createElementNS(NS, "rect");
-      box.setAttribute("fill", CYAN);
-      t.before(box);
-      this.highlights.set(t, box);
-    }
-    const target = (t.querySelector("tspan") ?? t) as SVGElement;
-    target.style.fill = on ? "#000000" : "";
-    box.style.display = on ? "inline" : "none";
-    if (!on) return;
-    const b = t.getBBox();
-    for (const [k, v] of Object.entries({ x: b.x - 2, y: b.y - 1, width: b.width + 4, height: b.height + 2 })) box.setAttribute(k, String(v));
-    if (t.getAttribute("transform")) box.setAttribute("transform", t.getAttribute("transform")!);
-  }
+  private hl = new Highlighter();
 
   // TMR/REF (generic timer, speed references, minimums) and ALERTS, drawn in the NRST window's place. FG1000 has
   // these as TODO, so the layout follows the real unit.
@@ -737,29 +708,3 @@ function altLabel(v: number): [string, string, number] {
   return [prefix + Math.trunc(v / 1000), String(v % 1000), offset + 30.078];
 }
 
-/** An element's bounding box in screen coordinates. */
-function screenBox(screen: SVGGElement, e: SVGGraphicsElement): DOMRect {
-  const b = e.getBBox();
-  const m = screen.getCTM()!.inverse().multiply(e.getCTM()!);
-  const a = new DOMPoint(b.x, b.y).matrixTransform(m);
-  const c = new DOMPoint(b.x + b.width, b.y + b.height).matrixTransform(m);
-  return new DOMRect(Math.min(a.x, c.x), Math.min(a.y, c.y), Math.abs(c.x - a.x), Math.abs(c.y - a.y));
-}
-
-/** Initial great-circle bearing (true) and distance in nm. */
-function bearingDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const r = Math.PI / 180;
-  const dLon = (lon2 - lon1) * r;
-  const [p1, p2] = [lat1 * r, lat2 * r];
-  const brg = Math.atan2(Math.sin(dLon) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dLon)) / r;
-  const dist = (Math.acos(Math.min(1, Math.sin(p1) * Math.sin(p2) + Math.cos(p1) * Math.cos(p2) * Math.cos(dLon))) / r) * 60;
-  return { brg: mod(brg, 360), dist };
-}
-
-// setTextElementLat / Lon: N33°25.92'
-const latLon = (v: number, pos: string, neg: string) => {
-  const a = Math.abs(v);
-  return `${v >= 0 ? pos : neg}${Math.floor(a)}°${((a % 1) * 60).toFixed(2)}'`;
-};
-
-const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);

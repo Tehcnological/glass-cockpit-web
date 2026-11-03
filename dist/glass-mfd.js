@@ -1,5 +1,6 @@
-// Glass MFD for the browser: the FG1000 MFD's surround, engine strip (Nasal/EIS/EIS.nas) and navigation map page
-// (Nasal/MFDPages/NavigationMap), Copyright 2018 Stuart Buchanan, ported to TypeScript. GPL-2.0-or-later.
+// Glass MFD for the browser: the FG1000 MFD's surround and page groups (Nasal/MFDPages/Surround), engine strip
+// (Nasal/EIS/EIS.nas) and pages (Nasal/MFDPages/*, see mfd-pages.ts), Copyright 2018 Stuart Buchanan, ported to
+// TypeScript. GPL-2.0-or-later.
 //
 // FlightGear draws the map with its own Canvas map layers and navigation database. Here the map draws only the points
 // it is given, with the symbols and styles of the FG1000 layers (Nasal/canvas/map/*.symbol.nas,
@@ -7,18 +8,20 @@
 import NAV_MAP from "./svg/nav-map.js";
 import EIS from "./svg/eis.js";
 import SURROUND from "./svg/surround-mfd.js";
+import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay } from "./display.js";
-import { Page, deg3 } from "./page.js";
+import { Page, clamp, deg3, mod } from "./page.js";
 import { drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
+import { BLANK, Highlighter, NS, key } from "./ui.js";
+import { PAGE_GROUPS, makePages } from "./mfd-pages.js";
 const DEFAULTS = {
-    heading: 0, headingBug: 0, course: 0, baro: 29.92, alt: 0, selectedAlt: null, track: 0, groundspeed: 0, dtk: null, ete: null, lat: 0, lon: 0, range: 10, orientation: "NORTH UP",
-    points: [], airspaces: [], route: [], activeLeg: 1,
+    heading: 0, headingBug: 0, course: 0, baro: 29.92, alt: 0, selectedAlt: null, track: 0, groundspeed: 0, dtk: null, ete: null,
+    lat: 0, lon: 0, magVar: 0, range: 10, orientation: "NORTH UP",
+    points: [], airspaces: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null,
     engine: { rpm: 0, fuelFlow: 0, oilPressure: 0, oilTemp: 0, egt: 0, vacuum: 0, fuelLeft: 0, fuelRight: 0, volts: 0, engineHours: 0 },
-    radios: RADIOS, cdiSource: "NAV1",
-    // NavigationMap.topMenu
-    softkeys: ["ENGINE", "", "MAP", "", "", "", "", "", "DCLTR", "", "CHKLIST", ""],
+    radios: RADIOS, cdiSource: "NAV1", checklists: [],
 };
 // EIS.new: pointer name, min, max, travel in px (PFD.PointerElement).
 const POINTERS = [
@@ -26,9 +29,13 @@ const POINTERS = [
     ["EGTPointer", "egt", 0, 1], ["EGTCylinder", "egt", 0, 1], ["VacPointer", "vacuum", 3, 7],
     ["LeftFuelPointer", "fuelLeft", 0, 30], ["RightFuelPointer", "fuelRight", 0, 30],
 ];
-// Constants.nas: header 56 px, footer 25 px, engine strip 150 px wide; the map's range is 689/2 px (NavMap.nas).
-const MAP = { x: 150, y: 56, w: 874, h: 687, cx: 587, cy: 399.5, px: 344.5 };
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+// Constants.nas MAP_FULL and MAP_PARTIAL: header 56 px, footer 25 px, engine strip 150 px, data display 300 px; the
+// map's range is 689/2 px (NavMap.nas) either way.
+const MAP_FULL = { x: 150, y: 56, w: 874, h: 687, cx: 587, cy: 399.5, px: 344.5 };
+const MAP_PARTIAL = { x: 150, y: 56, w: 574, h: 687, cx: 437, cy: 399.5, px: 344.5 };
+// Surround.showMenu: the selected group and page, and the rest.
+const MENU_SELECTED = "rgb(179,179,255)";
+const MENU_OTHER = "rgb(179,179,179)";
 export class GlassMfd {
     options;
     svg;
@@ -36,48 +43,280 @@ export class GlassMfd {
     eis;
     nav;
     surround;
+    raw;
     map;
+    mapPartial;
+    frame;
+    pages;
+    /** DIRECT TO or PROC, over the page. */ overlay = null;
+    timers = { menu: 0, load: 0 };
+    hl = new Highlighter();
+    ui = {
+        group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, airways: 0,
+        layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false },
+    };
     /** The container must be visible: layout is measured once here. */
     constructor(container, options = {}) {
         this.options = options;
-        const { svg, screen } = buildDisplay(container, [NAV_MAP, SURROUND, EIS], "Multi-function display", options);
+        const { svg, screen } = buildDisplay(container, [NAV_MAP, ...Object.values(PAGE_SVGS), SURROUND, EIS], "Multi-function display", options);
         this.svg = svg;
         this.eis = new Page(screen, "EIS");
         this.nav = new Page(screen, "NavigationMap");
         this.surround = new Surround(screen);
-        this.surround.setPageTitle("MAP - NAVIGATION MAP");
+        this.raw = new Page(screen, "");
         // The map sits above its black background and below the range/orientation legend.
-        this.map = mapGroup(screen, this.nav.el("Legend"), MAP);
+        this.map = mapGroup(screen, this.nav.el("Legend"), MAP_FULL);
+        this.mapPartial = mapGroup(screen, this.nav.el("Legend"), MAP_PARTIAL);
+        // Pages with no data source (weather, terrain, AUX) show their title and this line, under the surround.
+        this.frame = document.createElementNS(NS, "text");
+        for (const [k, v] of Object.entries({ x: "587", y: "110", "text-anchor": "middle", fill: "#ffffff", "font-size": "22", "font-family": "'Liberation Sans',Arial,sans-serif" })) {
+            this.frame.setAttribute(k, v);
+        }
+        let surround = this.raw.el("PageTitle");
+        while (surround.parentNode !== screen)
+            surround = surround.parentNode;
+        screen.insertBefore(this.frame, surround);
+        this.pages = makePages(this.api(), screen);
         if (options.bezel)
             bezelInput(svg, (i) => this.input(i));
-        this.set({});
+        this.loadPage();
+    }
+    /** Stops the page menu timers. Call when the display is removed. */
+    destroy() {
+        clearTimeout(this.timers.menu);
+        clearTimeout(this.timers.load);
+    }
+    // What the pages may use.
+    api() {
+        const self = this;
+        return {
+            get s() {
+                return self.state;
+            },
+            ui: this.ui,
+            hl: this.hl,
+            change: (patch) => this.change(patch),
+            go: (group, page) => this.goToPage(group, page),
+            tune: (freq) => this.tune(freq),
+            topKeys: (extra) => this.topKeys(extra),
+            drawMap: (g, geom, center) => drawMap(g, { ...this.state, center }, geom, this.ui.dcltr),
+            close: () => this.closeOverlay(),
+        };
+    }
+    /** The page under DIRECT TO or PROC. */
+    get groupPage() {
+        return this.pages.groups[this.ui.shown[0]][this.ui.shown[1]];
+    }
+    get page() {
+        return this.overlay ?? this.groupPage;
     }
     input(i) {
         this.options.onInput?.(i);
-        if (i.control === "NAV_TOGGLE" || i.control === "COM_TOGGLE") {
-            this.surround.toggle(i.control === "NAV_TOGGLE" ? "nav" : "com");
-            return this.set({});
+        const page = this.page;
+        switch (i.control) {
+            case "NAV_TOGGLE":
+            case "COM_TOGGLE":
+                this.surround.toggle(i.control === "NAV_TOGGLE" ? "nav" : "com");
+                return this.set({});
+            case "SOFTKEY":
+                this.softkeys()[i.value - 1]?.act?.();
+                return this.set({});
+            case "RANGE":
+                // NavMap.handleRange: clockwise zooms out. Pages with their own ranges (traffic) take it first.
+                if (!page.range(i.value))
+                    this.change({ range: stepRange(this.state.range, i.value) });
+                return this.set({});
+            case "FMS_OUTER":
+            case "FMS_INNER":
+                if (page.crsr && page.fms(i.control === "FMS_OUTER", i.value > 0 ? 1 : -1))
+                    return this.set({});
+                if (this.overlay)
+                    return;
+                return this.pageMenu(i.control === "FMS_OUTER", i.value);
+            case "FMS_CRSR":
+                page.toggleCrsr();
+                return this.set({});
+            case "ENT":
+                page.ent();
+                return this.set({});
+            case "CLR":
+                page.clr();
+                return this.set({});
+            case "CLR_HOLD":
+                // MFDPageController.handleClearHold: back to the navigation map.
+                return this.goToPage("MapPageGroup", "NavigationMap");
+            case "FPL":
+                return this.goToPage("FPLPageGroup", "ActiveFlightPlanNarrow");
+            case "DTO": {
+                // The waypoint selected on the page, else the active one.
+                const act = this.state.route[this.state.activeLeg];
+                const id = page.selected() ?? (typeof act === "string" ? act : act?.id ?? null);
+                this.openOverlay(this.pages.directTo);
+                this.pages.directTo.open(id);
+                return this.set({});
+            }
+            case "PROC":
+                this.openOverlay(this.pages.procedures);
+                this.pages.procedures.open();
+                return this.set({});
         }
-        let patch = adjust(i, this.state, this.surround.sel);
-        // NavMap.handleRange: clockwise zooms out.
-        if (i.control === "RANGE") {
-            patch = { range: stepRange(this.state.range, i.value) };
-        }
-        if (!patch)
-            return;
+        const patch = adjust(i, this.state, this.surround.sel);
+        if (patch)
+            this.change(patch);
+    }
+    change(patch) {
         this.set(patch);
         this.options.onChange?.(patch);
+    }
+    openOverlay(p) {
+        this.overlay?.show(false);
+        this.overlay = p;
+        this.hideMenu();
+        this.ui.menu = "top";
+        p.show(true);
+        this.surround.setPageTitle(p.title);
+    }
+    closeOverlay() {
+        if (!this.overlay)
+            return;
+        this.overlay.show(false);
+        this.overlay = null;
+        this.surround.setPageTitle(this.page.title);
+    }
+    // SurroundController.handleFMSOuter / Inner: the first click shows the page group menu, later ones step through it;
+    // the page loads half a second after the last click and the menu hides after three.
+    pageMenu(outer, value) {
+        const u = this.ui;
+        if (u.menuVisible) {
+            const d = value > 0 ? 1 : -1;
+            if (outer) {
+                u.group = mod(u.group + d, PAGE_GROUPS.length);
+                u.page = 0;
+            }
+            else {
+                u.page = mod(u.page + d, PAGE_GROUPS[u.group].pages.length);
+            }
+        }
+        this.showMenu();
+        clearTimeout(this.timers.menu);
+        clearTimeout(this.timers.load);
+        this.timers.menu = window.setTimeout(() => this.hideMenu(), 3000);
+        this.timers.load = window.setTimeout(() => this.loadPage(), 500);
+    }
+    showMenu() {
+        const u = this.ui;
+        u.menuVisible = true;
+        PAGE_GROUPS.forEach((g, gi) => {
+            const sel = gi === u.group;
+            this.raw.show(g.group, sel);
+            this.raw.show(g.label, true);
+            this.color(g.label, sel ? MENU_SELECTED : MENU_OTHER);
+            if (sel)
+                g.pages.forEach((p, pi) => this.color(p, pi === u.page ? MENU_SELECTED : MENU_OTHER));
+        });
+    }
+    hideMenu() {
+        this.ui.menuVisible = false;
+        for (const g of PAGE_GROUPS) {
+            this.raw.show(g.group, false);
+            this.raw.show(g.label, false);
+        }
+    }
+    color(id, c) {
+        const e = this.raw.el(id);
+        if (e)
+            for (const t of [e, ...e.querySelectorAll("text, tspan")])
+                t.style.fill = c;
+    }
+    /** Surround.goToPage: by group and page name. */
+    goToPage(group, page) {
+        const gi = PAGE_GROUPS.findIndex((g) => g.group === group);
+        if (gi < 0)
+            return;
+        this.ui.group = gi;
+        this.ui.page = Math.max(0, PAGE_GROUPS[gi].pages.indexOf(page));
+        this.hideMenu();
+        this.loadPage();
+    }
+    loadPage() {
+        const u = this.ui;
+        this.closeOverlay();
+        this.groupPage.show(false);
+        u.shown = [u.group, u.page];
+        u.menu = "top";
+        this.groupPage.show(true);
+        this.surround.setPageTitle(this.groupPage.title);
+        this.set({});
     }
     /** Merge new values into the state and redraw. */
     set(patch) {
         const s = (this.state = { ...this.state, ...patch });
+        const page = this.page;
+        const under = this.groupPage;
         this.surround.setRadios(s.radios, s.cdiSource === "NAV1" ? 1 : s.cdiSource === "NAV2" ? 2 : null);
-        this.surround.setSoftkeys(s.softkeys);
+        const keys = this.softkeys();
+        this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit));
         this.updateHeader(s);
         this.updateEIS(s.engine);
-        this.nav.text("RangeDisplay", rangeLabel(s.range));
-        this.nav.text("OrientationDisplay", s.orientation);
-        drawMap(this.map, s, MAP);
+        // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO is a
+        // window over the page, which stays drawn.
+        const base = page === this.pages.directTo ? under : page;
+        const mode = base.navMap;
+        this.nav.show("Group", mode !== null);
+        this.map.style.display = mode === "full" ? "inline" : "none";
+        this.mapPartial.style.display = mode === "partial" ? "inline" : "none";
+        if (mode) {
+            this.nav.tf("Legend", { tx: mode === "partial" ? MAP_PARTIAL.w - MAP_FULL.w : 0 });
+            this.nav.text("RangeDisplay", rangeLabel(s.range));
+            this.nav.text("OrientationDisplay", s.orientation);
+            drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center: base.center() ?? undefined }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
+        }
+        this.frame.textContent = base.frame();
+        if (base !== page)
+            base.draw();
+        page.draw();
+    }
+    // The softkeys: the page's own, or a menu shared by the pages (EIS engineMenu, NavigationMap mapMenu).
+    softkeys() {
+        const u = this.ui;
+        const to = (m) => () => (u.menu = m);
+        const eis = () => [key("ENGINE", to("engine"), u.menu === "engine"), key("LEAN", to("lean"), u.menu === "lean"), key("SYSTEM", to("system"), u.menu === "system")];
+        const fill = (k) => [...k, ...Array(12).fill(BLANK)].slice(0, 12);
+        switch (u.menu) {
+            // shortcut: the engine strip has only its ENGINE page (as FG1000); LEAN and SYSTEM change the softkeys only.
+            case "engine":
+                return fill([...eis(), BLANK, BLANK, BLANK, BLANK, BLANK, key("BACK", to("top"))]);
+            case "lean":
+                return fill([...eis(), key("CYL SELECT"), key("ASSIST"), BLANK, BLANK, BLANK, BLANK, key("BACK", to("engine"))]);
+            case "system":
+                return fill([...eis(), key("RST FUEL"), key("GAL REM"), key("BACK", to("engine"))]);
+            case "map": {
+                // shortcut: no traffic, profile, topography, terrain or airway data; these keys switch only their setting.
+                const layer = (n) => key(n, () => (u.layers[n] = !u.layers[n]), u.layers[n]);
+                const airways = ["AIRWAYS", "AIRWY ON", "AIRWY LO", "AIRWY HI"];
+                return fill([layer("TRAFFIC"), layer("PROFILE"), layer("TOPO"), layer("TERRAIN"),
+                    key(airways[u.airways], () => (u.airways = (u.airways + 1) % 4), u.airways > 0), BLANK, BLANK, BLANK, BLANK, BLANK, key("BACK", to("top"))]);
+            }
+        }
+        return fill(this.page.keys());
+    }
+    // Most pages start with ENGINE and MAP (EIS.engineMenu, NavigationMap.mapMenu).
+    topKeys(extra = {}) {
+        const k = Array(12).fill(BLANK);
+        k[0] = key("ENGINE", () => (this.ui.menu = "engine"));
+        k[2] = key("MAP", () => (this.ui.menu = "map"));
+        for (const [i, v] of Object.entries(extra))
+            k[Number(i)] = v;
+        return k;
+    }
+    // A frequency from a page (ENT on a NRST or WPT frequency) goes to the standby of the selected NAV or COM.
+    tune(freq) {
+        const r = this.state.radios;
+        const nav = freq >= 108 && freq < 118;
+        if (!nav && (freq < 118 || freq >= 137))
+            return;
+        const which = nav ? `nav${this.surround.sel.nav}` : `com${this.surround.sel.com}`;
+        this.change({ radios: { ...r, [which]: { ...r[which], standby: freq } } });
     }
     // Surround.updateHeaderData, MFD half: the default fields GS, DTK, TRK, ETE.
     updateHeader(s) {
@@ -105,7 +344,7 @@ export class GlassMfd {
     }
 }
 // ETE as Surround.updateHeaderData formats it: m:ss under an hour, h:mm over.
-function ete(sec) {
+export function ete(sec) {
     const s = Math.max(0, Math.round(sec));
     const p2 = (n) => String(n).padStart(2, "0");
     return s < 3600 ? `${Math.floor(s / 60)}:${p2(s % 60)}` : `${Math.floor(s / 3600)}:${p2(Math.floor(s / 60) % 60)}`;
