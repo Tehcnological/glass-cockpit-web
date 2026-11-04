@@ -6,11 +6,21 @@
   "type": "module",
   "main": "dist/glass-pfd.js",
   "types": "dist/glass-pfd.d.ts",
-  "exports": { ".": "./dist/glass-pfd.js" },
-  "files": ["dist", "src", "LICENSE"],
+  "exports": {
+    ".": "./dist/glass-pfd.js",
+    "./radio": "./dist/radio.js",
+    "./vue/*": "./vue/*"
+  },
+  "files": ["dist", "src", "vue", "LICENSE"],
   "scripts": {
     "test": "tsc && node --test test/",
     "build": "node scripts/build-svg.mjs && tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "vue": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vue": { "optional": true }
   },
   "devDependencies": {
     "typescript": "^5.6.0"

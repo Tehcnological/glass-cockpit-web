@@ -39,6 +39,16 @@ FlightGear draws the map from its own navigation database. Here the map shows on
 
 Open `index.html` through a local web server for a demo with sliders.
 
+## Vue
+
+`vue/` holds the Vue components [instrumentready.com](https://instrumentready.com) uses, driven by one `FlightState` (`state.ts`). Import them as `glass-cockpit-web/vue/Glass.vue`.
+
+- `Glass.vue`: the PFD or MFD.
+- `Steam.vue`: steam gauges. Needs the [OpenAttitude](https://github.com/OpenAttitude/library) `@openattitude/*` packages it imports (LGPL-3.0-or-later).
+- `KitDemo.vue`: every instrument on one state, with sliders. It reads the page's CSS variables and links to the site's credits page.
+
+`glass-cockpit-web/radio` exports `tuneNav`, which tunes NAV1 and NAV2 to the nearest VOR on the frequency.
+
 ## Build
 
 ```sh
