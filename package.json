@@ -13,7 +13,7 @@
   },
   "files": ["dist", "src", "vue", "LICENSE"],
   "scripts": {
-    "test": "tsc && node --test test/",
+    "test": "tsc && node --test test/*.test.mjs",
     "build": "node scripts/build-svg.mjs && tsc -p tsconfig.json"
   },
   "peerDependencies": {

@@ -58,6 +58,36 @@ npm run build
 
 `dist/` is committed so the package can be installed straight from GitHub.
 
+## CI
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs one job, `build-and-test`, on every pull request to main and every push to main. It uses a standard GitHub-hosted runner, which is free for public repos, and no secrets. It stops at the first failure, which shows as a failed check on the PR with the step named:
+
+1. `npm ci`
+2. `npm test`: `tsc`, then the unit tests in `test/`
+3. Deletes `dist/` and the generated `src/svg/`, runs `npm run build` and fails if the result differs from what is committed
+4. Installs the commit from git, as a site does, then imports `GlassPfd`, `GlassMfd` and `tuneNav` and checks for the files in `vue/`
+
+A new push to a PR cancels that PR's older run. There are no path filters on purpose: a required check whose workflow is filtered out never reports, and its PR waits forever.
+
+The workflow token is read-only. Fork PRs run on `pull_request`, so they get no secrets, and first-time contributors need approval before they run. Code review apps such as Cursor Bugbot and Codex are separate from CI, which neither touches nor depends on them. Leave them out of required checks, so a skipped review can't block a merge.
+
+Not covered:
+
+- Linting: no linter is configured, so strict `tsc` is the only static check.
+- `vue/`: the components are not compiled or type checked here, because `vue` and `@openattitude/*` are not dependencies of this package. Only their presence is checked.
+- A browser: most of `src/` runs only in the DOM and the unit tests cover the bezel and radio logic, so rendering is not exercised.
+- Node versions other than 22.
+- instrumentready.com's own build, which is in a private repo.
+- New major versions of the two actions: `@v7` picks up fixes on its own, and a new major is a manual bump.
+
+A red check blocks merging only if branch protection requires it. These settings do that, and `enforce_admins: false` lets admins still push to main directly, in which case CI reports after the push:
+
+```sh
+gh api -X PUT repos/Tehcnological/glass-cockpit-web/branches/main/protection --input - <<'EOF'
+{"required_status_checks":{"strict":false,"contexts":["build-and-test"]},"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null}
+EOF
+```
+
 ## Not ported
 
 MFD pages that need data this package has no source for (weather, terrain, XM, trip planning, GPS status, stored flight plans, user waypoints, nearest airspaces), DIRECT TO's VNAV fields, approach suspend and missed-approach sequencing, USER and AIRWAY waypoint lists, synthetic vision, the arc HSI, DME window, selected airspeed, autopilot annunciations, failure flags, the GPS course-to-intercept diamond, and map terrain and airways. FG1000 renders in Liberation Sans Narrow; without that font installed, some narrow labels fall back to a wider font.
