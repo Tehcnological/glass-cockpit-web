@@ -59,3 +59,223 @@ export function planName(legs) {
     const ids = (apts.length > 1 ? apts : legs.filter(Boolean)).map((p) => p.id);
     return ids.length ? `${ids[0]} / ${ids[ids.length - 1]}` : "";
 }
+/** Whether the GPS may fly an approach (by `approachName`'s names): RNAV (GPS) and GPS approaches. The rest ask NOT APPROVED FOR GPS. */
+export function gpsApproved(name) {
+    return name.startsWith("RNAV (GPS)") || name.startsWith("GPS");
+}
+/** Vector-to-final makes the final approach fix active; an approach without one starts at its first leg. */
+export function vtfLeg(legs) {
+    return Math.max(0, legs.findIndex((l) => typeof l !== "string" && l.role === "FAF"));
+}
+const isFix = (l) => typeof l === "object" && l.approach !== undefined;
+/**
+ * Vector-to-final with the approach's fixes from `route[start]`: the final approach fix is active, its leg on the final
+ * course, drawn from the approach's own fix before it (a waypoint entered between them is skipped by starting the leg at
+ * that fix's position). With no approach fix before the FAF (or no FAF), it goes direct from the aircraft at `here`.
+ */
+export function vtfPatch(start, legs, here) {
+    const i = vtfLeg(legs);
+    if (isFix(legs[i - 1]))
+        return { activeLeg: start + i, directFrom: null, vtf: true };
+    const fix = legs.slice(0, Math.max(0, i)).reverse().find(isFix);
+    const from = fix?.lat !== undefined && fix.lon !== undefined ? { lat: fix.lat, lon: fix.lon } : here;
+    return { activeLeg: start + i, directFrom: from, vtf: true };
+}
+/** A route entry PROC loaded as part of an approach; a waypoint entered by hand is not one. */
+export const isApproach = (r) => typeof r !== "string" && r.approach !== undefined;
+/** The approach loaded in `route`: its fixes, which PROC marks with `approach`, from `start` on. */
+// `pts` is the route from there on, with any waypoints inserted among the fixes, so its indexes are the route's from `start`.
+export function loadedApproach(route) {
+    const start = route.findIndex(isApproach);
+    return start < 0 ? null : { start, name: route[start].approach, pts: route.slice(start) };
+}
+/** PROC's change to the flight plan: the approach `pts` after the en route waypoints (replacing one loaded before), loaded, activated or vectors-to-final. */
+export function approachPatch(route0, pts, mode, here) {
+    // Loading an approach cancels Parallel Track (Pilot's Guide).
+    const enroute = cancelParallel(route0).filter((r) => !isApproach(r));
+    const route = [...enroute, ...pts];
+    if (mode === "load")
+        return { route, vtf: false };
+    if (mode === "activate")
+        return { route, activeLeg: enroute.length, directFrom: here, vtf: false };
+    return { route, ...vtfPatch(enroute.length, pts, here) };
+}
+/** A fix entered by hand (WAYPOINT ENTRY, DIRECT TO) is an ordinary waypoint, even when picked from a loaded approach. */
+export function asWaypoint(p) {
+    const { approach: _a, role: _r, ...w } = p;
+    return w;
+}
+/** How waypoint `p` goes into the flight plan: by id when the host's data has it, an approach fix as a plain
+ * waypoint, and a Parallel Track point as the entry it was offset from (an edit cancels Parallel Track). */
+export function planEntry(s, p) {
+    if (p.parallel !== undefined)
+        return p.parallel;
+    return s.points.includes(p) || p.type === "APT" ? p.id : asWaypoint(p);
+}
+/** A waypoint by identifier: navigation points, then flight plan points (approach fixes), then airports. */
+export const findPoint = (s, id) => s.points.find((p) => p.id === id) ?? s.route.find((r) => typeof r === "object" && r.id === id) ?? routePoint(id, [], s.airports);
+/** DIRECT TO's ACTIVATE: the leg to `p` from here, in the flight plan if it is there, else as a plan of its own. */
+export function directToPatch(s, p) {
+    // A direct-to cancels Parallel Track (Pilot's Guide): the plan goes back to its own waypoints.
+    const route = cancelParallel(s.route);
+    // An offset point (the active one DIRECT TO offers) goes direct to the waypoint it came from.
+    const id = p.parallel !== undefined ? routePoint(p.parallel, s.points, s.airports)?.id : p.id;
+    const i = route.findIndex((r) => routePoint(r, s.points, s.airports)?.id === id);
+    const directFrom = { lat: s.lat, lon: s.lon };
+    if (i >= 0)
+        return { ...(s.route.some(isParallel) && { route }), activeLeg: i, directFrom, vtf: false };
+    return { route: [planEntry(s, p)], activeLeg: 0, directFrom, vtf: false };
+}
+/**
+ * The Direct-to window's Cancel Direct-To NAV (Pilot's Guide): the plan resumes on the leg closest to the aircraft; a
+ * direct-to that replaced the plan leaves nothing to fly. Null (dim) with no direct-to, or on vector-to-final.
+ */
+export function cancelDirectTo(s) {
+    if (!s.directFrom || s.vtf)
+        return null;
+    const pts = s.route.map((r) => routePoint(r, s.points, s.airports));
+    // Distance from the aircraft to each leg, flat-earth nm: close enough to pick a leg.
+    const { to } = local(s);
+    const off = (a, b) => onLeg(to(a), to(b)).d;
+    let [leg, best] = [-1, Infinity];
+    for (let i = 1; i < pts.length; i++) {
+        const [a, b] = [pts[i - 1], pts[i]];
+        const d = a && b ? off(a, b) : Infinity;
+        if (d < best)
+            [leg, best] = [i, d];
+    }
+    if (leg < 0)
+        return { route: [], activeLeg: 0, directFrom: null, vtf: false };
+    return { activeLeg: leg, directFrom: null, vtf: false };
+}
+/**
+ * Vector-to-final after a waypoint is inserted or deleted at `at`, with the final approach fix active at `activeLeg`. Its
+ * intercept may start at any approach fix before the FAF or at the aircraft (see `vtfPatch`), so an edit at or before the
+ * FAF ends it and its intercept, and the active leg is drawn as an ordinary one; an edit after the FAF keeps it.
+ */
+export function vtfEdit(vtf, at, activeLeg) {
+    if (!vtf)
+        return { vtf: false };
+    return at > activeLeg ? { vtf: true } : { vtf: false, directFrom: null };
+}
+// Flat-earth nm around `o` (x east, y north): close enough over a flight plan leg for the FPL tools below.
+function local(o) {
+    const k = 60 * Math.cos((o.lat * Math.PI) / 180);
+    return {
+        to: (p) => [(p.lon - o.lon) * k, (p.lat - o.lat) * 60],
+        from: ([x, y]) => ({ lat: o.lat + y / 60, lon: o.lon + x / k }),
+    };
+}
+/** The point of leg a-b closest to the frame's origin, and its distance (a `local` frame). */
+function onLeg([ax, ay], [bx, by]) {
+    const [dx, dy] = [bx - ax, by - ay];
+    const t = Math.max(0, Math.min(1, (-ax * dx - ay * dy) / (dx * dx + dy * dy || 1)));
+    const xy = [ax + t * dx, ay + t * dy];
+    return { xy, d: Math.hypot(...xy) };
+}
+const ids = (route) => new Set(route.map((r) => (typeof r === "string" ? r : r.id)));
+/** A user waypoint name from `id` not already among `taken`: `id` and a digit. */
+// shortcut: the Pilot's Guide only says the name comes from the reference's; upgrade if the trainer shows its scheme.
+function userName(id, taken) {
+    const used = ids(taken);
+    for (let n = 1;; n++)
+        if (!used.has(`${id.slice(0, 5)}${n}`))
+            return `${id.slice(0, 5)}${n}`;
+}
+/**
+ * Closest Point of FPL (Pilot's Guide): the point on the plan nearest the reference waypoint `ref`, as a user waypoint
+ * named apart from the plan's and `points`, with the true bearing and distance to it from `ref`. Null with no leg.
+ */
+export function closestPointOfFpl(s, ref) {
+    const pts = s.route.map((r) => routePoint(r, s.points, s.airports));
+    const { to, from } = local(ref);
+    let best = null;
+    for (let i = 1; i < pts.length; i++) {
+        const [a, b] = [pts[i - 1], pts[i]];
+        const c = a && b && onLeg(to(a), to(b));
+        if (c && (!best || c.d < best.d))
+            best = c;
+    }
+    if (!best)
+        return null;
+    const p = from(best.xy);
+    const point = { id: userName(ref.id, [...s.route, ...s.points]), type: "WPT", lat: p.lat, lon: p.lon };
+    return { point, ...bearingDistance(ref.lat, ref.lon, p.lat, p.lon) };
+}
+/**
+ * Create ATK Offset Waypoint (Pilot's Guide): a waypoint `nm` (1 to 999, negative before) along the plan from the one at
+ * `at`, to insert at the returned `at`. Null where the Pilot's Guide forbids it: past the leg's length (on the active
+ * waypoint, the distance to go), with no leg that side, or at or after the final approach fix; and where one with
+ * the same name is already in the plan.
+ */
+export function atkOffset(s, at, nm) {
+    const faf = s.route.findIndex((r) => isApproach(r) && r.role === "FAF");
+    if (!Number.isInteger(nm) || !nm || Math.abs(nm) > 999 || (faf >= 0 && at >= faf))
+        return null;
+    const pts = s.route.map((r) => routePoint(r, s.points, s.airports));
+    const w = pts[at];
+    // Along the plan's leg that side; before the active waypoint, also short of the aircraft's distance to go.
+    const here = nm < 0 && at === s.activeLeg ? { lat: s.lat, lon: s.lon } : undefined;
+    // On a direct-to, the leg into the active waypoint starts where the direct-to did.
+    const other = (here && s.directFrom) || pts[at + Math.sign(nm)] || here;
+    if (!w || !other)
+        return null;
+    const { to, from } = local(w);
+    const [x, y] = to(other);
+    const len = Math.hypot(x, y);
+    if (Math.abs(nm) >= len || (here && Math.abs(nm) >= Math.hypot(...to(here))))
+        return null;
+    const p = from([(x * Math.abs(nm)) / len, (y * Math.abs(nm)) / len]);
+    const point = { id: `${w.id.slice(0, 5)}${nm < 0 ? "-" : "+"}${Math.abs(nm)}`, type: "WPT", lat: p.lat, lon: p.lon };
+    // The same offset again would repeat the name (and the place): refused.
+    return ids(s.route).has(point.id) ? null : { at: nm < 0 ? at : at + 1, point };
+}
+export const isParallel = (r) => typeof r !== "string" && r.parallel !== undefined;
+/** The plan without Parallel Track: each offset point back to the entry it came from. */
+export const cancelParallel = (route) => route.map((r) => (isParallel(r) ? r.parallel : r));
+/**
+ * Parallel Track (Pilot's Guide): the plan with its en route points from the active leg's start on offset `nm` (1 to
+ * 99) to side `L` or `R`, named with a lower case p, so both legs at a turn stay `nm` off. The approach is not offset.
+ * Null where the Pilot's Guide makes it unavailable: on a direct-to, an approach leg, or a turn over 120 degrees.
+ */
+// shortcut: it does not cancel itself when the offset tracks would overlap; upgrade with a leg-length check if needed.
+export function parallelTrack(s, side, nm) {
+    const route = cancelParallel(s.route);
+    const end = route.findIndex(isApproach) < 0 ? route.length : route.findIndex(isApproach);
+    const start = Math.max(0, s.activeLeg - 1);
+    if (s.directFrom || nm < 1 || nm > 99 || !Number.isInteger(nm) || s.activeLeg >= end || end - start < 2)
+        return null;
+    const pts = route.map((r) => routePoint(r, s.points, s.airports));
+    // A zero-length leg has no direction to offset from: invalid geometry.
+    for (let i = start + 1; i < end; i++) {
+        const [a, b] = [pts[i - 1], pts[i]];
+        if (!a || !b || bearingDistance(a.lat, a.lon, b.lat, b.lon).dist < 1e-6)
+            return null;
+    }
+    const out = [...route];
+    for (let i = start; i < end; i++) {
+        const p = pts[i];
+        if (!p)
+            return null;
+        const { to, from } = local(p);
+        // Unit directions of the legs in and out of p, in p's frame; the first and last have one leg.
+        const dir = (q, sign) => {
+            if (!q)
+                return null;
+            const [x, y] = to(q);
+            const l = Math.hypot(x, y) || 1;
+            return [(sign * x) / l, (sign * y) / l];
+        };
+        const din = i > start ? dir(pts[i - 1], -1) : null;
+        const dout = i < end - 1 ? dir(pts[i + 1], 1) : null;
+        const [ux, uy] = din && dout ? [din[0] + dout[0], din[1] + dout[1]] : (din ?? dout);
+        const turn = din && dout ? Math.acos(Math.max(-1, Math.min(1, din[0] * dout[0] + din[1] * dout[1]))) : 0;
+        if (turn > (120 * Math.PI) / 180)
+            return null;
+        const l = Math.hypot(ux, uy);
+        const k = ((side === "R" ? 1 : -1) * nm) / Math.cos(turn / 2) / l;
+        const q = from([uy * k, -ux * k]); // right of (ux, uy) is (uy, -ux)
+        out[i] = { id: `${p.id}p`, type: "WPT", lat: q.lat, lon: q.lon, parallel: route[i] };
+    }
+    return out;
+}

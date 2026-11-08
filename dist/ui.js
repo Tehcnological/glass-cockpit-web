@@ -2,9 +2,10 @@
 // Nasal/canvas/PFD GroupElement, HighlightElement and DefaultStyle (Copyright 2018 Stuart Buchanan), GPL-2.0-or-later.
 import { clamp, mod } from "./page.js";
 export const key = (label, act, lit = false) => ({ label, act, lit });
+export const dimKey = (label) => ({ label, dim: true });
 export const BLANK = key("");
-/** DefaultStyle.HIGHLIGHT_COLOR: the cursor box. */
-export const CYAN = "#80ffff";
+/** The cursor box and selectable text. v13 trainer: full cyan (FG1000 DefaultStyle.HIGHLIGHT_COLOR is a paler #80ffff). */
+export const CYAN = "#00ffff";
 export const NS = "http://www.w3.org/2000/svg";
 export const esc = (t) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 /** The FMS cursor: black text on a cyan box, as FG1000's highlightTextElement. */

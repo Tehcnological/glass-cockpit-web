@@ -1,6 +1,6 @@
 import type { Radios } from "./surround.js";
-export type Control = "NAV_VOL" | "NAV_ID" | "NAV_FREQ_TRANSFER" | "NAV_OUTER" | "NAV_INNER" | "NAV_TOGGLE" | "HEADING" | "HEADING_PRESS" | "ALT_OUTER" | "ALT_INNER" | "COM_VOL" | "COM_VOL_TOGGLE" | "COM_FREQ_TRANSFER" | "COM_FREQ_TRANSFER_HOLD" | "COM_OUTER" | "COM_INNER" | "COM_TOGGLE" | "CRS" | "BARO" | "CRS_CENTER" | "RANGE" | "JOYSTICK_PRESS" | "JOYSTICK_HORIZONTAL" | "JOYSTICK_VERTICAL" | "DTO" | "FPL" | "CLR" | "CLR_HOLD" | "MENU" | "PROC" | "ENT" | "FMS_OUTER" | "FMS_INNER" | "FMS_CRSR" | "SOFTKEY";
-/** One bezel input: a knob turned one detent (value +1 clockwise, -1 counterclockwise), a push (1), or a softkey (1 to 12). */
+export type Control = "NAV_VOL" | "NAV_ID" | "NAV_FREQ_TRANSFER" | "NAV_OUTER" | "NAV_INNER" | "NAV_TOGGLE" | "HEADING" | "HEADING_PRESS" | "ALT_OUTER" | "ALT_INNER" | "ALT_PRESS" | "COM_VOL" | "COM_VOL_TOGGLE" | "COM_FREQ_TRANSFER" | "COM_FREQ_TRANSFER_HOLD" | "COM_OUTER" | "COM_INNER" | "COM_TOGGLE" | "CRS" | "BARO" | "CRS_CENTER" | "RANGE" | "JOYSTICK_PRESS" | "JOYSTICK_HORIZONTAL" | "JOYSTICK_VERTICAL" | "DTO" | "FPL" | "CLR" | "CLR_HOLD" | "MENU" | "PROC" | "ENT" | "FMS_OUTER" | "FMS_INNER" | "FMS_CRSR" | "SOFTKEY";
+/** One bezel input: a knob turned (value +1 a detent clockwise, -1 counterclockwise; HDG and CRS 5 on a fast wheel spin), a push (1), or a softkey (1 to 12). */
 export interface Input {
     control: Control;
     value: number;
@@ -18,8 +18,28 @@ export interface Knobs {
     comVolume: number;
     /** NAV station identifier audio, switched by pushing the NAV volume knob. */ navIdent: boolean;
 }
-/** Adds the hotspots to a display drawn with its bezel and reports each input. */
-export declare function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void): void;
+/**
+ * A hotspot. `arrow`: it turns a knob or moves the joystick, repeating while held, drawn as an arrow here (`dir`, the
+ * way it points in degrees, 0 right and 90 down; `size`, 1 for a large knob) or printed on the bezel. `also`: a
+ * second input a click reports (the joystick's diagonals). `shiftClick`: what Shift+click does, and pressing and holding.
+ */
+export type Spot = {
+    box: [number, number, number, number];
+    wheel?: Control;
+    shiftWheel?: Control;
+    click?: Control;
+    shiftClick?: Control;
+    value?: number;
+    arrow?: "drawn" | "printed";
+    dir?: number;
+    size?: number;
+    also?: Input;
+};
+export declare const SPOTS: Spot[];
+/** Detents one wheel notch turns: HDG and CRS turn 5 when the wheel spins fast (`gap`, ms since the last notch), as a quick twist does. */
+export declare function wheelStep(control: Control, gap: number): number;
+/** Adds the hotspots to a display drawn with its bezel and reports each input. Returns a function that removes the window listener. */
+export declare function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void): () => void;
 /**
  * The knob and button changes SurroundController makes, as a patch; null when the input does not change these values.
  * `toStation` is the magnetic bearing to the station of the NAV radio the CDI shows, if the host gives one.

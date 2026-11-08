@@ -101,10 +101,10 @@ export class Surround {
     }
   }
 
-  /** Twelve labels, left to right; "" leaves a key blank. A lit key (an option that is on) is black on grey. */
-  setSoftkeys(labels: string[], lit: boolean[] = []) {
+  /** Twelve labels, left to right; "" leaves a key blank. A lit key (an option that is on) is black on grey; a dim key is grey. */
+  setSoftkeys(labels: string[], lit: boolean[] = [], dim: boolean[] = []) {
     for (let i = 0; i < 12; i++) {
-      this.raw.text(`SoftKey${i}`, labels[i] ?? "", lit[i] ? "#000000" : WHITE);
+      this.raw.text(`SoftKey${i}`, labels[i] ?? "", lit[i] ? "#000000" : dim[i] ? "#808080" : WHITE);
       this.raw.fill(`SoftKey${i}-bg`, lit[i] ? "#808080" : "#000000");
     }
   }

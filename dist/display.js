@@ -7,8 +7,21 @@ export function buildDisplay(container, pages, label, { bezel }) {
     container.innerHTML = `<svg xmlns="${NS}" viewBox="${bezel ? "1 132 1407 918" : "0 0 1024 768"}" role="img"></svg>`;
     const svg = container.querySelector("svg");
     svg.setAttribute("aria-label", label);
-    if (bezel)
+    if (bezel) {
         svg.innerHTML = BEZEL;
+        // fascia.svg shades its two side columns unevenly (the left has an extra black overlay and a fainter edge strip), so
+        // the left reads darker. Replace the left column's shading with a mirror image of the right's.
+        for (const id of ["rect8520", "path12506", "path12557"])
+            svg.querySelector(`#${id}`)?.style.setProperty("display", "none");
+        for (const id of ["path12508", "rect12510", "path12523"]) {
+            const right = svg.querySelector(`#${id}`);
+            const left = right?.cloneNode(true);
+            left?.removeAttribute("id");
+            left?.setAttribute("transform", "matrix(-1,0,0,1,1399,0)"); // the columns' edges mirror about x = 699.5
+            if (left)
+                right.after(left);
+        }
+    }
     const screen = svg.appendChild(document.createElementNS(NS, "g"));
     if (bezel)
         screen.setAttribute("transform", "translate(187 177)");

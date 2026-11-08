@@ -17,3 +17,19 @@ export function tuneNav(radios, points, lat, lon) {
     }
     return { radios: out, bearings };
 }
+/** Localizers are 108.10 to 111.95 MHz with an odd tenths digit; the rest of the NAV band is VORs. */
+export function isLocalizer(mhz) {
+    const k = Math.round(mhz * 100);
+    return k >= 10810 && k <= 11195 && Math.floor(k / 10) % 2 === 1;
+}
+/** The CDI source as the v13 trainer names it: GPS, VOR1, LOC1, VOR2, LOC2 (FG1000 shows NAV1 and NAV2). "" for OFF. */
+export function cdiLabel(source, radios) {
+    if (source === "GPS" || source === "OFF")
+        return source === "GPS" ? "GPS" : "";
+    const n = source === "NAV1" ? 1 : 2;
+    return (isLocalizer(radios[`nav${n}`].active) ? "LOC" : "VOR") + n;
+}
+/** The DME window's distance: one decimal, or dashes with no station. */
+export function dmeText(p) {
+    return p?.distance === undefined ? "-.--NM" : `${p.distance.toFixed(1)}NM`;
+}

@@ -1,7 +1,10 @@
 import { Page } from "./page.js";
 import { type LatLon, type MapGeometry, type MapPoint } from "./map.js";
+import { type FplToolName } from "./fpl-tools.js";
 import { Highlighter, type Key } from "./ui.js";
+import { type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
+import { type Pan } from "./pan.js";
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
 export interface Checklist {
     group: string;
@@ -18,9 +21,11 @@ export interface MfdUi {
     menuVisible: boolean;
     /** The shared softkey menu showing: "top" (the page's own), "engine", "lean", "system" or "map". */ menu: string;
     /** Declutter level, 0 to 3. */ dcltr: number;
+    /** MAP SETUP's track vector look-ahead, seconds; 0 is off. */ trackVector: number;
     /** Airways key state, 0 to 3. */ airways: number;
     /** MAP menu toggles. */ layers: Record<string, boolean>;
     /** Waypoints entered in DIRECT TO and WAYPOINT ENTRY, latest first: their RECENT list. */ recent: string[];
+    /** Pan mode on the navigation map (joystick push), or null. */ pan: Pan | null;
 }
 /** What the MFD gives its pages. */
 export interface Mfd {
@@ -67,6 +72,8 @@ export declare class MfdPage {
     center(): LatLon | null;
     /** The waypoint DIRECT TO starts with from this page (the one under the cursor). */
     selected(): string | null;
+    /** The MENU key's PAGE MENU options, or null for a page without one here. */
+    pageMenu(): MenuOption[] | null;
     draw(): void;
 }
 /** A page with its own map window beside its data. */
@@ -104,6 +111,7 @@ declare class DirectToPage extends MapPage {
     center(): MapPoint | null;
     keys(): Key[];
     toggleCrsr(): void;
+    pageMenu(): MenuOption[];
     fms(outer: boolean, d: number): boolean;
     private pick;
     ent(): void;
@@ -112,22 +120,55 @@ declare class DirectToPage extends MapPage {
 }
 declare class ProceduresPage extends MfdPage {
     navMap: "partial";
-    private airport;
-    private grp;
-    private apr;
-    private trans;
     private entry;
+    private flow;
     constructor(m: Mfd, screen: SVGGElement, after: Element);
-    /** Opens on the destination: the last airport in the flight plan, else the nearest. */
     open(): void;
-    private procs;
-    private transitions;
     keys(): Key[];
     toggleCrsr(): void;
     fms(outer: boolean, d: number): boolean;
     ent(): void;
     clr(): void;
-    private load;
+    draw(): void;
+}
+export declare class PageMenuPage extends MfdPage {
+    private options;
+    private at;
+    private base;
+    constructor(m: Mfd, screen: SVGGElement, after: Element);
+    get title(): string;
+    /** Shows `options` for the page titled `title`, the cursor on the first available option. */
+    /** The window the menu was opened over (DIRECT TO) and whether its cursor was on; CLR goes back to it as it was. */
+    private back;
+    private backCrsr;
+    open(options: MenuOption[], title: string, back?: MfdPage | null): void;
+    fms(_outer: boolean, d: number): boolean;
+    ent(): void;
+    clr(): void;
+    toggleCrsr(): void;
+    draw(): void;
+}
+export declare class MapSetupPage extends MfdPage {
+    private at;
+    constructor(m: Mfd, screen: SVGGElement, after: Element);
+    open(): this;
+    fms(outer: boolean, d: number): boolean;
+    ent(): void;
+    clr(): void;
+    toggleCrsr(): void;
+    draw(): void;
+}
+/** The window Closest Point of FPL, Parallel Track and Create ATK Offset Waypoint open over the flight plan, in
+ * MapSetupPage's style; its rows come from `FplTool`. */
+export declare class FplToolPage extends MfdPage {
+    private tool;
+    private g;
+    constructor(m: Mfd, screen: SVGGElement, after: Element);
+    open(name: FplToolName, sel: number): this;
+    fms(outer: boolean, d: number): boolean;
+    ent(): void;
+    clr(): void;
+    toggleCrsr(): void;
     draw(): void;
 }
 export interface Pages {
@@ -135,6 +176,9 @@ export interface Pages {
     directTo: DirectToPage;
     procedures: ProceduresPage;
     waypointEntry: WaypointEntryPage;
+    pageMenu: PageMenuPage;
+    mapSetup: MapSetupPage;
+    fplTool: FplToolPage;
 }
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
 export declare function makePages(m: Mfd, screen: SVGGElement): Pages;

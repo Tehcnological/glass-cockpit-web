@@ -4,23 +4,39 @@
 <title>glass-cockpit-web demo</title>
 <style>
   body { margin: 0; padding: 16px; background: #17191c; color: #d9dadc; font: 14px system-ui, sans-serif; }
-  .units { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 16px; }
+  .units { display: flex; gap: 6px; align-items: flex-end; }
+  #pfd, #mfd { flex: 1407 1 0; } #backup { flex: 100 1 0; }
   .units svg { display: block; width: 100%; height: auto; }
   form { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 16px; margin-top: 12px; }
   label { display: grid; grid-template-columns: 90px 1fr 48px; gap: 8px; align-items: center; }
 </style>
-<div class="units"><div id="pfd"></div><div id="mfd"></div></div>
+<div class="units"><div id="pfd"></div><div id="backup"></div><div id="mfd"></div></div>
 <form id="f"></form>
 <script type="module">
   import { GlassPfd, GlassMfd } from "./dist/glass-pfd.js";
-  const pfd = new GlassPfd(document.getElementById("pfd"), { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 } });
-  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true });
+  import { DisplayBackup } from "./dist/display-backup.js";
+  // shortcut: the displays have no reversionary mode yet, so the button only shows its state.
+  new DisplayBackup(document.getElementById("backup"));
+  // The two units share their knobs and flight plan, as a real G1000's do: a change on one is set on the other, and the
+  // sliders follow. RANGE and the map stay each unit's own.
+  const SHARED = ["headingBug", "course", "baro", "selectedAlt", "radios", "navVolume", "comVolume", "navIdent", "route", "activeLeg", "directFrom", "vtf", "points"];
+  const share = (to) => (patch) => {
+    for (const [k, v] of Object.entries(patch)) if (f.elements[k]?.type === "range") (f.elements[k].value = v), (f.elements[k].nextElementSibling.value = v);
+    const p = Object.fromEntries(Object.entries(patch).filter(([k]) => SHARED.includes(k)));
+    if (Object.keys(p).length) to().set(p);
+  };
+  const pfd = new GlassPfd(document.getElementById("pfd"), { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share(() => mfd) });
+  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true, onChange: share(() => pfd) });
   // Made-up points for the demo, not real navigation data.
   const points = [
     { id: "KAAA", type: "APT", lat: 33.40, lon: -112.00 }, { id: "ABC", type: "VOR", lat: 33.50, lon: -111.85 },
     { id: "XY", type: "NDB", lat: 33.30, lon: -112.10 }, { id: "FIXEE", type: "FIX", lat: 33.55, lon: -112.05 },
     { id: "WPONE", type: "WPT", lat: 33.45, lon: -111.95 },
   ];
+  const leg = (fix, lat, role) => ({ fix, lat, lon: -112.0, type: "TF", alt: null, role });
+  const airports = [{ id: "KAAA", name: "Demo Field", lat: 33.40, lon: -112.00, elev: 1200, runways: [], freqs: [], approaches: ["ILS RWY 36", "RNAV (GPS) RWY 36"] }];
+  const final = [leg("ONEIF", 33.25, "IF"), leg("TWOFA", 33.32, "FAF"), leg("RW36", 33.395, "MAP"), leg("THREE", 33.50, "MISSED")];
+  const procedures = ["ILS RWY 36", "RNAV (GPS) RWY 36"].map((name) => ({ airport: "KAAA", name, transitions: { VECTORS: [] }, legs: final }));
   const ctl = {
     pitch: [-30, 30, 0], roll: [-60, 60, 0], ias: [0, 200, 100], alt: [-500, 15000, 3000], vsi: [-2000, 2000, 0],
     heading: [0, 359, 90], headingBug: [0, 359, 120], course: [0, 359, 100], cdiDots: [-2.4, 2.4, 0.5], selectedAlt: [0, 15000, 4000],
@@ -28,19 +44,23 @@
   };
   const f = document.getElementById("f");
   for (const [k, [min, max, v]] of Object.entries(ctl)) {
-    f.insertAdjacentHTML("beforeend", `<label>${k}<input type="range" name="${k}" min="${min}" max="${max}" step="${max - min > 10 ? 1 : 0.1}" value="${v}"><output>${v}</output></label>`);
+    f.insertAdjacentHTML("beforeend", `<label>${k}<input type="range" name="${k}" min="${min}" max="${max}" step="${k === "selectedAlt" ? 100 : k === "vsi" ? 50 : max - min > 10 ? 1 : 0.1}" value="${v}"><output>${v}</output></label>`);
   }
-  f.insertAdjacentHTML("beforeend", `<label>hdg up<input type="checkbox" name="hdgUp"></label>`);
+  f.insertAdjacentHTML("beforeend", `<label>message<input type="checkbox" name="alert"></label><label>fail AHRS<input type="checkbox" name="ahrs"></label><label>fail ADC<input type="checkbox" name="adc"></label>`);
   const update = () => {
     const s = Object.fromEntries([...new FormData(f)].map(([k, v]) => [k, Number(v)]));
     f.querySelectorAll("label").forEach((l) => l.querySelector("output") && (l.querySelector("output").value = l.querySelector("input").value));
-    pfd.set({ ...s, cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 } });
+    pfd.set({ ...s, alerts: f.alert.checked ? ["DEMO - A sample message."] : [],
+      failed: { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked }, cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 } });
     mfd.set({
-      heading: s.heading, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
-      orientation: f.hdgUp.checked ? "HDG UP" : "NORTH UP", points, route: ["ABC", "WPONE", "KAAA"], activeLeg: 1,
+      heading: s.heading, headingBug: s.headingBug, course: s.course, selectedAlt: s.selectedAlt, alt: s.alt, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
       engine: { rpm: s.rpm, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 },
     });
   };
   f.addEventListener("input", update);
+  // Set once, so the sliders don't undo flight plan changes.
+  const plan = { route: ["ABC", "WPONE", "KAAA"], activeLeg: 1 };
+  mfd.set({ points, airports, procedures, ...plan });
+  pfd.set({ points, airports, procedures, ...plan });
   update();
 </script>

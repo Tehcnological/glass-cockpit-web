@@ -1,6 +1,6 @@
 // NAV radios tuned to VORs in the map points: the station ID next to the frequency and the magnetic bearing and
 // distance to it, for the BRG pointers and the CRS knob push.
-import type { MapPoint, Pointer, Radios } from "./glass-pfd.js";
+import type { CdiSource, MapPoint, Pointer, Radios } from "./glass-pfd.js";
 
 // shortcut: flat-earth distance and bearing; within a degree inside 200 nm. Use a great circle if scenarios go farther.
 const nm = (lat1: number, lon1: number, lat2: number, lon2: number) =>
@@ -21,4 +21,22 @@ export function tuneNav(radios: Radios, points: MapPoint[], lat: number, lon: nu
     bearings[`NAV${n}`] = { id: p.id, bearing: ((brg % 360) + 360) % 360, distance: nm(lat, lon, p.lat, p.lon) };
   }
   return { radios: out, bearings };
+}
+
+/** Localizers are 108.10 to 111.95 MHz with an odd tenths digit; the rest of the NAV band is VORs. */
+export function isLocalizer(mhz: number): boolean {
+  const k = Math.round(mhz * 100);
+  return k >= 10810 && k <= 11195 && Math.floor(k / 10) % 2 === 1;
+}
+
+/** The CDI source as the v13 trainer names it: GPS, VOR1, LOC1, VOR2, LOC2 (FG1000 shows NAV1 and NAV2). "" for OFF. */
+export function cdiLabel(source: CdiSource, radios: Radios): string {
+  if (source === "GPS" || source === "OFF") return source === "GPS" ? "GPS" : "";
+  const n = source === "NAV1" ? 1 : 2;
+  return (isLocalizer(radios[`nav${n}`].active) ? "LOC" : "VOR") + n;
+}
+
+/** The DME window's distance: one decimal, or dashes with no station. */
+export function dmeText(p?: { distance?: number }): string {
+  return p?.distance === undefined ? "-.--NM" : `${p.distance.toFixed(1)}NM`;
 }

@@ -12,6 +12,8 @@ export interface MapPoint {
     /** Degrees, east positive. */ magVar?: number;
     /** Flight plan legs: the published altitude, e.g. "3600+" (see `ProcLeg`). */ alt?: string | null;
     /** Flight plan legs: the fix's role in an approach (see `ProcLeg`). */ role?: string;
+    /** Flight plan legs: the approach PROC loaded this fix from, e.g. "ILS RWY 36". */ approach?: string;
+    /** Flight plan legs: Parallel Track's point, offset from this flight plan entry (see `parallelTrack`). */ parallel?: string | MapPoint;
 }
 /** A position only. */
 export interface LatLon {
@@ -23,12 +25,23 @@ export interface Airspace {
     cls: "B" | "C" | "D";
     rings: [number, number][][];
 }
+/** Map orientations, as MAP SETUP offers them (Pilot's Guide); FG1000 has north up and heading up. */
+export declare const ORIENTATIONS: readonly ["NORTH UP", "TRK UP", "DTK UP", "HDG UP"];
+export type Orientation = (typeof ORIENTATIONS)[number];
+/** MAP SETUP's track vector look-ahead times, seconds; 0 is off (Pilot's Guide: 30 s to 20 min, 60 s the default). */
+export declare const TRACK_VECTOR: number[];
 export interface MapData {
     /** Magnetic heading, degrees. */ heading: number;
+    /** Magnetic variation, degrees east positive: heading, track and desired track plus this are true. */ magVar?: number;
     /** Aircraft position, decimal degrees. */ lat: number;
     lon: number;
     /** Map range, nm from the aircraft to the edge of the map's short side. */ range: number;
-    orientation: "NORTH UP" | "HDG UP";
+    orientation: Orientation;
+    /** The map's rotation, degrees, in place of the orientation's: pan mode holds it still. */ up?: number;
+    /** For TRK UP, DTK UP and the track vector: ground track and desired track, degrees, and groundspeed, knots. */ track?: number;
+    dtk?: number | null;
+    groundspeed?: number;
+    /** Track vector look-ahead, seconds; 0 or absent draws none. */ trackVector?: number;
     points: MapPoint[];
     airspaces: Airspace[];
     /** Flight plan in order: ids of `points`, or points of its own (approach fixes). */ route: (string | MapPoint)[];
@@ -51,6 +64,14 @@ export declare const RANGES: number[];
 export declare function stepRange(r: number, dir: number): number;
 export declare const rangeLabel: (r: number) => string;
 export declare const DCLTR: string[];
+/** The map's rotation, degrees: pan mode's held rotation, else the orientation's. DTK UP with no desired track turns to the track. */
+export declare function mapUp(s: Pick<MapData, "orientation" | "heading" | "up" | "track" | "dtk" | "magVar">): number;
+/** Where the track vector ends: the aircraft's position after `secs` along its track at its groundspeed. */
+export declare function trackVectorEnd(s: LatLon & {
+    track: number;
+    groundspeed: number;
+    magVar?: number;
+}, secs: number): LatLon;
 /** A group in screen coordinates, clipped to the map window, inserted before `before` (in whatever group holds it). */
 export declare function mapGroup(screen: SVGGElement, before: Element, m: MapGeometry): SVGGElement;
 /** Draws the map into `g`, which must be in screen coordinates (see `mapGroup`). */

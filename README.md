@@ -60,10 +60,12 @@ The container must be in the page and visible when a display is created, since r
 
 Two callbacks let a host follow the controls:
 
-- `onChange(patch)` reports state the controls changed, so a host can keep a PFD and MFD in step. On the MFD it also reports `route`, `activeLeg` and `directFrom` when FPL, DIRECT TO or PROC change them.
-- `onInput({ control, value })` reports every input, including the FMS knob, menu keys and joystick, which the display does not act on.
+- `onChange(patch)` reports state the controls changed, so a host can keep a PFD and MFD in step. Both units also report `route`, `activeLeg`, `directFrom` and `vtf` when the flight plan's PAGE MENU, DIRECT TO or PROC change them.
+- `onInput({ control, value })` reports every input, including ones the display does not act on.
 
 ### PFD
+
+DIRECT TO and PROC open windows where NRST opens, and work as the MFD's do (see below): DIRECT TO needs `points` and `airports`, PROC `procedures`.
 
 FG1000 draws the turn rate scale above the compass rose but never moves anything on it; `turnRate` (degrees per second) draws a magenta trend vector there, the heading 6 seconds ahead, as the real unit does.
 
@@ -85,9 +87,10 @@ How the pages work:
 - **FPL:** shows the active flight plan. With the cursor on, the inner knob opens WAYPOINT ENTRY to insert a waypoint after the selected one, CLR deletes one, ENT on a row makes it the active leg.
 - **DIRECT TO:** opens on the selected waypoint with ACTIVATE? highlighted, so ENT goes direct; the inner knob enters another.
 - **WAYPOINT ENTRY and DIRECT TO:** turning the inner knob left before typing opens the FPL, NRST and RECENT lists; the outer knob scrolls a list and ENT takes the waypoint.
-- **PROC:** opens on the destination's approaches. Pick one, a transition, then LOAD? or ACTIVATE?. Its fixes join the flight plan after the en route waypoints.
-- **Softkeys:** ENGINE (LEAN, SYSTEM), MAP (layers, airways, terrain and traffic switches), DCLTR, CHKLIST, and each page's own keys.
+- **PROC:** opens the PROCEDURES menu (see below). SELECT APPROACH opens on the destination's approaches. Pick one, a transition, then LOAD? or ACTIVATE?. Its fixes join the flight plan after the en route waypoints.
+- **Softkeys:** ENGINE (LEAN, SYSTEM), MAP (traffic, profile and airway switches; the data keys are dim), DCLTR, CHKLIST, and each page's own keys.
 - **CLR held:** goes to the navigation map.
+- **Joystick push:** on the navigation map (and the PFD's inset map), pan mode: a pointer and an info bar (the point under the pointer, or MAP POINTER; distance and bearing from the aircraft; latitude and longitude). The joystick moves the pointer and scrolls the map at its edge. RANGE recenters the map on the pointer. DIRECT TO takes the point under the pointer. Push again, or change page, to end it.
 
 ### Bezel controls
 
@@ -98,7 +101,11 @@ With `bezel: true`, the mouse works the controls as FlightGear's FG1000 window d
 | Wheel | Turns a knob |
 | Shift+wheel | Turns the outer ring of a dual knob |
 | Click | Pushes a knob or button |
-| Shift+click | Long press |
+| Shift+click, or holding 2 s | Long press: COM ⇄ tunes 121.5 in the active COM; CLR on the MFD goes to the navigation map |
+| Click an arrow beside a knob | Turns the knob one detent, left counterclockwise. On a dual knob the upper pair turns the outer ring and the lower pair the inner knob. Holding an arrow keeps turning. RANGE uses the - and + printed beside it. |
+| Click the joystick's arrows | Moves the pan pointer: up, down, left, right and the four diagonals. Holding keeps moving it. |
+
+A fast spin of the wheel turns HDG and CRS 5° a notch; a slow one turns 1°. Every knob pushes, ALT included (its push does nothing).
 
 On both units:
 
@@ -108,7 +115,7 @@ On both units:
 - **NAV and COM volume** set `navVolume` and `comVolume` (0 to 1) and show the level for 2 s; NAV push toggles `navIdent`.
 - **RANGE** works the MFD map and the PFD inset.
 
-Every PFD softkey works:
+Every PFD softkey that is not dim works:
 
 - **INSET:** DCLTR, range.
 - **PFD:** BRG1/BRG2 cycle OFF, NAV1, NAV2, GPS, ADF over `bearings`; WIND; ALT UNIT meters and hPa; STD BARO; DFLTS.
@@ -116,7 +123,7 @@ Every PFD softkey works:
 - **XPDR:** modes, code entry, IDENT.
 - **TMR/REF:** the FMS outer knob picks a field, the inner changes it, ENT starts and stops the timer.
 - **NRST:** FMS scrolls, ENT shows the airport, CLR goes back.
-- **ALERTS.**
+- **ALERTS:** lists `alerts`, one string per message, written "TITLE - description" as the trainer shows them.
 - **SYN VIS** keys switch only their setting; there is no terrain to draw.
 - **FPL** toggles the flight plan window.
 
@@ -125,6 +132,38 @@ Every PFD softkey works:
 FlightGear draws the map from its own navigation database. Here the map shows only the points passed in, with FG1000's symbols for airports, VORs, NDBs, fixes and flight plan waypoints, each layer at FG1000's default ranges: airports and VORs up to 150 nm, NDBs and fixes up to 15 nm, flight plan points always.
 
 `airspaces` takes Class B, C and D outlines. FG1000 draws none, so they follow the sectional chart: B solid blue, C solid magenta, D dashed blue, shown up to 150 nm.
+
+### Where it follows the G1000 trainer
+
+Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this package follows the trainer, in behavior and labels only; the artwork is still FG1000's.
+
+- **Knob arrows:** as on the trainer, clicking beside a knob turns it, and holding keeps turning. Here small arrows (original, not the trainer's) sit above each knob: two pairs on the dual knobs (NAV, ALT, COM, CRS/BARO, FMS), upper for the outer ring and lower for the inner knob, one pair on HDG, and small ones on the volume knobs. RANGE turns on its printed - and +, and the joystick pans in eight directions. A faint glow shows an arrow under the pointer.
+- **VSI** scale reads 1 and 2 (thousand fpm) and stops at ±2000 fpm (FG1000: ±4000). The readout shows from 100 fpm, rounded to 50 fpm as the NXi G1000 does; the trainer could not be climbed to check.
+- **MENU** on the PFD opens the PFD SETUP MENU (brightness, shown on AUTO; not ported), or with the flight plan window open its PAGE MENU, or in the DIRECT TO window that window's menu (Cancel Direct-To NAV: the flight plan resumes on the leg closest to the aircraft; CLR goes back to DIRECT TO). On the MFD it opens the page's PAGE MENU: on the navigation map, Map Setup, Declutter and Measure Bearing/Distance work. MAP SETUP (Map group) sets ORIENTATION (NORTH UP, TRK UP, DTK UP, HDG UP; `orientation`, reported through `onChange`) and TRACK VECTOR (off, or a light blue line to where the aircraft will be in 30 s to 20 min, always straight); heading, track and desired track are magnetic, and the map adds `magVar`; its other settings are grey. Measure Bearing/Distance (a pointer starts on the aircraft with a dashed line from the start point and the bearing and distance from it in the info bar; ENT moves the start point to the pointer; Stop Measuring or a joystick push ends it; no elevation, as there is no terrain data); on the flight plan page (and the PFD's flight plan window), Invert Flight Plan, Delete Flight Plan and Remove Approach work, and Closest Point Of FPL, Parallel Track and (MFD only, on the waypoint under the cursor) Create ATK Offset Waypoint open windows that follow the Pilot's Guide's steps. Closest Point Of FPL shows the bearing and distance from a reference waypoint to the nearest point on the plan and adds a user waypoint there to `points`, reported through `onChange`. Parallel Track (left or right, 1 to 99 nm) replaces the plan's points from the active leg on, up to an approach, with offset points named with a lower case p that carry `parallel`; a direct-to, loading an approach, editing the plan or activating a leg cancels it, and it is unavailable on a direct-to, an approach leg or a turn over 120 degrees. It does not cancel itself when offset tracks would overlap, and VNV is not ported. An ATK offset (1 to 999 nm, negative before the waypoint) is inserted into the plan; the large FMS knob steps it 10 nm, the small one 1 nm, not digit by digit. Window titles and field names are this package's own; in DIRECT TO, Cancel Direct-To NAV. Other options are listed grey, and the other pages have no menu yet. The FMS knob moves the cursor over the options that work, ENT carries one out, and CLR, MENU again or pushing the FMS knob closes it.
+- **FPL and PROC again:** on the MFD, FPL again goes back to the page shown before it, and PROC again closes the PROCEDURES window.
+- **Pan mode** (FG1000 has none): the joystick push on the MFD navigation map and the PFD inset map, as the Pilot's Guide and the trainer describe. The pointer and bar are drawn here, not Garmin's.
+- **PFD DIRECT TO and PROC** (FG1000 has neither): windows in the NRST window's place, laid out as the trainer's, sharing the MFD's flow. DIRECT TO and PROC again close them.
+- **Long press:** holding COM ⇄ or CLR for 2 s acts as on the real unit (FG1000: a separate key binding); COM ⇄ tunes 121.5, where FG1000 tunes 121.00.
+- **Attitude and turn rate** (Pilot's Guide): the pitch ladder stops below the roll pointer and slip/skid bar instead of running through them, and the turn rate band has ticks at half-standard and standard rate each side, with the trend vector drawn through them. FG1000 draws the band alone.
+- **Bezel shading:** FG1000's fascia shades its left column darker than its right (an extra overlay and a fainter edge strip); here both match the right.
+- **Colors:** the cursor and selectable text are full cyan (FG1000: a paler #80ffff), and the page group window shows the selected page in cyan and the rest in white (FG1000: lilac and grey).
+
+- **Softkey layouts** follow the trainer: DME on the PFD's top row and PFD menu; WX LGND, PRECIP and METAR in the inset menu; DCLTR, SHW CHRT and CHKLIST in the last three MFD slots; BACK in the eleventh slot of the ENGINE, LEAN, SYSTEM and MAP menus; LEAN's CYL SLCT and ASSIST and SYSTEM's RST FUEL and GAL REM where the trainer has them.
+- **Dim keys:** a key whose function is unavailable is grey and does nothing. OBS is dim with no flight plan. Keys for data this package has no source for (weather, topography, terrain, charts, map legend) are always dim. The inset's DCLTR stays working, although the trainer dims it.
+- **ADVISORY:** the last PFD softkey reads ADVISORY, lit, while a message in `alerts` is unread (one the ALERTS window has not shown, compared by text), and ALERTS once the window has shown it. The trainer flashes it; here it is lit steadily.
+- **CDI label** names the station type: GPS, VOR1, LOC1, VOR2 or LOC2, from the NAV radio's active frequency (FG1000: NAV1, NAV2). The course box reads DTK on GPS and CRS on a NAV radio. `cdiLabel` and `isLocalizer` are exported from `glass-cockpit-web/radio`.
+- **TMR/REF** is titled REFERENCES, with the timer and the minimums each on one row and the glide speed as GLIDE. The speed references start off (`vspeedsOn` all false); turn them on there, or set `vspeedsOn`.
+- **Failures:** `failed` flags instruments with FG1000's red X and yellow text. Set them as the trainer fails its units:
+
+  | Trainer failure | `failed` | Also |
+  | --- | --- | --- |
+  | AHRS (GRS) | `attitude` | |
+  | Air data (GDC) | `airspeed`, `altitude`, `vsi` | The baro box stays |
+  | GPS | none | Add a "GPS NAV LOST" message to `alerts` and set `cdiValid: false` on GPS |
+
+  `heading` flags the heading box (FG1000's flag; the trainer's magnetometer failure was not checked). FG1000's NO GPS POSITION flag is not used on the PFD.
+- **DME:** PFD > DME shows the DME window left of the HSI: the NAV radio, its active frequency and the distance from `bearings` (dashes without one). The top-row DME key opens DME TUNING, where the small FMS knob switches NAV1 and NAV2. No HOLD.
+- **PROC** opens a PROCEDURES menu: ACTIVATE VECTOR-TO-FINAL and ACTIVATE APPROACH (grey until an approach is loaded), ACTIVATE MISSED APPROACH (grey until one with a missed approach is loaded), SELECT APPROACH, and SELECT ARRIVAL and SELECT DEPARTURE (always grey, not ported). Activating an approach the GPS may not fly (anything but RNAV (GPS) and GPS approaches), from ACTIVATE? or the menu, asks NOT APPROVED FOR GPS, YES or NO; NO goes back without activating. CLR goes back from SELECT APPROACH to the menu. PROC marks the fixes it loads with `approach` (the approach's name), which is how it finds the loaded approach. ACTIVATE with the VECTORS transition, or ACTIVATE VECTOR-TO-FINAL, makes the final approach fix active with no leg from the aircraft (direct from the aircraft when the approach has no fix before its FAF), and sets `vtf` on the unit (reported through `onChange`; the PFD keeps it too, which dims Cancel Direct-To NAV) so a host can label the PFD's active leg, as the trainer does: `{ from: "vtf 356°", to: "TWOFA faf" }`. The PFD flight plan tags approach fixes in lowercase: `faf`, `map`. `gpsApproved` and `vtfLeg` are exported for hosts.
 
 ## Navdata
 
@@ -225,8 +264,11 @@ EOF
 - MFD pages that need data this package has no source for: weather, terrain, XM, trip planning, GPS status, stored flight plans, user waypoints, nearest airspaces.
 - DIRECT TO's VNAV fields, approach suspend and missed-approach sequencing.
 - USER and AIRWAY waypoint lists.
-- Synthetic vision, the arc HSI, DME window, selected airspeed, autopilot annunciations, failure flags and the GPS course-to-intercept diamond.
+- Synthetic vision, the arc HSI, DME HOLD, selected airspeed, autopilot annunciations and the GPS course-to-intercept diamond.
 - Map terrain and airways.
+- The audio panel (and its reversionary mode button), and typing waypoint names on the keyboard.
+- PAGE MENU on pages other than the navigation map, flight plan and DIRECT TO, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice).
+- The autopilot keys the trainer's MFD bezel has (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN), reversionary mode, and the map's range ring and measure bearing/distance in pan mode.
 
 FG1000 renders in Liberation Sans Narrow, which is not bundled. Without that font installed, some narrow labels fall back to a wider font.
 

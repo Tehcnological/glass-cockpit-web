@@ -2,10 +2,14 @@
 // draws into its FG1000 SVG (src/fg1000/<page>.svg, prefix <page>) and takes the FMS knob, CRSR, ENT and CLR while its
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
-import { mapGroup, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
-import { bearingDistance, latLon, nearest, planName, routePoint, type Airport, type Procedure } from "./nav.js";
-import { BLANK, Highlighter, IdEntry, ListView, NS, firstRow, key, type Key } from "./ui.js";
+import { ORIENTATIONS, TRACK_VECTOR, mapGroup, mapUp, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
+import { bearingDistance, cancelDirectTo, cancelParallel, directToPatch, findPoint, isParallel, latLon, nearest, planEntry, planName, routePoint, vtfEdit, type Airport, type Procedure } from "./nav.js";
+import { FPL_TOOLS, FplTool, toolEnabled, type FplToolName } from "./fpl-tools.js";
+import { BLANK, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key, type Key } from "./ui.js";
+import { firstOption, fplMenu, stepMenu, type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
+import { panStart, type Pan } from "./pan.js";
+import { PROC_MENU, ProcFlow } from "./procedures.js";
 
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
 export interface Checklist { group: string; name: string; items: { name: string; value: string }[] }
@@ -17,9 +21,11 @@ export interface MfdUi {
   menuVisible: boolean;
   /** The shared softkey menu showing: "top" (the page's own), "engine", "lean", "system" or "map". */ menu: string;
   /** Declutter level, 0 to 3. */ dcltr: number;
+  /** MAP SETUP's track vector look-ahead, seconds; 0 is off. */ trackVector: number;
   /** Airways key state, 0 to 3. */ airways: number;
   /** MAP menu toggles. */ layers: Record<string, boolean>;
   /** Waypoints entered in DIRECT TO and WAYPOINT ENTRY, latest first: their RECENT list. */ recent: string[];
+  /** Pan mode on the navigation map (joystick push), or null. */ pan: Pan | null;
 }
 
 /** What the MFD gives its pages. */
@@ -57,6 +63,8 @@ const TITLES: Record<string, string> = {
   NearestVOR: "NRST - NEAREST VOR", NearestUserWaypoints: "NRST - NEAREST USER WPTS", NearestFrequencies: "NRST - NEAREST FREQUENCIES",
   NearestAirspaces: "NRST - NEAREST AIRSPACES", DirectTo: "DIRECT TO", Procedures: "PROC - PROCEDURES",
   WaypointEntry: "FPL - ACTIVE FLIGHT PLAN", // a window over the flight plan page, which keeps its title
+  MapSetup: "MAP - NAVIGATION MAP", // likewise over the navigation map
+  FplTool: "FPL - ACTIVE FLIGHT PLAN", // over the flight plan page
 };
 
 // The map windows of pages with their own map (their <page>NavMap-bg, in screen pixels); FG1000 keeps the full map's
@@ -132,6 +140,11 @@ export class MfdPage {
     return null;
   }
 
+  /** The MENU key's PAGE MENU options, or null for a page without one here. */
+  pageMenu(): MenuOption[] | null {
+    return null;
+  }
+
   draw() {}
 }
 
@@ -161,10 +174,29 @@ class NavigationMapPage extends MfdPage {
   }
   keys() {
     const u = this.m.ui;
+    // v13 trainer slots: DCLTR tenth, SHW CHRT (dim, no charts) eleventh, CHKLIST twelfth (FG1000: ninth and eleventh).
     return this.m.topKeys({
-      8: key(["DCLTR", "DCLTR-1", "DCLTR-2", "DCLTR-3"][u.dcltr], () => (u.dcltr = (u.dcltr + 1) % 4)),
-      10: key("CHKLIST", () => this.m.go("LstPageGroup", "Checklist")),
+      9: key(["DCLTR", "DCLTR-1", "DCLTR-2", "DCLTR-3"][u.dcltr], () => (u.dcltr = (u.dcltr + 1) % 4)),
+      10: dimKey("SHW CHRT"),
+      11: key("CHKLIST", () => this.m.go("LstPageGroup", "Checklist")),
     });
+  }
+  constructor(m: Mfd, name: string, screen: SVGGElement, private setup: () => MapSetupPage) {
+    super(m, name, screen);
+  }
+
+  // v13 trainer's options; Map Setup, Declutter and Measure Bearing/Distance work here (no charts or profile view).
+  pageMenu(): MenuOption[] {
+    const u = this.m.ui;
+    const s = this.s;
+    // Pilot's Guide: the measure pointer starts on the aircraft; while measuring the option reads Stop Measuring.
+    const measure: MenuOption = u.pan?.from
+      ? { label: "Stop Measuring", act: () => (u.pan = null) }
+      : { label: "Measure Bearing/Distance", act: () => (u.pan = { ...panStart(s, mapUp(s)), from: { lat: s.lat, lon: s.lon } }) };
+    return [
+      { label: "Map Setup", act: () => this.m.open(this.setup().open()) }, { label: "Declutter", act: () => (u.dcltr = (u.dcltr + 1) % 4) },
+      measure, { label: "Show Chart" }, { label: "Show Profile View" },
+    ];
   }
 }
 
@@ -687,22 +719,33 @@ class ChecklistPage extends MfdPage {
 
 /** A flight plan entry resolved to a point. */
 const resolve = (s: MfdState, r: string | MapPoint) => routePoint(r, s.points, s.airports);
-const airportPoint = (s: MfdState, id: string): MapPoint | undefined => {
-  const a = s.airports.find((x) => x.id === id);
-  return a && { id: a.id, type: "APT", lat: a.lat, lon: a.lon, name: a.name };
-};
-/** A waypoint by identifier: navigation points, then flight plan points (approach fixes), then airports. */
-const findPoint = (s: MfdState, id: string): MapPoint | undefined =>
-  s.points.find((p) => p.id === id) ?? s.route.find((r): r is MapPoint => typeof r === "object" && r.id === id) ?? airportPoint(s, id);
 
 // ActiveFlightPlanNarrow: the legs with desired track, distance and altitude; the arrow marks the active leg. With the
 // cursor on, the outer knob moves it and the inner knob opens WAYPOINT ENTRY, which adds a waypoint after the selected one.
 // shortcut: ENT on a leg activates it (the real unit's MENU > Activate Leg; FG1000's ENT does nothing), and CLR deletes
 // without asking.
 class FlightPlanPage extends MapPage {
+  // PAGE MENU (v13 trainer's options): Invert, Delete and Remove Approach work here, and Closest Point of FPL, Parallel
+  // Track and Create ATK Offset Waypoint (on the waypoint under the cursor) open their windows; the rest are dim.
+  pageMenu(): MenuOption[] {
+    // Each option's change is worked out again from the state when ENT carries it out (the host may have moved on).
+    const now = (label: string) => fplMenu(this.s.route, this.s.activeLeg).find((o) => o.label === label)?.patch;
+    const sel = this.crsr ? this.rows.sel : null;
+    return fplMenu(this.s.route, this.s.activeLeg).map(({ label, patch }) => (FPL_TOOLS as readonly string[]).includes(label) ? {
+      label,
+      act: toolEnabled(label as FplToolName, this.s, sel) ? () => this.m.open(this.tools().open(label as FplToolName, sel ?? 0)) : undefined,
+    } : {
+      label,
+      act: patch && (() => {
+        const p = now(label);
+        if (p) this.m.change(p);
+      }),
+    });
+  }
+
   private rows = new ListView(this.p, ["Header", "Leg", "DTK", "DIS", "ALT"], 11, "Leg", false, { trough: "ScrollTrough", thumb: "ScrollThumb" });
 
-  constructor(m: Mfd, screen: SVGGElement, private entry: WaypointEntryPage) {
+  constructor(m: Mfd, screen: SVGGElement, private entry: WaypointEntryPage, private tools: () => FplToolPage) {
     super(m, "ActiveFlightPlanNarrow", screen, FPL_MAP);
   }
 
@@ -727,23 +770,27 @@ class FlightPlanPage extends MapPage {
 
   private insert(at: number, p: MapPoint) {
     const s = this.s;
-    const route = [...s.route];
-    route.splice(at, 0, s.points.includes(p) || p.type === "APT" ? p.id : p);
-    this.m.change({ route, activeLeg: at <= s.activeLeg && s.route.length ? s.activeLeg + 1 : s.activeLeg });
+    const route = cancelParallel(s.route); // editing the plan cancels Parallel Track (Pilot's Guide)
+    route.splice(at, 0, planEntry(s, p));
+    const activeLeg = at <= s.activeLeg && s.route.length ? s.activeLeg + 1 : s.activeLeg;
+    this.m.change({ route, activeLeg, ...vtfEdit(s.vtf, at, s.activeLeg) });
     this.rows.sel = at;
   }
 
   ent() {
     const at = this.rows.sel;
-    if (this.crsr && at > 0 && at < this.s.route.length) this.m.change({ activeLeg: at, directFrom: null });
+    const s = this.s;
+    // Activating a leg cancels Parallel Track (Pilot's Guide).
+    if (this.crsr && at > 0 && at < s.route.length) this.m.change({ ...(s.route.some(isParallel) && { route: cancelParallel(s.route) }), activeLeg: at, directFrom: null, vtf: false });
   }
 
   clr() {
     const s = this.s;
     const at = this.rows.sel;
     if (!this.crsr || at >= s.route.length) return;
-    const route = s.route.filter((_, i) => i !== at);
-    this.m.change({ route, activeLeg: clamp(at < s.activeLeg ? s.activeLeg - 1 : s.activeLeg, 0, Math.max(0, route.length - 1)) });
+    const route = cancelParallel(s.route).filter((_, i) => i !== at);
+    const activeLeg = clamp(at < s.activeLeg ? s.activeLeg - 1 : s.activeLeg, 0, Math.max(0, route.length - 1));
+    this.m.change({ route, activeLeg, ...vtfEdit(s.vtf, at, s.activeLeg) });
   }
 
   draw() {
@@ -963,6 +1010,15 @@ class DirectToPage extends MapPage {
     this.crsr = true;
   }
 
+  // Pilot's Guide: the Direct-to window's one option. Worked out again when ENT carries it out.
+  pageMenu(): MenuOption[] {
+    const act = () => {
+      const p = cancelDirectTo(this.s);
+      if (p) this.m.change(p);
+    };
+    return [{ label: "Cancel Direct-To NAV", act: cancelDirectTo(this.s) ? act : undefined }];
+  }
+
   fms(outer: boolean, d: number) {
     if (this.sub.open) this.sub.fms(outer, d);
     else if (this.entry.editing) {
@@ -989,10 +1045,7 @@ class DirectToPage extends MapPage {
     if (!this.onActivate) return void (this.onActivate = !!this.point());
     const p = this.point();
     if (!p) return;
-    const s = this.s;
-    const i = s.route.findIndex((r) => resolve(s, r)?.id === p.id);
-    const from = { lat: s.lat, lon: s.lon };
-    this.m.change(i >= 0 ? { activeLeg: i, directFrom: from } : { route: [s.points.includes(p) || p.type === "APT" ? p.id : p], activeLeg: 0, directFrom: from });
+    this.m.change(directToPatch(this.s, p));
     this.m.close();
   }
 
@@ -1024,54 +1077,49 @@ class DirectToPage extends MapPage {
   }
 }
 
-// PROC: FG1000 has no procedures page; this one follows the G1000's SELECT APPROACH window (airport, approach,
-// transition, LOAD? / ACTIVATE?), drawn in the style of the NRST pages' data display.
+// PROC: FG1000 has no procedures page. This one follows the v13 trainer: a PROCEDURES menu, then the SELECT APPROACH
+// window (airport, approach, transition, LOAD? / ACTIVATE?), drawn in the style of the NRST pages' data display.
 const PROC_ROWS = 6;
+// The PROCEDURES window over the page; the flow is in procedures.ts, shared with the PFD.
 class ProceduresPage extends MfdPage {
   navMap = "partial" as const;
-  private airport: string | null = null;
-  private grp: "APT" | "APR" | "TRANS" | "LOAD" | "ACTIVATE" = "APR";
-  private apr = 0;
-  private trans = 0;
   private entry: IdEntry;
+  private flow: ProcFlow;
 
   constructor(m: Mfd, screen: SVGGElement, after: Element) {
     super(m, "Procedures", screen);
     const g = document.createElementNS(NS, "g");
     g.id = "Page-Procedures";
     g.style.display = "none";
+    const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed`;
     const text = (id: string, x: number, y: number, fill = "#ffffff", size = 19.35, anchor = "start") =>
-      `<text id="Procedures${id}" x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:${size}px"></text>`;
-    const label = (t: string, y: number) => `<text x="874" y="${y}" fill="#80ffff" text-anchor="middle" style="font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px">${t}</text>`;
+      `<text id="Procedures${id}" x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style};font-size:${size}px"></text>`;
+    const label = (t: string, y: number, fill = CYAN) => `<text x="874" y="${y}" fill="${fill}" text-anchor="middle" style="${style};font-size:19.35px">${t}</text>`;
     let rows = "";
     for (let i = 0; i < PROC_ROWS; i++) rows += text(`Approach${i}`, 740, 210 + i * 26);
     for (let i = 0; i < PROC_ROWS; i++) rows += text(`Trans${i}`, 740, 420 + i * 26);
+    let menu = "";
+    for (let i = 0; i < PROC_MENU.length; i++) menu += text(`Menu${i}`, 740, 130 + i * 30);
+    // v13 trainer: ACTIVATE? on an approach the GPS may not fly asks first.
+    const ask = ["- NOT APPROVED FOR GPS -", "GPS guidance is for", "monitoring only.", "Activate approach?"].map((t, i) => label(t, 300 + i * 30, "#ffffff")).join("");
     g.innerHTML =
       `<rect x="724.5" y="53.5" width="310" height="689" style="fill:#1a3030;stroke:#ffffff;stroke-width:1"/>` +
+      `<g id="ProceduresMenu">${label("PROCEDURES", 85)}${menu}</g>` +
+      `<g id="ProceduresSelect">` +
       label("APPROACH", 85) + text("ID", 874, 120, "#ffffff", 24, "middle") + text("Name", 874, 148, "#ffffff", 19.35, "middle") +
       label("SELECT APPROACH", 182) + rows + label("TRANSITION", 392) +
-      text("Load", 874, 610, "#ffffff", 22, "middle") + text("Activate", 874, 645, "#ffffff", 22, "middle");
+      text("Load", 874, 610, "#ffffff", 22, "middle") + text("Activate", 874, 645, "#ffffff", 22, "middle") + `</g>` +
+      `<g id="ProceduresAsk"><rect x="734.5" y="270" width="290" height="190" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>` +
+      `${ask}${text("Yes", 834, 440, "#ffffff", 22, "middle")}${text("No", 914, 440, "#ffffff", 22, "middle")}</g>`;
     after.after(g);
     this.root = g;
     this.entry = new IdEntry(this.p, 4);
+    this.flow = new ProcFlow({ s: () => this.s, change: (patch) => this.m.change(patch), close: () => this.m.close() }, this.entry);
   }
 
-  /** Opens on the destination: the last airport in the flight plan, else the nearest. */
   open() {
-    const s = this.s;
-    const apts = s.route.map((r) => resolve(s, r)).filter((p) => p?.type === "APT");
-    this.airport = apts[apts.length - 1]?.id ?? nearest(s.airports, s.lat, s.lon, 0, 1)[0]?.item.id ?? null;
-    [this.grp, this.apr, this.trans, this.crsr] = ["APR", 0, 0, true];
-    this.entry.cancel();
-  }
-
-  private procs(): Procedure[] {
-    return this.s.procedures.filter((p) => p.airport === this.airport);
-  }
-
-  private transitions() {
-    const p = this.procs()[this.apr];
-    return p ? Object.keys(p.transitions) : [];
+    this.flow.open();
+    this.crsr = true;
   }
 
   keys() {
@@ -1083,67 +1131,264 @@ class ProceduresPage extends MfdPage {
   }
 
   fms(outer: boolean, d: number) {
-    const order = ["APT", "APR", "TRANS", "LOAD", "ACTIVATE"] as const;
-    if (this.entry.editing) {
-      if (outer) this.entry.outer(d);
-      else this.entry.inner(d);
-    } else if (outer) this.grp = order[clamp(order.indexOf(this.grp) + (d > 0 ? 1 : -1), 0, order.length - 1)];
-    else if (this.grp === "APT") this.entry.inner(d);
-    else if (this.grp === "APR") [this.apr, this.trans] = [clamp(this.apr + d, 0, Math.max(0, this.procs().length - 1)), 0];
-    else if (this.grp === "TRANS") this.trans = clamp(this.trans + d, 0, Math.max(0, this.transitions().length - 1));
-    else this.grp = d > 0 ? "ACTIVATE" : "LOAD";
+    this.flow.fms(outer, d);
     return true;
   }
 
   ent() {
-    if (this.entry.editing) {
-      const v = this.entry.ent();
-      if (v) [this.airport, this.apr, this.trans, this.grp] = [v, 0, 0, "APR"];
-    } else if (this.grp === "APT") this.grp = "APR";
-    else if (this.grp === "APR") this.grp = this.transitions().length > 1 ? "TRANS" : "LOAD";
-    else if (this.grp === "TRANS") this.grp = "LOAD";
-    else this.load(this.grp === "ACTIVATE");
+    this.flow.ent();
   }
 
   clr() {
-    if (this.entry.editing) this.entry.cancel();
-    else this.m.close();
+    this.flow.clr();
   }
 
-  // Adds the approach after the en route waypoints (replacing an approach loaded before), as the G1000 does.
-  // shortcut: the missed approach legs follow the missed approach point with no suspend.
-  private load(activate: boolean) {
-    const p = this.procs()[this.apr];
-    if (!p) return;
-    const s = this.s;
-    const legs = [...(p.transitions[this.transitions()[this.trans]] ?? []), ...p.legs];
-    const pts: MapPoint[] = legs
-      .filter((l, i) => i === 0 || l.fix !== legs[i - 1].fix)
-      .map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, role: l.role }));
-    const enroute = s.route.filter((r) => typeof r === "string" || s.points.includes(r));
-    const route = [...enroute, ...pts];
-    this.m.change(activate ? { route, activeLeg: enroute.length, directFrom: { lat: s.lat, lon: s.lon } } : { route });
+  draw() {
+    const f = this.flow;
+    // NOT APPROVED FOR GPS shows over the view it was asked from.
+    const under = f.view === "ask" ? f.pending?.from ?? "select" : f.view;
+    this.p.show("Menu", under === "menu");
+    this.p.show("Select", under === "select");
+    this.p.show("Ask", f.view === "ask");
+    for (let i = 0; i < PROC_MENU.length; i++) {
+      // The trainer draws available items cyan and the rest grey.
+      this.p.text(`Menu${i}`, PROC_MENU[i], f.enabled(i) ? CYAN : "#808080");
+      this.m.hl.set(this.p.el(`Menu${i}`), f.view === "menu" && this.crsr && i === f.item);
+    }
+    this.p.text("Yes", "YES");
+    this.p.text("No", "NO");
+    this.m.hl.set(this.p.el("Yes"), f.view === "ask" && f.yes);
+    this.m.hl.set(this.p.el("No"), f.view === "ask" && !f.yes);
+    const procs = f.procs();
+    const apt = this.s.airports.find((a) => a.id === f.airport);
+    const on = this.crsr && f.view === "select";
+    this.entry.draw(f.airport ?? "____", on && f.grp === "APT", this.m.hl);
+    this.p.text("Name", apt ? apt.name.toUpperCase() : "");
+    const list = (name: string, items: string[], sel: number, lit: boolean) => {
+      const top = firstRow(sel, items.length, PROC_ROWS);
+      for (let i = 0; i < PROC_ROWS; i++) {
+        this.p.text(`${name}${i}`, items[top + i] ?? "");
+        this.m.hl.set(this.p.el(`${name}${i}`), lit && top + i === sel && !!items[top + i]);
+      }
+    };
+    list("Approach", procs.length ? procs.map((p) => p.name) : ["NONE"], f.apr, on && f.grp === "APR" && procs.length > 0);
+    list("Trans", f.transitions(), f.trans, on && f.grp === "TRANS");
+    this.p.text("Load", "LOAD?");
+    this.p.text("Activate", "ACTIVATE?");
+    this.m.hl.set(this.p.el("Load"), on && f.grp === "LOAD");
+    this.m.hl.set(this.p.el("Activate"), on && f.grp === "ACTIVATE");
+  }
+}
+
+// MENU: the page's PAGE MENU, a window over the page (v13 trainer). Either FMS knob moves the cursor, skipping dim
+// options; ENT carries out the option; CLR, MENU or pushing the FMS knob closes it.
+const MENU_ROWS = 8;
+export class PageMenuPage extends MfdPage {
+  private options: MenuOption[] = [];
+  private at = 0;
+  private base = "";
+
+  constructor(m: Mfd, screen: SVGGElement, after: Element) {
+    super(m, "PageMenu", screen);
+    const g = document.createElementNS(NS, "g");
+    g.id = "Page-PageMenu";
+    g.style.display = "none";
+    const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px`;
+    const text = (t: string, x: number, y: number, anchor = "start", id = "") =>
+      `<text ${id && `id="PageMenu${id}"`} x="${x}" y="${y}" fill="#ffffff" text-anchor="${anchor}" style="${style}">${t}</text>`;
+    let rows = "";
+    for (let i = 0; i < MENU_ROWS; i++) rows += text("", 744, 150 + i * 27, "start", `Option${i}`);
+    g.innerHTML =
+      `<rect x="724.5" y="53.5" width="310" height="390" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>` +
+      text("PAGE MENU", 874, 82, "middle") + text("OPTIONS", 740, 115) +
+      `<rect x="734.5" y="120.5" width="290" height="${MENU_ROWS * 27 + 12}" style="fill:none;stroke:#808080;stroke-width:1"/>` +
+      text("Press the FMS CRSR knob to", 874, 395, "middle") + text("return to base page", 874, 420, "middle") + rows;
+    after.after(g);
+    this.root = g;
+  }
+
+  get title() {
+    return this.base;
+  }
+
+  /** Shows `options` for the page titled `title`, the cursor on the first available option. */
+  /** The window the menu was opened over (DIRECT TO) and whether its cursor was on; CLR goes back to it as it was. */
+  private back: MfdPage | null = null;
+  private backCrsr = false;
+
+  open(options: MenuOption[], title: string, back: MfdPage | null = null) {
+    [this.options, this.base, this.crsr, this.back, this.backCrsr] = [options, title, true, back, back?.crsr ?? false];
+    this.at = firstOption(options.map((o) => !!o.act));
+  }
+
+  fms(_outer: boolean, d: number) {
+    this.at = stepMenu(this.options.map((o) => !!o.act), this.at, d);
+    return true;
+  }
+
+  ent() {
+    const act = this.options[this.at]?.act;
+    if (!act) return;
+    this.m.close();
+    act();
+  }
+
+  clr() {
+    this.m.close();
+    if (!this.back) return;
+    this.m.open(this.back);
+    this.back.crsr = this.backCrsr; // hiding it for the menu turned its cursor off
+  }
+
+  toggleCrsr() {
     this.m.close();
   }
 
   draw() {
-    const procs = this.procs();
-    const apt = this.s.airports.find((a) => a.id === this.airport);
-    this.entry.draw(this.airport ?? "____", this.crsr && this.grp === "APT", this.m.hl);
-    this.p.text("Name", apt ? apt.name.toUpperCase() : "");
-    const list = (name: string, items: string[], sel: number, on: boolean) => {
-      const top = firstRow(sel, items.length, PROC_ROWS);
-      for (let i = 0; i < PROC_ROWS; i++) {
-        this.p.text(`${name}${i}`, items[top + i] ?? "");
-        this.m.hl.set(this.p.el(`${name}${i}`), on && top + i === sel && !!items[top + i]);
+    const top = firstRow(this.at, this.options.length, MENU_ROWS);
+    for (let i = 0; i < MENU_ROWS; i++) {
+      const o = this.options[top + i];
+      this.p.text(`Option${i}`, o?.label ?? "", o?.act ? CYAN : "#808080");
+      this.m.hl.set(this.p.el(`Option${i}`), !!o && top + i === this.at);
+    }
+  }
+}
+
+// MAP SETUP (Pilot's Guide), the navigation map's settings: a window like the PAGE MENU, with its Map group only.
+// ORIENTATION and TRACK VECTOR work; the rest are grey (no terrain, wind, fuel or synthetic vision data here). The outer
+// FMS knob moves the cursor, the inner changes the setting; CLR, MENU or pushing the FMS knob closes it.
+// shortcut: a setting changes as the knob turns (the real unit takes it on ENT), and TRACK VECTOR's on/off and
+// look-ahead time are one field.
+const SETUP_ROWS = ["ORIENTATION", "AUTO ZOOM", "LAND DATA", "TRACK VECTOR", "WIND VECTOR", "NAV RANGE RING", "TOPO DATA", "FUEL RNG (RSV)", "FIELD OF VIEW"];
+const SETUP_ON = [0, 3];
+export class MapSetupPage extends MfdPage {
+  private at = 0;
+
+  constructor(m: Mfd, screen: SVGGElement, after: Element) {
+    super(m, "MapSetup", screen);
+    const g = document.createElementNS(NS, "g");
+    g.id = "Page-MapSetup";
+    g.style.display = "none";
+    const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px`;
+    const text = (t: string, x: number, y: number, anchor = "start", id = "", fill = "#ffffff") =>
+      `<text ${id && `id="MapSetup${id}"`} x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style}">${t}</text>`;
+    let rows = "";
+    SETUP_ROWS.forEach((label, i) => {
+      rows += text(label, 744, 150 + i * 27, "start", "", SETUP_ON.includes(i) ? "#ffffff" : "#808080") + text("", 1014, 150 + i * 27, "end", `Value${i}`, CYAN);
+    });
+    g.innerHTML =
+      `<rect x="724.5" y="53.5" width="310" height="390" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>` +
+      text("MAP SETUP", 874, 82, "middle") + text("GROUP", 740, 115) + text("Map", 1014, 115, "end", "", CYAN) +
+      `<rect x="734.5" y="120.5" width="290" height="${SETUP_ROWS.length * 27 + 12}" style="fill:none;stroke:#808080;stroke-width:1"/>` +
+      text("Press the FMS CRSR knob to", 874, 395, "middle") + text("return to base page", 874, 420, "middle") + rows;
+    after.after(g);
+    this.root = g;
+  }
+
+  open() {
+    [this.at, this.crsr] = [SETUP_ON[0], true];
+    return this;
+  }
+
+  fms(outer: boolean, d: number) {
+    if (outer) this.at = SETUP_ON[Math.max(0, Math.min(SETUP_ON.length - 1, SETUP_ON.indexOf(this.at) + d))];
+    else if (this.at === 0) {
+      const i = ORIENTATIONS.indexOf(this.s.orientation);
+      this.m.change({ orientation: ORIENTATIONS[clamp(i + d, 0, ORIENTATIONS.length - 1)] });
+    } else {
+      const u = this.m.ui;
+      u.trackVector = TRACK_VECTOR[clamp(TRACK_VECTOR.indexOf(u.trackVector) + d, 0, TRACK_VECTOR.length - 1)];
+    }
+    return true;
+  }
+
+  ent() {}
+
+  clr() {
+    this.m.close();
+  }
+
+  toggleCrsr() {
+    this.m.close();
+  }
+
+  draw() {
+    const t = this.m.ui.trackVector;
+    const values: Record<number, string> = { 0: this.s.orientation, 3: t === 0 ? "Off" : t < 120 ? `On ${t} sec` : `On ${t / 60} min` };
+    SETUP_ROWS.forEach((_, i) => {
+      this.p.text(`Value${i}`, values[i] ?? "");
+      this.m.hl.set(this.p.el(`Value${i}`), i === this.at);
+    });
+  }
+}
+
+/** The window Closest Point of FPL, Parallel Track and Create ATK Offset Waypoint open over the flight plan, in
+ * MapSetupPage's style; its rows come from `FplTool`. */
+export class FplToolPage extends MfdPage {
+  private tool: FplTool;
+  private g: SVGGElement;
+
+  constructor(m: Mfd, screen: SVGGElement, after: Element) {
+    super(m, "FplTool", screen);
+    const g = document.createElementNS(NS, "g");
+    g.id = "Page-FplTool";
+    g.style.display = "none";
+    after.after(g);
+    this.root = this.g = g;
+    this.tool = new FplTool(new IdEntry(this.p, 5));
+  }
+
+  open(name: FplToolName, sel: number) {
+    this.tool.open(name, this.s, sel);
+    this.crsr = true;
+    return this;
+  }
+
+  fms(outer: boolean, d: number) {
+    this.tool.fms(this.s, outer, d);
+    return true;
+  }
+
+  ent() {
+    const r = this.tool.ent(this.s);
+    if (r.patch) this.m.change(r.patch);
+    if (r.close) this.m.close();
+  }
+
+  // Pilot's Guide: the FMS knob or CLR cancels (CLR first cancels an identifier being spelled).
+  clr() {
+    if (this.tool.clr()) this.m.close();
+  }
+
+  toggleCrsr() {
+    this.m.close();
+  }
+
+  draw() {
+    const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px`;
+    // `cur`: the cursor's cyan box goes behind it, measured once drawn.
+    const text = (t: string, x: number, y: number, anchor: string, fill: string, cur = false) =>
+      `<text ${cur ? "data-cur " : ""}x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style}">${esc(t)}</text>`;
+    const rows = this.tool.rows(this.s);
+    let out = `<rect x="724.5" y="53.5" width="310" height="${rows.length * 27 + 90}" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>`;
+    rows.forEach((r, i) => {
+      const y = i === 0 ? 82 : 100 + i * 27;
+      if (r.title) {
+        out += text(r.label, 874, y, "middle", "#ffffff");
+        return;
       }
-    };
-    list("Approach", procs.length ? procs.map((p) => p.name) : ["NONE"], this.apr, this.crsr && this.grp === "APR" && procs.length > 0);
-    list("Trans", this.transitions(), this.trans, this.crsr && this.grp === "TRANS");
-    this.p.text("Load", "LOAD?");
-    this.p.text("Activate", "ACTIVATE?");
-    this.m.hl.set(this.p.el("Load"), this.crsr && this.grp === "LOAD");
-    this.m.hl.set(this.p.el("Activate"), this.crsr && this.grp === "ACTIVATE");
+      const onLabel = !!r.cur && r.value === undefined;
+      out += text(r.label, 744, y, "start", onLabel ? "#000000" : r.dim ? "#808080" : "#ffffff", onLabel);
+      if (r.value !== undefined) out += text(r.value, 1014, y, "end", r.cur ? "#000000" : CYAN, r.cur);
+    });
+    const y = 100 + rows.length * 27 + 10;
+    this.g.innerHTML = out + text("Press the FMS CRSR knob to", 874, y, "middle", "#ffffff") + text("cancel", 874, y + 25, "middle", "#ffffff");
+    for (const t of this.g.querySelectorAll<SVGTextElement>("text[data-cur]")) {
+      const b = t.getBBox();
+      const box = document.createElementNS(NS, "rect");
+      for (const [k, v] of Object.entries({ x: b.x - 2, y: b.y - 1, width: b.width + 4, height: b.height + 2, fill: CYAN })) box.setAttribute(k, String(v));
+      t.before(box);
+    }
   }
 }
 
@@ -1152,6 +1397,9 @@ export interface Pages {
   directTo: DirectToPage;
   procedures: ProceduresPage;
   waypointEntry: WaypointEntryPage;
+  pageMenu: PageMenuPage;
+  mapSetup: MapSetupPage;
+  fplTool: FplToolPage;
 }
 
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
@@ -1161,7 +1409,7 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
   const waypointEntry = new WaypointEntryPage(m, screen);
   const make = (name: string): MfdPage => {
     switch (name) {
-      case "NavigationMap": return new NavigationMapPage(m, name, screen);
+      case "NavigationMap": return new NavigationMapPage(m, name, screen, () => mapSetup);
       case "TrafficMap": return new TrafficPage(m, name, screen);
       case "NearestAirports": return new NearestAirportsPage(m, name, screen);
       case "NearestVOR": return new NearestNavPage(m, name, screen, "VOR");
@@ -1173,7 +1421,7 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
       case "IntersectionInfo": return new NavInfoPage(m, name, screen, "FIX", 5);
       case "AirportInfo": return new AirportInfoPage(m, screen);
       case "Checklist": return new ChecklistPage(m, screen);
-      case "ActiveFlightPlanNarrow": return new FlightPlanPage(m, screen, waypointEntry);
+      case "ActiveFlightPlanNarrow": return new FlightPlanPage(m, screen, waypointEntry, () => fplTool);
     }
     // No data: the map pages keep the navigation map under their title.
     const p = new MfdPage(m, name, screen);
@@ -1183,6 +1431,9 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
   const groups = PAGE_GROUPS.map((g) => g.pages.map(make));
   const directTo = new DirectToPage(m, screen);
   const procedures = new ProceduresPage(m, screen, roots[roots.length - 1].parentNode as Element);
+  const pageMenu = new PageMenuPage(m, screen, roots[roots.length - 1].parentNode as Element);
+  const mapSetup = new MapSetupPage(m, screen, roots[roots.length - 1].parentNode as Element);
+  const fplTool = new FplToolPage(m, screen, roots[roots.length - 1].parentNode as Element);
   for (const r of roots) r.style.display = "none";
-  return { groups, directTo, procedures, waypointEntry };
+  return { groups, directTo, procedures, waypointEntry, pageMenu, mapSetup, fplTool };
 }

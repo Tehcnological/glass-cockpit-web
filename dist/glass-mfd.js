@@ -11,15 +11,18 @@ import SURROUND from "./svg/surround-mfd.js";
 import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay } from "./display.js";
 import { Page, clamp, deg3, mod } from "./page.js";
-import { drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
+import { panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget } from "./pan.js";
+import { drawMap, mapGroup, mapUp, rangeLabel, stepRange } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
-import { BLANK, Highlighter, NS, key } from "./ui.js";
+import { BLANK, Highlighter, NS, dimKey, key } from "./ui.js";
 import { PAGE_GROUPS, makePages } from "./mfd-pages.js";
+/** The pan info bar's text size, px. */
+const PAN_FONT = 18;
 const DEFAULTS = {
     heading: 0, headingBug: 0, course: 0, baro: 29.92, alt: 0, selectedAlt: null, track: 0, groundspeed: 0, dtk: null, ete: null,
     lat: 0, lon: 0, magVar: 0, range: 10, orientation: "NORTH UP",
-    points: [], airspaces: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null,
+    points: [], airspaces: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null, vtf: false,
     engine: { rpm: 0, fuelFlow: 0, oilPressure: 0, oilTemp: 0, egt: 0, vacuum: 0, fuelLeft: 0, fuelRight: 0, volts: 0, engineHours: 0 },
     radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, cdiSource: "NAV1", bearings: {}, checklists: [],
 };
@@ -34,8 +37,9 @@ const POINTERS = [
 const MAP_FULL = { x: 150, y: 56, w: 874, h: 687, cx: 587, cy: 399.5, px: 344.5 };
 const MAP_PARTIAL = { x: 150, y: 56, w: 574, h: 687, cx: 437, cy: 399.5, px: 344.5 };
 // Surround.showMenu: the selected group and page, and the rest.
-const MENU_SELECTED = "rgb(179,179,255)";
-const MENU_OTHER = "rgb(179,179,179)";
+// v13 trainer: the page group window shows the selected page in cyan and the rest in white (FG1000: lilac and grey).
+const MENU_SELECTED = "#00ffff";
+const MENU_OTHER = "#ffffff";
 export class GlassMfd {
     options;
     svg;
@@ -43,17 +47,20 @@ export class GlassMfd {
     eis;
     nav;
     surround;
+    /** Removes the bezel's window listener. */ unbezel = () => { };
     raw;
     map;
     mapPartial;
+    /** Pan mode's pointer and info bar, over the full map. */ panLayer;
     frame;
     pages;
-    /** DIRECT TO, PROC or WAYPOINT ENTRY, over the page. */ overlay = null;
+    /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ overlay = null;
+    /** The page FPL goes back to: group and page names. */ beforeFpl = ["MapPageGroup", "NavigationMap"];
     timers = { menu: 0, load: 0 };
     hl = new Highlighter();
     ui = {
-        group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, airways: 0,
-        layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false }, recent: [],
+        group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, trackVector: 0, airways: 0,
+        layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false }, recent: [], pan: null,
     };
     /** The container must be visible: layout is measured once here. */
     constructor(container, options = {}) {
@@ -67,6 +74,7 @@ export class GlassMfd {
         // The map sits above its black background and below the range/orientation legend.
         this.map = mapGroup(screen, this.nav.el("Legend"), MAP_FULL);
         this.mapPartial = mapGroup(screen, this.nav.el("Legend"), MAP_PARTIAL);
+        this.panLayer = mapGroup(screen, this.nav.el("Legend"), MAP_FULL);
         // Pages with no data source (weather, terrain, AUX) show their title and this line, under the surround.
         this.frame = document.createElementNS(NS, "text");
         for (const [k, v] of Object.entries({ x: "587", y: "110", "text-anchor": "middle", fill: "#ffffff", "font-size": "22", "font-family": "'Liberation Sans',Arial,sans-serif" })) {
@@ -78,7 +86,7 @@ export class GlassMfd {
         screen.insertBefore(this.frame, surround);
         this.pages = makePages(this.api(), screen);
         if (options.bezel)
-            bezelInput(svg, (i) => this.input(i));
+            this.unbezel = bezelInput(svg, (i) => this.input(i));
         this.loadPage();
     }
     /** Stops the page menu timers. Call when the display is removed. */
@@ -86,6 +94,7 @@ export class GlassMfd {
         clearTimeout(this.timers.menu);
         clearTimeout(this.timers.load);
         this.surround.destroy();
+        this.unbezel();
     }
     // What the pages may use.
     api() {
@@ -125,8 +134,11 @@ export class GlassMfd {
                 return this.set({});
             case "RANGE":
                 // NavMap.handleRange: clockwise zooms out. Pages with their own ranges (traffic) take it first.
-                if (!page.range(i.value))
+                if (!page.range(i.value)) {
+                    if (this.ui.pan && !this.overlay)
+                        this.ui.pan = panTarget(this.ui.pan, this.panView());
                     this.change({ range: stepRange(this.state.range, i.value) });
+                }
                 return this.set({});
             case "FMS_OUTER":
             case "FMS_INNER":
@@ -139,7 +151,11 @@ export class GlassMfd {
                 page.toggleCrsr();
                 return this.set({});
             case "ENT":
-                page.ent();
+                // Measuring (Pilot's Guide): ENT moves the start point to the pointer.
+                if (this.ui.pan?.from && !this.overlay)
+                    this.ui.pan = panMeasureFrom(this.ui.pan, this.panView());
+                else
+                    page.ent();
                 return this.set({});
             case "CLR":
                 page.clr();
@@ -147,17 +163,57 @@ export class GlassMfd {
             case "CLR_HOLD":
                 // MFDPageController.handleClearHold: back to the navigation map.
                 return this.goToPage("MapPageGroup", "NavigationMap");
-            case "FPL":
+            case "FPL": {
+                // v13 trainer: FPL again goes back to the page shown before it ("Press the FPL key to view the previous page").
+                const [gi, pi] = this.ui.shown;
+                const here = [PAGE_GROUPS[gi].group, PAGE_GROUPS[gi].pages[pi]];
+                if (here[1] === "ActiveFlightPlanNarrow")
+                    return this.overlay ? this.goToPage(...here) : this.goToPage(...this.beforeFpl);
+                this.beforeFpl = here;
                 return this.goToPage("FPLPageGroup", "ActiveFlightPlanNarrow");
+            }
+            case "MENU": {
+                // v13 trainer: MENU opens the page's PAGE MENU; MENU again closes it (the trainer then opens its DEMO MODE page,
+                // a simulator setting, not ported).
+                const menu = this.pages.pageMenu;
+                if (this.overlay === menu)
+                    this.closeOverlay();
+                else if (page.pageMenu()) {
+                    menu.open(page.pageMenu(), page.title, this.overlay);
+                    this.openOverlay(menu);
+                }
+                return this.set({});
+            }
+            case "JOYSTICK_PRESS":
+                // v13 trainer: the push starts pan mode on the full navigation map; again ends it and recenters the map.
+                if (this.overlay || this.groupPage.navMap !== "full")
+                    return;
+                this.ui.pan = this.ui.pan ? null : panStart(this.state, this.panView().up);
+                return this.set({});
+            case "JOYSTICK_HORIZONTAL":
+            case "JOYSTICK_VERTICAL": {
+                const pan = this.ui.pan;
+                if (!pan || this.overlay)
+                    return;
+                const h = i.control === "JOYSTICK_HORIZONTAL";
+                this.ui.pan = panMove(pan, h ? i.value : 0, h ? 0 : i.value, this.panView());
+                return this.set({});
+            }
             case "DTO": {
-                // The waypoint selected on the page, else the active one.
+                // The waypoint selected on the page or under the pan pointer, else the active one.
                 const act = this.state.route[this.state.activeLeg];
-                const id = page.selected() ?? (typeof act === "string" ? act : act?.id ?? null);
+                const under = this.ui.pan && !this.overlay ? this.panInfo().label : "MAP POINTER";
+                const id = page.selected() ?? (under !== "MAP POINTER" ? under : null) ?? (typeof act === "string" ? act : act?.id ?? null);
                 this.openOverlay(this.pages.directTo);
                 this.pages.directTo.open(id);
                 return this.set({});
             }
             case "PROC":
+                // v13 trainer: PROC again closes the window.
+                if (this.overlay === this.pages.procedures) {
+                    this.closeOverlay();
+                    return this.set({});
+                }
                 this.openOverlay(this.pages.procedures);
                 this.pages.procedures.open();
                 return this.set({});
@@ -214,7 +270,7 @@ export class GlassMfd {
             const sel = gi === u.group;
             this.raw.show(g.group, sel);
             this.raw.show(g.label, true);
-            this.color(g.label, sel ? MENU_SELECTED : MENU_OTHER);
+            this.color(g.label, MENU_OTHER);
             if (sel)
                 g.pages.forEach((p, pi) => this.color(p, pi === u.page ? MENU_SELECTED : MENU_OTHER));
         });
@@ -246,6 +302,8 @@ export class GlassMfd {
         const u = this.ui;
         this.closeOverlay();
         this.groupPage.show(false);
+        if (u.shown[0] !== u.group || u.shown[1] !== u.page)
+            u.pan = null; // the page group menu reloads the same page too
         u.shown = [u.group, u.page];
         u.menu = "top";
         this.groupPage.show(true);
@@ -261,12 +319,12 @@ export class GlassMfd {
         this.surround.setVolume("Nav", s.navVolume);
         this.surround.setVolume("Comm", s.comVolume);
         const keys = this.softkeys();
-        this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit));
+        this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit), keys.map((k) => !!k.dim));
         this.updateHeader(s);
         this.updateEIS(s.engine);
         // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO and
         // WAYPOINT ENTRY are windows over the page, which stays drawn.
-        const base = page === this.pages.directTo || page === this.pages.waypointEntry ? under : page;
+        const base = page === this.pages.directTo || page === this.pages.waypointEntry || page === this.pages.pageMenu || page === this.pages.mapSetup || page === this.pages.fplTool ? under : page;
         const mode = base.navMap;
         this.nav.show("Group", mode !== null);
         this.map.style.display = mode === "full" ? "inline" : "none";
@@ -275,12 +333,34 @@ export class GlassMfd {
             this.nav.tf("Legend", { tx: mode === "partial" ? MAP_PARTIAL.w - MAP_FULL.w : 0 });
             this.nav.text("RangeDisplay", rangeLabel(s.range));
             this.nav.text("OrientationDisplay", s.orientation);
-            drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center: base.center() ?? undefined }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
+            const pan = mode === "full" ? this.ui.pan : null;
+            const center = pan?.center ?? base.center() ?? undefined;
+            drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center, up: pan?.up, trackVector: mode === "full" ? this.ui.trackVector : 0 }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
         }
+        this.drawPan(mode === "full");
         this.frame.textContent = base.frame();
         if (base !== page)
             base.draw();
         page.draw();
+    }
+    panView() {
+        const s = this.state;
+        const up = this.ui.pan?.up ?? mapUp(s);
+        return { w: MAP_FULL.w, h: MAP_FULL.h, scale: MAP_FULL.px / s.range, up, lat: s.lat, bar: PAN_FONT * 2.7 };
+    }
+    panInfo() {
+        const s = this.state;
+        const named = [...s.points, ...s.route.filter((r) => typeof r !== "string")];
+        return panInfo(this.ui.pan, this.panView(), this.ui.pan.from ?? s, named, s.magVar);
+    }
+    /** Pan mode: the pointer, and the info bar across the top of the map (layout from the v13 trainer, drawn here). */
+    drawPan(shown) {
+        const pan = shown ? this.ui.pan : null;
+        this.panLayer.style.display = pan ? "inline" : "none";
+        if (!pan)
+            return;
+        const start = pan.from && panProject(pan, pan.from, this.panView());
+        this.panLayer.innerHTML = panMarkup(pan, this.panInfo(), MAP_FULL, PAN_FONT, start);
     }
     // The softkeys: the page's own, or a menu shared by the pages (EIS engineMenu, NavigationMap mapMenu).
     softkeys() {
@@ -288,20 +368,23 @@ export class GlassMfd {
         const to = (m) => () => (u.menu = m);
         const eis = () => [key("ENGINE", to("engine"), u.menu === "engine"), key("LEAN", to("lean"), u.menu === "lean"), key("SYSTEM", to("system"), u.menu === "system")];
         const fill = (k) => [...k, ...Array(12).fill(BLANK)].slice(0, 12);
+        // v13 trainer layouts: BACK in the eleventh slot, LEAN's and SYSTEM's keys where the trainer has them (FG1000 packs
+        // them after SYSTEM), and dim keys for data GCW has no source for.
         switch (u.menu) {
             // shortcut: the engine strip has only its ENGINE page (as FG1000); LEAN and SYSTEM change the softkeys only.
             case "engine":
-                return fill([...eis(), BLANK, BLANK, BLANK, BLANK, BLANK, key("BACK", to("top"))]);
+                return fill([...eis(), BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, key("BACK", to("top"))]);
             case "lean":
-                return fill([...eis(), key("CYL SELECT"), key("ASSIST"), BLANK, BLANK, BLANK, BLANK, key("BACK", to("engine"))]);
+                return fill([...eis(), BLANK, key("CYL SLCT"), key("ASSIST"), BLANK, BLANK, BLANK, BLANK, key("BACK", to("engine"))]);
             case "system":
-                return fill([...eis(), key("RST FUEL"), key("GAL REM"), key("BACK", to("engine"))]);
+                return fill([...eis(), BLANK, BLANK, BLANK, key("RST FUEL"), key("GAL REM"), BLANK, BLANK, key("BACK", to("engine"))]);
             case "map": {
-                // shortcut: no traffic, profile, topography, terrain or airway data; these keys switch only their setting.
+                // shortcut: no traffic, profile or airway data; these keys switch only their setting.
                 const layer = (n) => key(n, () => (u.layers[n] = !u.layers[n]), u.layers[n]);
                 const airways = ["AIRWAYS", "AIRWY ON", "AIRWY LO", "AIRWY HI"];
-                return fill([layer("TRAFFIC"), layer("PROFILE"), layer("TOPO"), layer("TERRAIN"),
-                    key(airways[u.airways], () => (u.airways = (u.airways + 1) % 4), u.airways > 0), BLANK, BLANK, BLANK, BLANK, BLANK, key("BACK", to("top"))]);
+                return fill([layer("TRAFFIC"), layer("PROFILE"), dimKey("TOPO"), dimKey("TERRAIN"),
+                    key(airways[u.airways], () => (u.airways = (u.airways + 1) % 4), u.airways > 0), BLANK, dimKey("PRECIP"), BLANK, dimKey("METAR"),
+                    dimKey("LEGEND"), key("BACK", to("top"))]);
             }
         }
         return fill(this.page.keys());

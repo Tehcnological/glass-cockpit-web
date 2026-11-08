@@ -29,7 +29,7 @@ function draw(s: FlightState) {
     heading: s.heading, turnRate: s.turnRate * 3, headingBug: s.headingBug, course: s.course, from: s.from, gs: s.gs,
     cdiDots: s.cdi * 2, // the PFD's CDI is two dots each side
     bearings: { ...nav?.bearings, ...(s.adf !== null && { ADF: { id: "", bearing: s.heading + s.adf } }) },
-    ...pickKeys(m, ["lat", "lon", "points", "airspaces", "route", "activeLeg", "airports", "magVar"]),
+    ...pickKeys(m, ["lat", "lon", "points", "airspaces", "route", "activeLeg", "directFrom", "vtf", "airports", "procedures", "magVar", "selectedAlt"]),
     ...nav && { radios: nav.radios },
   });
   mfd?.set({ heading: s.heading, headingBug: s.headingBug, course: s.course, baro: s.baro, alt: s.alt, track: s.heading, groundspeed: s.ias, ...m, ...nav });
@@ -38,12 +38,13 @@ function draw(s: FlightState) {
 onMounted(async () => {
   const lib = await import("glass-cockpit-web");
   // Hand back what FlightState and `mfd` hold (`mfd` would otherwise undo the RANGE knob on the next redraw);
-  // the rest (radios, selected altitude, CDI source) stays in the display.
+  // the rest (CDI source and the like) stays in the display. `mfd.selectedAlt`, when given, is shared by both units.
   const pick = (patch: object, from: object) => Object.fromEntries(Object.entries(patch).filter(([k]) => k in from));
   const onChange = (patch: object) => {
     const back = pick(patch, props.state);
     if (Object.keys(back).length) emit("change", back);
-    const map = pick(patch, props.mfd ?? {});
+    // The flight plan's keys and user waypoints (`points`) always go back, so a host that never set `vtf` still shares it.
+    const map = pick(patch, { route: 0, activeLeg: 0, directFrom: 0, vtf: 0, points: 0, ...props.mfd });
     if (Object.keys(map).length) emit("mfd", map);
   };
   if (props.unit === "mfd") mfd = new lib.GlassMfd(box.value!, { bezel: props.bezel, onChange });

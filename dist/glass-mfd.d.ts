@@ -1,5 +1,5 @@
 import { type DisplayOptions } from "./display.js";
-import { type Airspace, type LatLon, type MapPoint } from "./map.js";
+import { type Airspace, type LatLon, type MapPoint, type Orientation } from "./map.js";
 import type { CdiSource } from "./glass-pfd.js";
 import { type Knobs } from "./bezel.js";
 import type { Airport, Procedure, Station } from "./nav.js";
@@ -26,7 +26,7 @@ export interface MfdState extends Knobs {
     lon: number;
     /** Magnetic variation, degrees east positive: bearings on the pages are magnetic. */ magVar: number;
     /** Map range, nm from the aircraft to the edge of the map's short side. */ range: number;
-    orientation: "NORTH UP" | "HDG UP";
+    /** NORTH UP, TRK UP, DTK UP or HDG UP; MAP SETUP changes it and reports it. */ orientation: Orientation;
     /** Map symbols, and the VORs, NDBs and fixes the NRST and WPT pages list (`name`, `freq` and the rest fill in their details). */
     points: MapPoint[];
     airspaces: Airspace[];
@@ -37,6 +37,7 @@ export interface MfdState extends Knobs {
     route: (string | MapPoint)[];
     /** Index into `route` of the active waypoint; the leg into it is magenta. */ activeLeg: number;
     /** Set by DIRECT TO: where the direct leg to the active waypoint starts. */ directFrom: LatLon | null;
+    /** Vector-to-final is active (PROC): the active waypoint is the final approach fix, on the final course. */ vtf: boolean;
     engine: Engine;
     /** Which NAV shows green as the CDI source. */ cdiSource: CdiSource;
     /** Bearing to each NAV radio's station, magnetic (the PFD's `bearings` fit): CRS push sets the course to the CDI radio's. */
@@ -56,12 +57,15 @@ export declare class GlassMfd {
     private eis;
     private nav;
     private surround;
+    /** Removes the bezel's window listener. */ private unbezel;
     private raw;
     private map;
     private mapPartial;
+    /** Pan mode's pointer and info bar, over the full map. */ private panLayer;
     private frame;
     private pages;
-    /** DIRECT TO, PROC or WAYPOINT ENTRY, over the page. */ private overlay;
+    /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ private overlay;
+    /** The page FPL goes back to: group and page names. */ private beforeFpl;
     private timers;
     private hl;
     private ui;
@@ -86,6 +90,10 @@ export declare class GlassMfd {
     private loadPage;
     /** Merge new values into the state and redraw. */
     set(patch: Partial<MfdState>): void;
+    private panView;
+    private panInfo;
+    /** Pan mode: the pointer, and the info bar across the top of the map (layout from the v13 trainer, drawn here). */
+    private drawPan;
     private softkeys;
     private topKeys;
     private tune;

@@ -1,11 +1,12 @@
 import { type DisplayOptions } from "./display.js";
 import { type Radios } from "./surround.js";
-import { type Airspace, type MapPoint } from "./map.js";
-import { type Airport } from "./nav.js";
+import { type Airspace, type LatLon, type MapPoint } from "./map.js";
+import { type Airport, type Procedure } from "./nav.js";
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
 export type { Checklist } from "./mfd-pages.js";
 export type { MapPoint, Airspace, LatLon } from "./map.js";
 export type { Airport, Runway, Freq, Station, Procedure, ProcLeg } from "./nav.js";
+export { gpsApproved, vtfLeg } from "./nav.js";
 export type { Radio, Radios } from "./surround.js";
 export type { DisplayOptions } from "./display.js";
 export type { Control, Input } from "./bezel.js";
@@ -69,8 +70,11 @@ export interface PfdState {
     airspaces: Airspace[];
     /** Flight plan, for the inset map and the FPL window: ids of `points` or `airports`, or points of its own. */
     route: (string | MapPoint)[];
+    /** Set by DIRECT TO and PROC: where the direct leg to the active waypoint starts, for the inset map. */ directFrom: LatLon | null;
+    /** Vector-to-final is active (PROC): `directFrom` is its intercept, not a direct-to, so Cancel Direct-To NAV is dim. */ vtf: boolean;
     /** Index into `route` of the active waypoint. */ activeLeg: number;
     /** Airports the NRST window lists, nearest first after sorting here. */ airports: Airport[];
+    /** Approaches the PROC window can load, for the airports in `airports`. */ procedures: Procedure[];
     /** Magnetic variation, degrees east positive: bearings to stations are magnetic. */ magVar: number;
     /** Wind, true direction it blows from and knots; null shows NO DATA. */ wind: {
         direction: number;
@@ -86,10 +90,18 @@ export interface PfdState {
     /** Messages for the ALERTS window. */ alerts: string[];
     /** Which speed references (options.vspeeds) show on the tape, set in TMR/REF. */ vspeedsOn: Record<VSpeed, boolean>;
     /** Barometric minimums, feet (TMR/REF); null is off. */ minimums: number | null;
+    /**
+     * Failed instruments, flagged with FG1000's red X and yellow text. As the trainer shows them: an AHRS failure flags
+     * `attitude` only; an air data failure flags `airspeed`, `altitude` and `vsi` together.
+     */
+    failed: Partial<Record<Failure, boolean>>;
 }
+/** A change `onChange` reports. */
+export type PfdChange = Partial<PfdState>;
+export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading";
 export interface PfdOptions extends DisplayOptions {
     /** Called when a bezel input changes the state (heading bug, course, baro, selected altitude, radios, CDI source). */
-    onChange?: (patch: Partial<PfdState>) => void;
+    onChange?: (patch: PfdChange) => void;
     /** IAS box turns red above this. */ vne?: number;
     /** Speed references, switched on and off in TMR/REF. */ vspeeds?: Partial<Record<VSpeed, number>>;
 }
@@ -99,6 +111,7 @@ export declare class GlassPfd {
     private state;
     private p;
     private surround;
+    /** Removes the bezel's window listener. */ private unbezel;
     private nrst;
     private fpl;
     private fplRows;
@@ -106,11 +119,16 @@ export declare class GlassPfd {
     private minBug;
     private inset;
     private insetGeom;
+    /** Pan mode's pointer and info bar, over the inset map. */ private panLayer;
     private win;
     private winBox;
     private clock;
     private timers;
     private ui;
+    /** DIRECT TO's identifier, spelled with the FMS knob. */ private dtoEntry;
+    /** PROC: the same flow as the MFD's PROCEDURES page; its airport identifier is spelled in `procEntry`. */ private proc;
+    private procEntry;
+    /** The window the flight plan menu's Closest Point of FPL and Parallel Track open. */ private tool;
     /** The container must be visible: layout is measured once here. */
     constructor(container: HTMLElement, options?: PfdOptions);
     private updateTurnRate;
@@ -127,7 +145,11 @@ export declare class GlassPfd {
     private later;
     private defaults;
     private nearest;
+    /** The PAGE MENU options, the flight plan's or the DIRECT TO window's; those without `patch` or `tool` are dim. */
+    private pageMenu;
     private fms;
+    private dtoPoint;
+    private dtoEnt;
     private timerValue;
     private timerField;
     private timerAction;
@@ -139,6 +161,7 @@ export declare class GlassPfd {
     private updateXpdr;
     private updateWind;
     private updateInset;
+    private panView;
     private updateNrst;
     private hl;
     private drawWindow;

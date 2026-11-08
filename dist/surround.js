@@ -84,10 +84,10 @@ export class Surround {
             this.p.text(`Comm${n}StandbyFreq`, com.standby.toFixed(3));
         }
     }
-    /** Twelve labels, left to right; "" leaves a key blank. A lit key (an option that is on) is black on grey. */
-    setSoftkeys(labels, lit = []) {
+    /** Twelve labels, left to right; "" leaves a key blank. A lit key (an option that is on) is black on grey; a dim key is grey. */
+    setSoftkeys(labels, lit = [], dim = []) {
         for (let i = 0; i < 12; i++) {
-            this.raw.text(`SoftKey${i}`, labels[i] ?? "", lit[i] ? "#000000" : WHITE);
+            this.raw.text(`SoftKey${i}`, labels[i] ?? "", lit[i] ? "#000000" : dim[i] ? "#808080" : WHITE);
             this.raw.fill(`SoftKey${i}-bg`, lit[i] ? "#808080" : "#000000");
         }
     }
