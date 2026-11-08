@@ -4,6 +4,15 @@ export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 export const mod = (a, b) => a - b * Math.floor(a / b); // Nasal math.mod: result has the sign of b
 export const pad = (s, n, c = " ") => String(s).padStart(n, c);
 export const deg3 = (d) => pad(Math.round(mod(d, 360)) % 360, 3, "0") + "°";
+export const matrixAttr = (m) => `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})`;
+/** An element's own transform attribute as one matrix, read without layout. */
+export function ownMatrix(e) {
+    const list = e.transform.baseVal;
+    let m = new DOMMatrix();
+    for (let i = 0; i < list.numberOfItems; i++)
+        m = m.multiply(list.getItem(i).matrix);
+    return m;
+}
 export class Page {
     screen;
     prefix;
@@ -89,7 +98,7 @@ export function clipRect(parent, x, y, w, h, m) {
     for (const [k, v] of Object.entries({ x, y, width: w, height: h }))
         r.setAttribute(k, String(v));
     if (m)
-        r.setAttribute("transform", `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})`);
+        r.setAttribute("transform", matrixAttr(m));
     parent.appendChild(cp);
     return id;
 }

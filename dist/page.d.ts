@@ -10,6 +10,9 @@ export declare const clamp: (v: number, lo: number, hi: number) => number;
 export declare const mod: (a: number, b: number) => number;
 export declare const pad: (s: string | number, n: number, c?: string) => string;
 export declare const deg3: (d: number) => string;
+export declare const matrixAttr: (m: DOMMatrix) => string;
+/** An element's own transform attribute as one matrix, read without layout. */
+export declare function ownMatrix(e: SVGGraphicsElement): DOMMatrix;
 export declare class Page {
     readonly screen: SVGGElement;
     readonly prefix: string;

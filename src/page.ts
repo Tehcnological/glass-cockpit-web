@@ -14,6 +14,15 @@ export const mod = (a: number, b: number) => a - b * Math.floor(a / b); // Nasal
 export const pad = (s: string | number, n: number, c = " ") => String(s).padStart(n, c);
 export const deg3 = (d: number) => pad(Math.round(mod(d, 360)) % 360, 3, "0") + "°";
 
+export const matrixAttr = (m: DOMMatrix) => `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})`;
+/** An element's own transform attribute as one matrix, read without layout. */
+export function ownMatrix(e: SVGGraphicsElement): DOMMatrix {
+  const list = e.transform.baseVal;
+  let m = new DOMMatrix();
+  for (let i = 0; i < list.numberOfItems; i++) m = m.multiply(list.getItem(i).matrix);
+  return m;
+}
+
 export class Page {
   private cache = new Map<string, SVGGraphicsElement | null>();
   private base = new WeakMap<Element, string>();
@@ -91,7 +100,7 @@ export function clipRect(parent: Element, x: number, y: number, w: number, h: nu
   cp.setAttribute("clipPathUnits", "userSpaceOnUse");
   const r = cp.appendChild(document.createElementNS(NS, "rect"));
   for (const [k, v] of Object.entries({ x, y, width: w, height: h })) r.setAttribute(k, String(v));
-  if (m) r.setAttribute("transform", `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})`);
+  if (m) r.setAttribute("transform", matrixAttr(m));
   parent.appendChild(cp);
   return id;
 }
