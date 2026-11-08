@@ -27,8 +27,11 @@
     rev.set({ points, airports, procedures, ...plan });
     return rev;
   };
-  // A failed display goes dark inside its bezel (the screen is buildDisplay's clipped group).
-  const dark = (unit, off) => (unit.svg.querySelector(":scope > g[clip-path]").style.visibility = off ? "hidden" : "");
+  // A failed display goes dark inside its bezel (the screen is buildDisplay's clipped group), and its keys stop working.
+  const dark = (unit, off) => {
+    unit.svg.querySelector(":scope > g[clip-path]").style.visibility = off ? "hidden" : "";
+    unit.svg.style.pointerEvents = off ? "none" : "";
+  };
   // The units share their knobs and flight plan, as a real G1000's do: a change on one is set on the others, and the
   // sliders follow. RANGE and the map stay each unit's own.
   const SHARED = ["headingBug", "course", "baro", "selectedAlt", "radios", "navVolume", "comVolume", "navIdent", "route", "activeLeg", "directFrom", "vtf", "points"];
@@ -79,12 +82,13 @@
     const ps = { ...s, alerts: [...(f.alert.checked ? ["DEMO - A sample message."] : []), ...scheduled],
       cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, turnRate: s.ias > 0 ? (1091 * Math.tan((s.roll * Math.PI) / 180)) / (s.ias + 6) : 0, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 }, engine };
     dark(pfd, modes.pfd.mode === "off");
-    pfd.set({ ...ps, reversionary: modes.pfd.mode === "reversionary", failed: { ...failed, ...modes.pfd.failed } });
+    // A unit not shown is not drawn; the next update() draws it when it comes back.
+    if (modes.pfd.mode !== "off") pfd.set({ ...ps, reversionary: modes.pfd.mode === "reversionary", failed: { ...failed, ...modes.pfd.failed } });
     const revOn = modes.mfd.mode === "reversionary";
     revBox.style.display = revOn ? "" : "none"; // shown before the second PFD is built: it measures its layout
     if (revOn) revUnit().set({ ...ps, reversionary: true, failed: { ...failed, ...modes.mfd.failed } });
     dark(mfd, modes.mfd.mode === "off");
-    mfd.set({
+    if (modes.mfd.mode === "normal") mfd.set({
       heading: s.heading, headingBug: s.headingBug, course: s.course, selectedAlt: s.selectedAlt, alt: s.alt, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
       engine,
     });
