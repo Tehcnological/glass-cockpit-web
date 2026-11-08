@@ -20,6 +20,7 @@ export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
 export type { Checklist } from "./mfd-pages.js";
 export type { MapPoint, Airspace, LatLon } from "./map.js";
 export type { Airport, Runway, Freq, Station, Procedure, ProcLeg } from "./nav.js";
+export { gpsApproved, vtfLeg } from "./nav.js";
 export type { Radio, Radios } from "./surround.js";
 export type { DisplayOptions } from "./display.js";
 export type { Control, Input } from "./bezel.js";
@@ -511,7 +512,7 @@ export class GlassPfd {
       const flown = i < s.activeLeg;
       return {
         ID: (p?.id ?? String(s.route[i])).slice(0, 7),
-        Type: (p?.role ?? "").slice(0, 4),
+        Type: (p?.role ?? "").slice(0, 4).toLowerCase(), // v13 trainer: faf, map (FG1000 has no roles)
         DTK: flown ? "___°" : leg ? deg3(leg.brg - s.magVar) : "",
         DIS: flown ? "___nm" : leg ? `${leg.dist.toFixed(1)}nm` : "",
       };

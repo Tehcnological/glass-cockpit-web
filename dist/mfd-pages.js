@@ -3,7 +3,7 @@
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, rangeLabel } from "./map.js";
-import { bearingDistance, latLon, nearest, planName, routePoint } from "./nav.js";
+import { bearingDistance, gpsApproved, latLon, nearest, planName, routePoint, vtfLeg } from "./nav.js";
 import { BLANK, IdEntry, ListView, NS, dimKey, firstRow, key } from "./ui.js";
 // Surround.PAGE_GROUPS
 export const PAGE_GROUPS = [
@@ -673,7 +673,7 @@ class FlightPlanPage extends MapPage {
     ent() {
         const at = this.rows.sel;
         if (this.crsr && at > 0 && at < this.s.route.length)
-            this.m.change({ activeLeg: at, directFrom: null });
+            this.m.change({ activeLeg: at, directFrom: null, vtf: false });
     }
     clr() {
         const s = this.s;
@@ -935,7 +935,7 @@ class DirectToPage extends MapPage {
         const s = this.s;
         const i = s.route.findIndex((r) => resolve(s, r)?.id === p.id);
         const from = { lat: s.lat, lon: s.lon };
-        this.m.change(i >= 0 ? { activeLeg: i, directFrom: from } : { route: [s.points.includes(p) || p.type === "APT" ? p.id : p], activeLeg: 0, directFrom: from });
+        this.m.change(i >= 0 ? { activeLeg: i, directFrom: from, vtf: false } : { route: [s.points.includes(p) || p.type === "APT" ? p.id : p], activeLeg: 0, directFrom: from, vtf: false });
         this.m.close();
     }
     clr() {
@@ -968,12 +968,17 @@ class DirectToPage extends MapPage {
         this.drawOwnMap();
     }
 }
-// PROC: FG1000 has no procedures page; this one follows the G1000's SELECT APPROACH window (airport, approach,
-// transition, LOAD? / ACTIVATE?), drawn in the style of the NRST pages' data display.
+// PROC: FG1000 has no procedures page. This one follows the v13 trainer: a PROCEDURES menu, then the SELECT APPROACH
+// window (airport, approach, transition, LOAD? / ACTIVATE?), drawn in the style of the NRST pages' data display.
 const PROC_ROWS = 6;
+const MENU = ["ACTIVATE VECTOR-TO-FINAL", "ACTIVATE APPROACH", "ACTIVATE MISSED APPROACH", "SELECT APPROACH", "SELECT ARRIVAL", "SELECT DEPARTURE"];
+const SELECT_APPROACH = 3;
 class ProceduresPage extends MfdPage {
     navMap = "partial";
     airport = null;
+    view = "menu";
+    item = SELECT_APPROACH;
+    yes = true;
     grp = "APR";
     apr = 0;
     trans = 0;
@@ -983,28 +988,38 @@ class ProceduresPage extends MfdPage {
         const g = document.createElementNS(NS, "g");
         g.id = "Page-Procedures";
         g.style.display = "none";
-        const text = (id, x, y, fill = "#ffffff", size = 19.35, anchor = "start") => `<text id="Procedures${id}" x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:${size}px"></text>`;
-        const label = (t, y) => `<text x="874" y="${y}" fill="#80ffff" text-anchor="middle" style="font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px">${t}</text>`;
+        const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed`;
+        const text = (id, x, y, fill = "#ffffff", size = 19.35, anchor = "start") => `<text id="Procedures${id}" x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style};font-size:${size}px"></text>`;
+        const label = (t, y, fill = "#80ffff") => `<text x="874" y="${y}" fill="${fill}" text-anchor="middle" style="${style};font-size:19.35px">${t}</text>`;
         let rows = "";
         for (let i = 0; i < PROC_ROWS; i++)
             rows += text(`Approach${i}`, 740, 210 + i * 26);
         for (let i = 0; i < PROC_ROWS; i++)
             rows += text(`Trans${i}`, 740, 420 + i * 26);
+        let menu = "";
+        for (let i = 0; i < MENU.length; i++)
+            menu += text(`Menu${i}`, 740, 130 + i * 30);
+        // v13 trainer: ACTIVATE? on an approach the GPS may not fly asks first.
+        const ask = ["- NOT APPROVED FOR GPS -", "GPS guidance is for", "monitoring only.", "Activate approach?"].map((t, i) => label(t, 300 + i * 30, "#ffffff")).join("");
         g.innerHTML =
             `<rect x="724.5" y="53.5" width="310" height="689" style="fill:#1a3030;stroke:#ffffff;stroke-width:1"/>` +
+                `<g id="ProceduresMenu">${label("PROCEDURES", 85)}${menu}</g>` +
+                `<g id="ProceduresSelect">` +
                 label("APPROACH", 85) + text("ID", 874, 120, "#ffffff", 24, "middle") + text("Name", 874, 148, "#ffffff", 19.35, "middle") +
                 label("SELECT APPROACH", 182) + rows + label("TRANSITION", 392) +
-                text("Load", 874, 610, "#ffffff", 22, "middle") + text("Activate", 874, 645, "#ffffff", 22, "middle");
+                text("Load", 874, 610, "#ffffff", 22, "middle") + text("Activate", 874, 645, "#ffffff", 22, "middle") + `</g>` +
+                `<g id="ProceduresAsk"><rect x="734.5" y="270" width="290" height="190" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>` +
+                `${ask}${text("Yes", 834, 440, "#ffffff", 22, "middle")}${text("No", 914, 440, "#ffffff", 22, "middle")}</g>`;
         after.after(g);
         this.root = g;
         this.entry = new IdEntry(this.p, 4);
     }
-    /** Opens on the destination: the last airport in the flight plan, else the nearest. */
+    /** Opens on the PROCEDURES menu. SELECT APPROACH opens on the destination: the last airport in the flight plan, else the nearest. */
     open() {
         const s = this.s;
         const apts = s.route.map((r) => resolve(s, r)).filter((p) => p?.type === "APT");
         this.airport = apts[apts.length - 1]?.id ?? nearest(s.airports, s.lat, s.lon, 0, 1)[0]?.item.id ?? null;
-        [this.grp, this.apr, this.trans, this.crsr] = ["APR", 0, 0, true];
+        [this.view, this.item, this.grp, this.apr, this.trans, this.crsr] = ["menu", SELECT_APPROACH, "APR", 0, 0, true];
         this.entry.cancel();
     }
     procs() {
@@ -1014,6 +1029,16 @@ class ProceduresPage extends MfdPage {
         const p = this.procs()[this.apr];
         return p ? Object.keys(p.transitions) : [];
     }
+    /** The loaded approach: its fixes are the route's own points, after the en route waypoints (see `load`). */
+    loaded() {
+        const s = this.s;
+        const start = s.route.findIndex((r) => typeof r !== "string" && !s.points.includes(r));
+        return start < 0 ? null : { start, pts: s.route.slice(start) };
+    }
+    // The ACTIVATE items need a loaded approach; SELECT ARRIVAL and SELECT DEPARTURE are not ported.
+    enabled(i) {
+        return i === SELECT_APPROACH || (i < SELECT_APPROACH && this.loaded() !== null);
+    }
     keys() {
         return this.m.topKeys();
     }
@@ -1021,6 +1046,19 @@ class ProceduresPage extends MfdPage {
         this.crsr = true;
     }
     fms(outer, d) {
+        if (this.view === "menu") {
+            for (let i = this.item + d; i >= 0 && i < MENU.length; i += d) {
+                if (this.enabled(i)) {
+                    this.item = i;
+                    break;
+                }
+            }
+            return true;
+        }
+        if (this.view === "ask") {
+            this.yes = !this.yes;
+            return true;
+        }
         const order = ["APT", "APR", "TRANS", "LOAD", "ACTIVATE"];
         if (this.entry.editing) {
             if (outer)
@@ -1041,6 +1079,15 @@ class ProceduresPage extends MfdPage {
         return true;
     }
     ent() {
+        if (this.view === "menu")
+            return this.menuItem();
+        if (this.view === "ask") {
+            this.view = "select";
+            if (this.yes)
+                this.load(true);
+            return;
+        }
+        const p = this.procs()[this.apr];
         if (this.entry.editing) {
             const v = this.entry.ent();
             if (v)
@@ -1052,49 +1099,93 @@ class ProceduresPage extends MfdPage {
             this.grp = this.transitions().length > 1 ? "TRANS" : "LOAD";
         else if (this.grp === "TRANS")
             this.grp = "LOAD";
+        else if (this.grp === "ACTIVATE" && p && !gpsApproved(p.name))
+            [this.view, this.yes] = ["ask", true];
         else
             this.load(this.grp === "ACTIVATE");
     }
     clr() {
-        if (this.entry.editing)
+        if (this.view === "ask")
+            this.view = "select"; // as NO
+        else if (this.entry.editing)
             this.entry.cancel();
         else
             this.m.close();
     }
-    // Adds the approach after the en route waypoints (replacing an approach loaded before), as the G1000 does.
+    // ACTIVATE VECTOR-TO-FINAL, ACTIVATE APPROACH and ACTIVATE MISSED APPROACH act on the approach already loaded.
+    menuItem() {
+        if (this.item === SELECT_APPROACH) {
+            this.view = "select";
+            return;
+        }
+        const a = this.loaded();
+        if (!a)
+            return;
+        if (this.item === 0)
+            this.m.change({ activeLeg: a.start + vtfLeg(a.pts), directFrom: null, vtf: true });
+        else if (this.item === 1)
+            this.m.change({ activeLeg: a.start, directFrom: { lat: this.s.lat, lon: this.s.lon }, vtf: false });
+        else {
+            const missed = a.pts.findIndex((p) => p.role === "MISSED");
+            if (missed >= 0)
+                this.m.change({ activeLeg: a.start + missed, directFrom: null, vtf: false });
+        }
+        this.m.close();
+    }
+    // Adds the approach after the en route waypoints (replacing an approach loaded before), as the G1000 does. ACTIVATE
+    // with the VECTORS transition is vector-to-final: the final approach fix is active, its leg on the final course.
     // shortcut: the missed approach legs follow the missed approach point with no suspend.
     load(activate) {
         const p = this.procs()[this.apr];
         if (!p)
             return;
         const s = this.s;
-        const legs = [...(p.transitions[this.transitions()[this.trans]] ?? []), ...p.legs];
+        const name = this.transitions()[this.trans];
+        const legs = [...(p.transitions[name] ?? []), ...p.legs];
         const pts = legs
             .filter((l, i) => i === 0 || l.fix !== legs[i - 1].fix)
             .map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, role: l.role }));
         const enroute = s.route.filter((r) => typeof r === "string" || s.points.includes(r));
         const route = [...enroute, ...pts];
-        this.m.change(activate ? { route, activeLeg: enroute.length, directFrom: { lat: s.lat, lon: s.lon } } : { route });
+        if (!activate)
+            this.m.change({ route });
+        else if (name === "VECTORS")
+            this.m.change({ route, activeLeg: enroute.length + vtfLeg(pts), directFrom: null, vtf: true });
+        else
+            this.m.change({ route, activeLeg: enroute.length, directFrom: { lat: s.lat, lon: s.lon }, vtf: false });
         this.m.close();
     }
     draw() {
+        this.p.show("Menu", this.view === "menu");
+        this.p.show("Select", this.view !== "menu");
+        this.p.show("Ask", this.view === "ask");
+        for (let i = 0; i < MENU.length; i++) {
+            // The trainer draws available items cyan and the rest grey.
+            this.p.text(`Menu${i}`, MENU[i], this.enabled(i) ? "#80ffff" : "#808080");
+            this.m.hl.set(this.p.el(`Menu${i}`), this.view === "menu" && this.crsr && i === this.item);
+        }
+        this.p.text("Yes", "YES");
+        this.p.text("No", "NO");
+        this.m.hl.set(this.p.el("Yes"), this.view === "ask" && this.yes);
+        this.m.hl.set(this.p.el("No"), this.view === "ask" && !this.yes);
         const procs = this.procs();
         const apt = this.s.airports.find((a) => a.id === this.airport);
-        this.entry.draw(this.airport ?? "____", this.crsr && this.grp === "APT", this.m.hl);
+        const on = this.crsr && this.view === "select";
+        this.entry.draw(this.airport ?? "____", on && this.grp === "APT", this.m.hl);
         this.p.text("Name", apt ? apt.name.toUpperCase() : "");
-        const list = (name, items, sel, on) => {
+        const list = (name, items, sel, lit) => {
             const top = firstRow(sel, items.length, PROC_ROWS);
             for (let i = 0; i < PROC_ROWS; i++) {
                 this.p.text(`${name}${i}`, items[top + i] ?? "");
-                this.m.hl.set(this.p.el(`${name}${i}`), on && top + i === sel && !!items[top + i]);
+                this.m.hl.set(this.p.el(`${name}${i}`), lit && top + i === sel && !!items[top + i]);
             }
         };
-        list("Approach", procs.length ? procs.map((p) => p.name) : ["NONE"], this.apr, this.crsr && this.grp === "APR" && procs.length > 0);
-        list("Trans", this.transitions(), this.trans, this.crsr && this.grp === "TRANS");
+        list("Approach", procs.length ? procs.map((p) => p.name) : ["NONE"], this.apr, on && this.grp === "APR" && procs.length > 0);
+        list("Trans", this.transitions(), this.trans, on && this.grp === "TRANS");
         this.p.text("Load", "LOAD?");
         this.p.text("Activate", "ACTIVATE?");
-        this.m.hl.set(this.p.el("Load"), this.crsr && this.grp === "LOAD");
-        this.m.hl.set(this.p.el("Activate"), this.crsr && this.grp === "ACTIVATE");
+        this.m.hl.set(this.p.el("Load"), on && this.grp === "LOAD");
+        this.m.hl.set(this.p.el("Activate"), on && this.grp === "ACTIVATE");
     }
 }
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */

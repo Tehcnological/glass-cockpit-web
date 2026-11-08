@@ -19,7 +19,7 @@ import { PAGE_GROUPS, makePages } from "./mfd-pages.js";
 const DEFAULTS = {
     heading: 0, headingBug: 0, course: 0, baro: 29.92, alt: 0, selectedAlt: null, track: 0, groundspeed: 0, dtk: null, ete: null,
     lat: 0, lon: 0, magVar: 0, range: 10, orientation: "NORTH UP",
-    points: [], airspaces: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null,
+    points: [], airspaces: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null, vtf: false,
     engine: { rpm: 0, fuelFlow: 0, oilPressure: 0, oilTemp: 0, egt: 0, vacuum: 0, fuelLeft: 0, fuelRight: 0, volts: 0, engineHours: 0 },
     radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, cdiSource: "NAV1", bearings: {}, checklists: [],
 };

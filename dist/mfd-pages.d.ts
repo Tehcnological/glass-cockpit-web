@@ -113,20 +113,27 @@ declare class DirectToPage extends MapPage {
 declare class ProceduresPage extends MfdPage {
     navMap: "partial";
     private airport;
+    private view;
+    private item;
+    private yes;
     private grp;
     private apr;
     private trans;
     private entry;
     constructor(m: Mfd, screen: SVGGElement, after: Element);
-    /** Opens on the destination: the last airport in the flight plan, else the nearest. */
+    /** Opens on the PROCEDURES menu. SELECT APPROACH opens on the destination: the last airport in the flight plan, else the nearest. */
     open(): void;
     private procs;
     private transitions;
+    /** The loaded approach: its fixes are the route's own points, after the en route waypoints (see `load`). */
+    private loaded;
+    private enabled;
     keys(): Key[];
     toggleCrsr(): void;
     fms(outer: boolean, d: number): boolean;
     ent(): void;
     clr(): void;
+    private menuItem;
     private load;
     draw(): void;
 }

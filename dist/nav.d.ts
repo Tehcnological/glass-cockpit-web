@@ -73,3 +73,9 @@ export declare function nrstFreq(a: Airport): [string, string];
 export declare function routePoint(r: string | MapPoint, points: MapPoint[], airports: Airport[]): MapPoint | undefined;
 /** A flight plan's name: origin / destination, the first and last airports, so a loaded approach's fixes don't replace the destination. */
 export declare function planName(legs: (MapPoint | undefined)[]): string;
+/** Whether the GPS may fly an approach (by `approachName`'s names): RNAV (GPS) and GPS approaches. The rest ask NOT APPROVED FOR GPS. */
+export declare function gpsApproved(name: string): boolean;
+/** Vector-to-final makes the final approach fix active; an approach without one starts at its first leg. */
+export declare function vtfLeg(legs: {
+    role?: string;
+}[]): number;

@@ -109,3 +109,13 @@ export function planName(legs: (MapPoint | undefined)[]): string {
   const ids = (apts.length > 1 ? apts : legs.filter(Boolean)).map((p) => p!.id);
   return ids.length ? `${ids[0]} / ${ids[ids.length - 1]}` : "";
 }
+
+/** Whether the GPS may fly an approach (by `approachName`'s names): RNAV (GPS) and GPS approaches. The rest ask NOT APPROVED FOR GPS. */
+export function gpsApproved(name: string): boolean {
+  return name.startsWith("RNAV (GPS)") || name.startsWith("GPS");
+}
+
+/** Vector-to-final makes the final approach fix active; an approach without one starts at its first leg. */
+export function vtfLeg(legs: { role?: string }[]): number {
+  return Math.max(0, legs.findIndex((l) => l.role === "FAF"));
+}

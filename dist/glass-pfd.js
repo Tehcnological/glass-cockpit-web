@@ -16,6 +16,7 @@ import { alertsKey } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
 import { BLANK as blank, CYAN, Highlighter, ListView, NS, dimKey, esc, key as k, screenBox } from "./ui.js";
 export { GlassMfd } from "./glass-mfd.js";
+export { gpsApproved, vtfLeg } from "./nav.js";
 const DEFAULTS = {
     pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
     baro: 29.92, oat: 15, heading: 0, turnRate: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
@@ -442,7 +443,7 @@ export class GlassPfd {
             const flown = i < s.activeLeg;
             return {
                 ID: (p?.id ?? String(s.route[i])).slice(0, 7),
-                Type: (p?.role ?? "").slice(0, 4),
+                Type: (p?.role ?? "").slice(0, 4).toLowerCase(), // v13 trainer: faf, map (FG1000 has no roles)
                 DTK: flown ? "___°" : leg ? deg3(leg.brg - s.magVar) : "",
                 DIS: flown ? "___nm" : leg ? `${leg.dist.toFixed(1)}nm` : "",
             };
