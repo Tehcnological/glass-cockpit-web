@@ -14,7 +14,8 @@ test("vector-to-final activates the FAF, or the first leg without one", () => {
 });
 
 const here = { lat: 33.1, lon: -112 };
-const pt = (id, role) => ({ id, type: "WPT", lat: 33, lon: -112, role });
+// Approach fixes as PROC loads them: marked with their approach.
+const pt = (id, role) => ({ id, type: "WPT", lat: 33, lon: -112, role, approach: "ILS RWY 36" });
 
 test("vector-to-final from the FAF has no leg from the aircraft", () => {
   assert.deepEqual(vtfPatch(2, [pt("A", "IF"), pt("B", "FAF")], here), { activeLeg: 3, directFrom: null, vtf: true });
@@ -70,10 +71,16 @@ test("vector-to-final ends when an edit changes the leg into its fix", () => {
 });
 
 test("vector-to-final keeps the final course past a waypoint entered before the FAF", () => {
-  const fix = { id: "A", type: "WPT", lat: 33.5, lon: -112.2, role: "IF" };
+  const fix = { id: "A", type: "WPT", lat: 33.5, lon: -112.2, role: "IF", approach: "ILS RWY 36" };
   const user = { id: "USER", type: "WPT", lat: 34, lon: -111 };
   // The leg is drawn from the approach's own fix before the FAF, not the inserted waypoint.
   assert.deepEqual(vtfPatch(2, [fix, user, pt("B", "FAF")], here), { activeLeg: 4, directFrom: { lat: 33.5, lon: -112.2 }, vtf: true });
   // No approach fix before the FAF: direct from the aircraft.
   assert.deepEqual(vtfPatch(2, ["USER", pt("B", "FAF")], here), { activeLeg: 3, directFrom: here, vtf: true });
+});
+
+test("a published fix with no role before the FAF still starts its leg", () => {
+  // As JAMIL before WAZUP in the KPHX CIFP fixture: a fix of the approach, no role.
+  const jamil = { id: "JAMIL", type: "WPT", lat: 33.4, lon: -112.3, approach: "ILS RWY 08" };
+  assert.deepEqual(vtfPatch(2, [pt("A", "IF"), jamil, pt("B", "FAF")], here), { activeLeg: 4, directFrom: null, vtf: true });
 });

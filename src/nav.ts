@@ -120,8 +120,9 @@ export function vtfLeg(legs: readonly (string | { role?: string })[]): number {
   return Math.max(0, legs.findIndex((l) => typeof l !== "string" && l.role === "FAF"));
 }
 
-type Leg = string | { role?: string; lat?: number; lon?: number };
-const isFix = (l: Leg | undefined): l is { role: string; lat?: number; lon?: number } => typeof l === "object" && l.role !== undefined;
+// An approach's own fix, marked by PROC (a published fix may have no role); a waypoint entered by hand has no marker.
+type Leg = string | { role?: string; approach?: string; lat?: number; lon?: number };
+const isFix = (l: Leg | undefined): l is { approach: string; lat?: number; lon?: number } => typeof l === "object" && l.approach !== undefined;
 
 /**
  * Vector-to-final with the approach's fixes from `route[start]`: the final approach fix is active, its leg on the final

@@ -81,6 +81,7 @@ export declare function vtfLeg(legs: readonly (string | {
 })[]): number;
 type Leg = string | {
     role?: string;
+    approach?: string;
     lat?: number;
     lon?: number;
 };

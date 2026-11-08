@@ -67,7 +67,7 @@ export function gpsApproved(name) {
 export function vtfLeg(legs) {
     return Math.max(0, legs.findIndex((l) => typeof l !== "string" && l.role === "FAF"));
 }
-const isFix = (l) => typeof l === "object" && l.role !== undefined;
+const isFix = (l) => typeof l === "object" && l.approach !== undefined;
 /**
  * Vector-to-final with the approach's fixes from `route[start]`: the final approach fix is active, its leg on the final
  * course, drawn from the approach's own fix before it (a waypoint entered between them is skipped by starting the leg at
