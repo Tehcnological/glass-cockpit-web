@@ -174,7 +174,9 @@ export const findPoint = (s: Plan, id: string): MapPoint | undefined =>
 export function directToPatch(s: Plan & LatLon, p: MapPoint) {
   // A direct-to cancels Parallel Track (Pilot's Guide): the plan goes back to its own waypoints.
   const route = cancelParallel(s.route);
-  const i = route.findIndex((r) => routePoint(r, s.points, s.airports)?.id === p.id);
+  // An offset point (the active one DIRECT TO offers) goes direct to the waypoint it came from.
+  const id = p.parallel !== undefined ? routePoint(p.parallel, s.points, s.airports)?.id : p.id;
+  const i = route.findIndex((r) => routePoint(r, s.points, s.airports)?.id === id);
   const directFrom = { lat: s.lat, lon: s.lon };
   if (i >= 0) return { ...(s.route.some(isParallel) && { route }), activeLeg: i, directFrom, vtf: false };
   return { route: [s.points.includes(p) || p.type === "APT" ? p.id : asWaypoint(p)], activeLeg: 0, directFrom, vtf: false };
@@ -266,12 +268,14 @@ export function atkOffset(s: Plan & LatLon & { activeLeg: number }, at: number, 
   if (!Number.isInteger(nm) || !nm || Math.abs(nm) > 999 || (faf >= 0 && at >= faf)) return null;
   const pts = s.route.map((r) => routePoint(r, s.points, s.airports));
   const w = pts[at];
-  const other = nm < 0 && at === s.activeLeg ? { lat: s.lat, lon: s.lon } : pts[at + Math.sign(nm)];
+  // Along the plan's leg that side; before the active waypoint, also short of the aircraft's distance to go.
+  const here = nm < 0 && at === s.activeLeg ? { lat: s.lat, lon: s.lon } : undefined;
+  const other = pts[at + Math.sign(nm)] ?? here;
   if (!w || !other) return null;
   const { to, from } = local(w);
   const [x, y] = to(other);
   const len = Math.hypot(x, y);
-  if (Math.abs(nm) >= len) return null;
+  if (Math.abs(nm) >= len || (here && Math.abs(nm) >= Math.hypot(...to(here)))) return null;
   const p = from([(x * Math.abs(nm)) / len, (y * Math.abs(nm)) / len]);
   const point: MapPoint = { id: `${w.id.slice(0, 5)}${nm < 0 ? "-" : "+"}${Math.abs(nm)}`, type: "WPT", lat: p.lat, lon: p.lon };
   // The same offset again would repeat the name (and the place): refused.

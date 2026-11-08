@@ -153,12 +153,12 @@ const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer]
   // Track vector: a light blue line to where the aircraft will be (Pilot's Guide). shortcut: always straight; the real
   // one bends through up to 90 degrees of a turn at 30 and 60 s. Bend it when the MFD gets a turn rate.
   if (s.trackVector && s.groundspeed && s.track !== undefined) {
-    const [[x1, y1], [x2, y2]] = [xy(s), xy(trackVectorEnd({ lat: s.lat, lon: s.lon, track: s.track, groundspeed: s.groundspeed }, s.trackVector))];
+    const [[x1, y1], [x2, y2]] = [xy(s), xy(trackVectorEnd({ lat: s.lat, lon: s.lon, track: s.track, groundspeed: s.groundspeed, magVar: s.magVar }, s.trackVector))];
     out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#00ffff" stroke-width="2"/>`;
   }
   // APS_FG1000: the ownship icon at 30%, pointing along the heading relative to the map.
   const [ax, ay] = xy(s);
-  out += `<g transform="translate(${ax} ${ay}) rotate(${s.heading - up}) scale(0.3) translate(-43.92 -76)">${APS}</g>`;
+  out += `<g transform="translate(${ax} ${ay}) rotate(${s.heading + (s.magVar ?? 0) - up}) scale(0.3) translate(-43.92 -76)">${APS}</g>`;
   g.innerHTML = out;
   // Labels on a white box (text_mode FILLEDBOUNDINGBOX, text_padding 2).
   for (const t of g.querySelectorAll<SVGTextElement>("text[data-box]")) {

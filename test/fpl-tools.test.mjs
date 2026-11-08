@@ -111,3 +111,16 @@ test("inverting the plan or removing the approach cancels parallel track", async
   assert.deepEqual(m.find((o) => o.label === "Invert Flight Plan").patch.route, ["D", "C", "B", "A"]);
   assert.deepEqual(m.find((o) => o.label === "Remove Approach").patch.route, s.route);
 });
+
+test("direct-to an offset waypoint cancels parallel track and flies to its original", async () => {
+  const { directToPatch } = await import("../dist/nav.js");
+  const route = parallelTrack({ ...s, activeLeg: 2 }, "R", 6);
+  assert.deepEqual(directToPatch({ ...s, route }, route[2]), { route: s.route, activeLeg: 2, directFrom: { lat: 0, lon: 0.5 }, vtf: false });
+});
+
+test("an offset before the active waypoint lies on the inbound leg even when the aircraft is off course", () => {
+  const off = { ...s, activeLeg: 2, lat: 0.2, lon: 1.5 }; // 12 nm north of B-C, 30 nm to go
+  const r = atkOffset(off, 2, -10);
+  assert.ok(near(r.point.lat, 0) && near(r.point.lon, 2 - 10 / 60, 1e-4));
+  assert.equal(atkOffset({ ...off, lat: 0.1, lon: 1.95 }, 2, -10), null, "under 7 nm to go");
+});
