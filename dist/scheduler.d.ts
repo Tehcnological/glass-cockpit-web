@@ -21,7 +21,7 @@ export declare class Scheduler {
     /** The large FMS knob: along the text being typed, or on through the fields. */
     outer(d: number): void;
     /** ENT keeps the text typed; on a cleared line it clears the message's time too; otherwise it goes on a field. */
-    ent(now: number): void;
+    ent(): void;
     /** CLR on a message's text clears it; again, restores it. While typing, it stops. */
     clr(): void;
     /** The messages that came due by `now`; a periodic one starts its timer again. */

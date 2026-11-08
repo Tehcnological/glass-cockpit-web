@@ -1583,7 +1583,7 @@ class UtilityPage extends PanelPage {
         if (!this.crsr)
             return;
         if (this.inSched)
-            this.sched.ent(Date.now());
+            this.sched.ent();
         else if (UTILITY_FIELDS[this.at] === "action")
             this.util.action(Date.now());
         else if (this.at < 2)
@@ -1634,21 +1634,23 @@ class UtilityPage extends PanelPage {
                 }) }]);
     }
 }
-// AUX - TRIP PLANNING (Pilot's Guide): AUTO takes groundspeed, fuel flow and fuel on board from the aircraft; MANUAL takes
+// AUX - TRIP PLANNING (Pilot's Guide; FG1000 shows no data here): AUTO takes groundspeed, fuel flow and fuel on board from the aircraft; MANUAL takes
 // them, and the air data density altitude and true airspeed need, from the small FMS knob. The leg is the flight plan's
 // REM or one of its legs. WPTS mode and ESA are not ported.
 const TRIP_INPUTS = [
-    { key: "gs", label: "GS", step: 1, unit: "KT", digits: 0 },
-    { key: "ff", label: "FUEL FLOW", step: 0.1, unit: "GL/HR", digits: 1 },
-    { key: "fuel", label: "FUEL ON BOARD", step: 1, unit: "GL", digits: 1 },
-    { key: "cas", label: "CALIBRATED AS", step: 1, unit: "KT", digits: 0 },
-    { key: "alt", label: "IND ALTITUDE", step: 100, unit: "FT", digits: 0 },
-    { key: "baro", label: "BARO", step: 0.01, unit: "IN", digits: 2 },
-    { key: "tat", label: "TOTAL AIR TEMP", step: 1, unit: "°C", digits: 0 },
+    { key: "gs", label: "GS", step: 1, unit: "KT", digits: 0, min: 0, max: 999 },
+    { key: "ff", label: "FUEL FLOW", step: 0.1, unit: "GL/HR", digits: 1, min: 0, max: 99.9 },
+    { key: "fuel", label: "FUEL ON BOARD", step: 1, unit: "GL", digits: 1, min: 0, max: 999 },
+    { key: "cas", label: "CALIBRATED AS", step: 1, unit: "KT", digits: 0, min: 0, max: 999 },
+    { key: "alt", label: "IND ALTITUDE", step: 100, unit: "FT", digits: 0, min: -1000, max: 50000 },
+    { key: "baro", label: "BARO", step: 0.01, unit: "IN", digits: 2, min: 27, max: 32 },
+    { key: "tat", label: "TOTAL AIR TEMP", step: 1, unit: "°C", digits: 0, min: -99, max: 99 },
 ];
 class TripPlanningPage extends PanelPage {
     manual = null;
     leg = "REM";
+    /** The flight plan the leg was picked from: a changed plan goes back to REM, as its leg numbers move. */
+    legRoute = null;
     at = 0;
     sensors() {
         const s = this.m.s;
@@ -1664,11 +1666,11 @@ class TripPlanningPage extends PanelPage {
             this.at = clamp(this.at + (d > 0 ? 1 : -1), 0, this.manual ? TRIP_INPUTS.length : 0);
         else if (this.at === 0) {
             const legs = ["REM", ...this.m.s.route.keys()].filter((l) => l !== 0);
-            this.leg = legs[clamp(legs.indexOf(this.leg) + d, 0, legs.length - 1)];
+            [this.leg, this.legRoute] = [legs[clamp(legs.indexOf(this.leg) + d, 0, legs.length - 1)], this.m.s.route];
         }
         else if (this.manual) {
             const f = TRIP_INPUTS[this.at - 1];
-            this.manual[f.key] = Math.max(f.key === "tat" ? -99 : 0, +(this.manual[f.key] + d * f.step).toFixed(f.digits));
+            this.manual[f.key] = clamp(+(this.manual[f.key] + d * f.step).toFixed(f.digits), f.min, f.max);
         }
         return true;
     }
@@ -1683,7 +1685,7 @@ class TripPlanningPage extends PanelPage {
         const s = this.m.s;
         const setup = this.m.ui.setup;
         const now = Date.now();
-        if (this.leg !== "REM" && this.leg >= s.route.length)
+        if (this.leg !== "REM" && s.route !== this.legRoute)
             this.leg = "REM";
         const inp = this.manual ?? this.sensors();
         const id = (i) => routePoint(s.route[i] ?? "", s.points, s.airports);
@@ -1730,7 +1732,7 @@ class TripPlanningPage extends PanelPage {
         ]);
     }
 }
-// AUX - GPS STATUS (Pilot's Guide): the position, time, altitude, groundspeed and track the aircraft gives. There are no
+// AUX - GPS STATUS (Pilot's Guide; FG1000 shows no data here): the position, time, altitude, groundspeed and track the aircraft gives. There are no
 // satellites here, so the sky view and signal bars are left out and the accuracy, RAIM and SBAS boxes are grey.
 class GpsStatusPage extends PanelPage {
     rx = 1;
@@ -1757,7 +1759,7 @@ class GpsStatusPage extends PanelPage {
         ]);
     }
 }
-// AUX - SYSTEM STATUS (Pilot's Guide): every LRU reports in. There are no serial numbers, versions or databases here, so
+// AUX - SYSTEM STATUS (Pilot's Guide; FG1000 shows no data here): every LRU reports in. There are no serial numbers, versions or databases here, so
 // the airframe and database boxes are grey and ANN TEST is dim.
 const LRUS = ["GDC1", "GEA1", "GIA1", "GIA2", "GMA1", "GMU1", "GRS1", "GTX1", "MFD1", "PFD1"];
 class SystemStatusPage extends PanelPage {

@@ -61,11 +61,10 @@ export class Scheduler {
   }
 
   /** ENT keeps the text typed; on a cleared line it clears the message's time too; otherwise it goes on a field. */
-  ent(now: number) {
+  ent() {
     if (this.editing) {
-      this.items[this.i].text = this.editing.join("").trim();
+      this.items[this.i].text = this.editing.join("").trim(); // a running timer keeps running
       this.editing = null;
-      this.arm(this.items[this.i], now);
       this.outer(1);
     } else if (this.f === "text" && this.cleared !== null) {
       this.items[this.i] = blank();
@@ -88,6 +87,7 @@ export class Scheduler {
     for (const r of this.items) {
       if (r.due === null || r.due > now) continue;
       if (r.text) out.push(r.text);
+      if (r.type === "One-time") r.timer = 0; // spent: it reads 00:00:00 rather than looking set again
       r.due = r.type === "Periodic" ? r.due + Math.ceil((now - r.due + 1) / (r.timer * 1000)) * r.timer * 1000 : null;
     }
     return out;

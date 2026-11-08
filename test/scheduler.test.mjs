@@ -81,3 +81,21 @@ test("scheduler: no message without its text, and CLR clears the text, again res
   s.ent(T0); // ENT on the cleared line clears its time too
   assert.deepEqual(s.items[3], { text: "", type: "One-time", timer: 0, at: null, due: null });
 });
+
+test("scheduler: renaming a running message keeps its countdown", () => {
+  const s = new Scheduler();
+  type(s, 0, "A");
+  s.cursor(0, "time");
+  s.inner(30, T0);
+  type(s, 0, "AB", T0 + 25 * min);
+  assert.equal(s.items[0].due, T0 + 30 * min);
+});
+
+test("scheduler: a one-time message's timer reads zero once it has come due", () => {
+  const s = new Scheduler();
+  type(s, 0, "A");
+  s.cursor(0, "time");
+  s.inner(30, T0);
+  s.tick(T0 + 30 * min);
+  assert.equal(s.items[0].timer, 0);
+});

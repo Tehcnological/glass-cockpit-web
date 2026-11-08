@@ -28,7 +28,14 @@
   const pfd = new GlassPfd(document.getElementById("pfd"), { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share(() => mfd) });
   // Scheduler messages from AUX - UTILITY go to the PFD's ALERTS window.
   const scheduled = [];
-  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true, onChange: share(() => pfd), onScheduler: (m) => (scheduled.push(m), update()) });
+  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true, onChange: share(() => pfd), onScheduler });
+  // A message posted again (a periodic one) is taken off first, so the PFD counts it unread.
+  function onScheduler(m) {
+    const i = scheduled.indexOf(m);
+    if (i >= 0) scheduled.splice(i, 1), update();
+    scheduled.push(m);
+    update();
+  }
   // Made-up points for the demo, not real navigation data.
   const points = [
     { id: "KAAA", type: "APT", lat: 33.40, lon: -112.00 }, { id: "ABC", type: "VOR", lat: 33.50, lon: -111.85 },
