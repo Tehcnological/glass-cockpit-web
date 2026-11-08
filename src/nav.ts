@@ -120,13 +120,20 @@ export function vtfLeg(legs: readonly (string | { role?: string })[]): number {
   return Math.max(0, legs.findIndex((l) => typeof l !== "string" && l.role === "FAF"));
 }
 
+type Leg = string | { role?: string; lat?: number; lon?: number };
+const isFix = (l: Leg | undefined): l is { role: string; lat?: number; lon?: number } => typeof l === "object" && l.role !== undefined;
+
 /**
  * Vector-to-final with the approach's fixes from `route[start]`: the final approach fix is active, its leg on the final
- * course. With no fix before the FAF to draw that leg from (or no FAF), it goes direct from the aircraft at `here`.
+ * course, drawn from the approach's own fix before it (a waypoint entered between them is skipped by starting the leg at
+ * that fix's position). With no approach fix before the FAF (or no FAF), it goes direct from the aircraft at `here`.
  */
-export function vtfPatch(start: number, legs: readonly (string | { role?: string })[], here: LatLon): { activeLeg: number; directFrom: LatLon | null; vtf: true } {
+export function vtfPatch(start: number, legs: readonly Leg[], here: LatLon): { activeLeg: number; directFrom: LatLon | null; vtf: true } {
   const i = vtfLeg(legs);
-  return { activeLeg: start + i, directFrom: i > 0 ? null : here, vtf: true };
+  if (isFix(legs[i - 1])) return { activeLeg: start + i, directFrom: null, vtf: true };
+  const fix = legs.slice(0, Math.max(0, i)).reverse().find(isFix);
+  const from = fix?.lat !== undefined && fix.lon !== undefined ? { lat: fix.lat, lon: fix.lon } : here;
+  return { activeLeg: start + i, directFrom: from, vtf: true };
 }
 
 type Route = (string | MapPoint)[];

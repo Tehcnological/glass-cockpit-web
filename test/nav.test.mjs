@@ -68,3 +68,12 @@ test("vector-to-final ends when an edit changes the leg into its fix", () => {
   assert.equal(vtfInboundKept(1, 3, false), true);
   assert.equal(vtfInboundKept(4, 3, false), true);
 });
+
+test("vector-to-final keeps the final course past a waypoint entered before the FAF", () => {
+  const fix = { id: "A", type: "WPT", lat: 33.5, lon: -112.2, role: "IF" };
+  const user = { id: "USER", type: "WPT", lat: 34, lon: -111 };
+  // The leg is drawn from the approach's own fix before the FAF, not the inserted waypoint.
+  assert.deepEqual(vtfPatch(2, [fix, user, pt("B", "FAF")], here), { activeLeg: 4, directFrom: { lat: 33.5, lon: -112.2 }, vtf: true });
+  // No approach fix before the FAF: direct from the aircraft.
+  assert.deepEqual(vtfPatch(2, ["USER", pt("B", "FAF")], here), { activeLeg: 3, directFrom: here, vtf: true });
+});

@@ -79,13 +79,17 @@ export declare function gpsApproved(name: string): boolean;
 export declare function vtfLeg(legs: readonly (string | {
     role?: string;
 })[]): number;
+type Leg = string | {
+    role?: string;
+    lat?: number;
+    lon?: number;
+};
 /**
  * Vector-to-final with the approach's fixes from `route[start]`: the final approach fix is active, its leg on the final
- * course. With no fix before the FAF to draw that leg from (or no FAF), it goes direct from the aircraft at `here`.
+ * course, drawn from the approach's own fix before it (a waypoint entered between them is skipped by starting the leg at
+ * that fix's position). With no approach fix before the FAF (or no FAF), it goes direct from the aircraft at `here`.
  */
-export declare function vtfPatch(start: number, legs: readonly (string | {
-    role?: string;
-})[], here: LatLon): {
+export declare function vtfPatch(start: number, legs: readonly Leg[], here: LatLon): {
     activeLeg: number;
     directFrom: LatLon | null;
     vtf: true;
