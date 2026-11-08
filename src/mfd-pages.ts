@@ -3,7 +3,7 @@
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
-import { approachPatch, bearingDistance, gpsApproved, latLon, loadedApproach, nearest, planName, routePoint, vtfPatch, type Airport, type Procedure } from "./nav.js";
+import { approachPatch, asWaypoint, bearingDistance, gpsApproved, latLon, loadedApproach, nearest, planName, routePoint, vtfPatch, type Airport, type Procedure } from "./nav.js";
 import { BLANK, Highlighter, IdEntry, ListView, NS, dimKey, firstRow, key, type Key } from "./ui.js";
 import type { MfdState } from "./glass-mfd.js";
 
@@ -730,7 +730,7 @@ class FlightPlanPage extends MapPage {
   private insert(at: number, p: MapPoint) {
     const s = this.s;
     const route = [...s.route];
-    route.splice(at, 0, s.points.includes(p) || p.type === "APT" ? p.id : p);
+    route.splice(at, 0, s.points.includes(p) || p.type === "APT" ? p.id : asWaypoint(p));
     const activeLeg = at <= s.activeLeg && s.route.length ? s.activeLeg + 1 : s.activeLeg;
     this.m.change({ route, activeLeg, vtf: s.vtf && route[activeLeg] === s.route[s.activeLeg] });
     this.rows.sel = at;
@@ -997,7 +997,7 @@ class DirectToPage extends MapPage {
     const s = this.s;
     const i = s.route.findIndex((r) => resolve(s, r)?.id === p.id);
     const from = { lat: s.lat, lon: s.lon };
-    this.m.change(i >= 0 ? { activeLeg: i, directFrom: from, vtf: false } : { route: [s.points.includes(p) || p.type === "APT" ? p.id : p], activeLeg: 0, directFrom: from, vtf: false });
+    this.m.change(i >= 0 ? { activeLeg: i, directFrom: from, vtf: false } : { route: [s.points.includes(p) || p.type === "APT" ? p.id : asWaypoint(p)], activeLeg: 0, directFrom: from, vtf: false });
     this.m.close();
   }
 

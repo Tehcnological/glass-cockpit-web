@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { approachPatch, gpsApproved, loadedApproach, vtfLeg, vtfPatch } from "../dist/nav.js";
+import { approachPatch, asWaypoint, gpsApproved, loadedApproach, vtfLeg, vtfPatch } from "../dist/nav.js";
 
 test("which approaches the GPS may fly", () => {
   for (const n of ["RNAV (GPS) Y RWY 08", "RNAV (GPS)-D"]) assert.equal(gpsApproved(n), true, n);
@@ -45,4 +45,15 @@ test("loading an approach keeps a host's en route point objects", () => {
   const old = { ...pt("Z", "FAF"), approach: "OLD" };
   const pts = [pt("A", "IF")];
   assert.deepEqual(approachPatch(["KAAA", wpt, old], pts, "load", here).route, ["KAAA", wpt, ...pts]);
+});
+
+test("a fix copied into the flight plan by hand is an ordinary waypoint", () => {
+  const faf = { ...pt("B", "FAF"), approach: "ILS RWY 36" };
+  const w = asWaypoint(faf);
+  assert.equal(w.approach, undefined);
+  assert.equal(w.role, undefined);
+  assert.equal(w.id, "B");
+  assert.equal(faf.approach, "ILS RWY 36"); // the loaded fix is unchanged
+  const a = { ...pt("A", "IF"), approach: "ILS RWY 36" };
+  assert.equal(loadedApproach(["KAAA", w, a, faf]).start, 2);
 });

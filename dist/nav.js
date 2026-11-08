@@ -92,3 +92,8 @@ export function approachPatch(route0, pts, mode, here) {
         return { route, activeLeg: enroute.length, directFrom: here, vtf: false };
     return { route, ...vtfPatch(enroute.length, pts, here) };
 }
+/** A fix entered by hand (WAYPOINT ENTRY, DIRECT TO) is an ordinary waypoint, even when picked from a loaded approach. */
+export function asWaypoint(p) {
+    const { approach: _a, role: _r, ...w } = p;
+    return w;
+}

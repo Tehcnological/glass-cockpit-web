@@ -147,3 +147,9 @@ export function approachPatch(route0: Route, pts: MapPoint[], mode: "load" | "ac
   if (mode === "activate") return { route, activeLeg: enroute.length, directFrom: here, vtf: false };
   return { route, ...vtfPatch(enroute.length, pts, here) };
 }
+
+/** A fix entered by hand (WAYPOINT ENTRY, DIRECT TO) is an ordinary waypoint, even when picked from a loaded approach. */
+export function asWaypoint(p: MapPoint): MapPoint {
+  const { approach: _a, role: _r, ...w } = p;
+  return w;
+}

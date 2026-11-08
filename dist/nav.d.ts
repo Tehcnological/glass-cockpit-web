@@ -114,4 +114,6 @@ export declare function approachPatch(route0: Route, pts: MapPoint[], mode: "loa
     vtf: true;
     route: (string | MapPoint)[];
 };
+/** A fix entered by hand (WAYPOINT ENTRY, DIRECT TO) is an ordinary waypoint, even when picked from a loaded approach. */
+export declare function asWaypoint(p: MapPoint): MapPoint;
 export {};
