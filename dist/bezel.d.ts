@@ -21,7 +21,7 @@ export interface Knobs {
 /**
  * A hotspot. `arrow`: it turns a knob or moves the joystick, repeating while held, drawn as an arrow here (`dir`, the
  * way it points in degrees, 0 right and 90 down; `size`, 1 for a large knob) or printed on the bezel. `also`: a
- * second input a click reports (the joystick's diagonals).
+ * second input a click reports (the joystick's diagonals). `shiftClick`: what Shift+click does, and pressing and holding.
  */
 export type Spot = {
     box: [number, number, number, number];

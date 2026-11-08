@@ -11,10 +11,11 @@ import { Page, clamp, deg3, mod, pad } from "./page.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
-import { bearingDistance, bestApproach, latLon, nearest, nrstFreq, planName, routePoint } from "./nav.js";
+import { ProcFlow, PROC_MENU } from "./procedures.js";
+import { bearingDistance, bestApproach, directToPatch, findPoint, latLon, nearest, nrstFreq, planName, routePoint } from "./nav.js";
 import { alertsKey, seenAlerts } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
-import { BLANK as blank, CYAN, Highlighter, ListView, NS, dimKey, esc, firstRow, key as k, screenBox } from "./ui.js";
+import { BLANK as blank, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key as k, screenBox } from "./ui.js";
 import { firstOption, fplMenu, stepMenu } from "./page-menu.js";
 import { vsiPointer, vsiText } from "./vsi.js";
 export { GlassMfd } from "./glass-mfd.js";
@@ -23,7 +24,7 @@ const DEFAULTS = {
     pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
     baro: 29.92, oat: 15, heading: 0, turnRate: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
     cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null,
-    radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], activeLeg: 1, airports: [], magVar: 0, wind: null,
+    radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], activeLeg: 1, airports: [], procedures: [], magVar: 0, wind: null,
     xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
     vspeedsOn: { Vglide: false, Vr: false, Vx: false, Vy: false }, minimums: null, failed: {}, // v13 trainer: references start off
 };
@@ -72,13 +73,20 @@ export class GlassPfd {
         timer: { up: true, running: false, base: 0, since: 0 },
         /** The messages the ALERTS window has shown. */ alertsSeen: [],
         /** PFD > DME shows the DME window; DME TUNING picks its NAV radio. */ dme: false, dmeSource: "NAV1",
+        /** DIRECT TO: the waypoint, and whether the cursor is on ACTIVATE? (else on the identifier). */ dto: { id: null, act: false },
     };
+    /** DIRECT TO's identifier, spelled with the FMS knob. */ dtoEntry;
+    /** PROC: the same flow as the MFD's PROCEDURES page; its airport identifier is spelled in `procEntry`. */ proc;
+    procEntry;
     /** The container must be visible: layout is measured once here. */
     constructor(container, options = {}) {
         this.options = options;
         const { svg, screen } = buildDisplay(container, [PFD, SURROUND, NRST, NRST_INFO, FPL], "Primary flight display", options);
         this.svg = svg;
         this.p = new Page(screen, "PFDInstruments");
+        this.dtoEntry = new IdEntry(this.p, 5);
+        this.procEntry = new IdEntry(this.p, 4);
+        this.proc = new ProcFlow({ s: () => this.state, change: (patch) => this.change(patch), close: () => (this.ui.window = null) }, this.procEntry);
         this.surround = new Surround(screen);
         this.nrst = new Page(screen, "NearestAirportsPFD");
         this.fpl = new Page(screen, "PFDInstrumentsFlightPlan");
@@ -191,12 +199,35 @@ export class GlassPfd {
                     u.nrstInfo = !u.nrstInfo;
                 if (u.window === "TMR/REF")
                     this.timerAction();
+                if (u.window === "DTO")
+                    this.dtoEnt();
+                else if (u.window === "PROC")
+                    this.proc.ent();
                 return this.set({});
             case "CLR":
                 if (u.window === "NRST" && u.nrstInfo)
                     u.nrstInfo = false;
+                else if (u.window === "DTO" && this.dtoEntry.editing)
+                    this.dtoEntry.cancel();
+                else if (u.window === "PROC")
+                    this.proc.clr();
                 else if (u.window)
                     u.window = null;
+                return this.set({});
+            case "DTO": {
+                // v13 trainer: DIRECT TO opens its window in the NRST window's place, on the active waypoint; DTO again closes it.
+                const act = this.state.route[this.state.activeLeg];
+                const id = typeof act === "string" ? act : act?.id ?? null;
+                this.openWindow("DTO");
+                u.dto = { id, act: !!id && !!findPoint(this.state, id) };
+                this.dtoEntry.cancel();
+                return this.set({});
+            }
+            case "PROC":
+                // v13 trainer: PROC opens the PROCEDURES window where DIRECT TO opens; PROC again closes it.
+                this.openWindow("PROC");
+                if (u.window === "PROC")
+                    this.proc.open();
                 return this.set({});
             case "FPL":
                 // PFDInstrumentsController.handleFPL: shows or hides the flight plan window.
@@ -341,6 +372,18 @@ export class GlassPfd {
         // shortcut: no HOLD mode; add it when a scenario needs DME hold.
         if (u.window === "DME" && !outer)
             u.dmeSource = u.dmeSource === "NAV1" ? "NAV2" : "NAV1";
+        if (u.window === "PROC")
+            this.proc.fms(outer, d);
+        if (u.window === "DTO") {
+            // As the MFD's DIRECT TO: the inner knob spells the identifier, the outer moves to ACTIVATE?.
+            const e = this.dtoEntry;
+            if (e.editing)
+                outer ? e.outer(d) : e.inner(d);
+            else if (outer)
+                u.dto.act = d > 0 && !!this.dtoPoint();
+            else if (!u.dto.act)
+                e.inner(d);
+        }
         if (u.window === "TMR/REF") {
             if (outer)
                 u.cursor = mod(u.cursor + d, TMR_FIELDS.length);
@@ -348,6 +391,28 @@ export class GlassPfd {
                 this.timerField(d);
         }
         this.set({});
+    }
+    dtoPoint() {
+        const id = this.ui.dto.id;
+        return id ? findPoint(this.state, id) : undefined;
+    }
+    // ENT in DIRECT TO: takes the spelled identifier, then moves to ACTIVATE?, then flies direct.
+    dtoEnt() {
+        const u = this.ui;
+        const e = this.dtoEntry;
+        if (e.editing) {
+            const id = e.ent();
+            if (id)
+                u.dto = { id, act: !!findPoint(this.state, id) };
+            return;
+        }
+        const p = this.dtoPoint();
+        if (!u.dto.act)
+            u.dto.act = !!p;
+        else if (p) {
+            u.window = null;
+            this.change(directToPatch(this.state, p));
+        }
     }
     timerValue() {
         const t = this.ui.timer;
@@ -632,6 +697,46 @@ export class GlassPfd {
             rows.push({ label: "PFD DSPL", cells: [{ text: "AUTO", right: 150, cur: true }, { text: "100.00%", right: end }] });
             rows.push({ label: "MFD DSPL", cells: [{ text: "AUTO", right: 150 }, { text: "___._%", right: end }] });
         }
+        else if (u.window === "DTO") {
+            // v13 trainer layout: the identifier with its name and city, VNV altitude and offset, bearing, distance, course.
+            const p = this.dtoPoint();
+            const apt = p?.type === "APT" ? s.airports.find((a) => a.id === p.id) : undefined;
+            const bd = p && bearingDistance(s.lat, s.lon, p.lat, p.lon);
+            const crs = bd ? deg3(bd.brg - s.magVar) : "___°";
+            const white = "#ffffff";
+            rows.push({ label: "DIRECT TO", cells: [], title: true });
+            rows.push({ label: "", cells: [{ text: this.dtoEntry.editing ? this.dtoEntry.value : p?.id ?? u.dto.id ?? "_____", right: 80, cur: !u.dto.act }] });
+            rows.push({ label: (p?.name ?? "").toUpperCase(), cells: [] }, { label: (apt?.city ?? p?.city ?? "").toUpperCase(), cells: [] });
+            rows.push({ label: "ALT", cells: [{ text: "_____FT", right: 120, cur: false }, { text: "OFFSET", right: end - 50, cur: false, color: white }, { text: "+0NM", right: end, cur: false }] });
+            rows.push({ label: "BRG", cells: [{ text: crs, right: 100, cur: false }, { text: "DIS", right: end - 70, cur: false, color: white }, { text: bd ? `${bd.dist.toFixed(1)}NM` : "___NM", right: end, cur: false }] });
+            rows.push({ label: "CRS", cells: [{ text: crs, right: 100, cur: false }] });
+            rows.push({ label: "ACTIVATE?", cells: [], cur: u.dto.act });
+        }
+        else if (u.window === "PROC") {
+            // v13 trainer: the MFD's PROCEDURES items, in the PFD's window.
+            const f = this.proc;
+            if (f.view === "menu") {
+                rows.push({ label: "PROCEDURES", cells: [], title: true });
+                PROC_MENU.forEach((m, i) => rows.push({ label: m, cells: [], color: f.enabled(i) ? CYAN : "#808080", cur: i === f.item }));
+            }
+            else if (f.view === "ask") {
+                rows.push({ label: "- NOT APPROVED FOR GPS -", cells: [], title: true });
+                for (const t of ["GPS guidance is for", "monitoring only.", "Activate approach?"])
+                    rows.push({ label: t, cells: [] });
+                rows.push({ label: "", cells: [{ text: "YES", right: 110, cur: f.yes }, { text: "NO", right: 190, cur: !f.yes }] });
+            }
+            else {
+                const g = f.grp;
+                const apt = s.airports.find((a) => a.id === f.airport);
+                const procs = f.procs();
+                rows.push({ label: "APPROACH", cells: [], title: true });
+                rows.push({ label: "", cells: [{ text: this.procEntry.editing ? this.procEntry.value : f.airport ?? "____", right: 70, cur: g === "APT" }] });
+                rows.push({ label: apt ? apt.name.toUpperCase() : "", cells: [] });
+                rows.push({ label: "", cells: [{ text: procs[f.apr]?.name ?? "NONE", right: end, cur: g === "APR" && procs.length > 0 }] });
+                rows.push({ label: "TRANS", cells: [{ text: f.transitions()[f.trans] ?? "", right: end, cur: g === "TRANS" }] });
+                rows.push({ label: "LOAD?", cells: [], cur: g === "LOAD" }, { label: "ACTIVATE?", cells: [], cur: g === "ACTIVATE" });
+            }
+        }
         else if (u.window === "MENU") {
             // v13 trainer: the flight plan's PAGE MENU; available options cyan, the rest grey, scrolling with the cursor.
             const opts = this.pageMenu();
@@ -658,7 +763,7 @@ export class GlassPfd {
                 const cur = c.cur ?? ((u.window === "TMR/REF" && TMR_FIELDS[u.cursor] === c.field) || c.field === "mode");
                 if (cur)
                     out += `<rect x="${x + c.right - width(c.text) + 4}" y="${ty - line * 0.8}" width="${width(c.text)}" height="${line}" fill="${CYAN}"/>`;
-                out += `<text x="${x + c.right}" y="${ty}" text-anchor="end" ${FONT} fill="${cur ? "#000" : CYAN}">${esc(c.text)}</text>`;
+                out += `<text x="${x + c.right}" y="${ty}" text-anchor="end" ${FONT} fill="${cur ? "#000" : c.color ?? CYAN}">${esc(c.text)}</text>`;
             }
         });
         this.win.innerHTML = out;

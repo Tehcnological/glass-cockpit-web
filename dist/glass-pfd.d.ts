@@ -1,7 +1,7 @@
 import { type DisplayOptions } from "./display.js";
 import { type Radios } from "./surround.js";
 import { type Airspace, type MapPoint } from "./map.js";
-import { type Airport } from "./nav.js";
+import { type Airport, type Procedure } from "./nav.js";
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
 export type { Checklist } from "./mfd-pages.js";
 export type { MapPoint, Airspace, LatLon } from "./map.js";
@@ -72,6 +72,7 @@ export interface PfdState {
     route: (string | MapPoint)[];
     /** Index into `route` of the active waypoint. */ activeLeg: number;
     /** Airports the NRST window lists, nearest first after sorting here. */ airports: Airport[];
+    /** Approaches the PROC window can load, for the airports in `airports`. */ procedures: Procedure[];
     /** Magnetic variation, degrees east positive: bearings to stations are magnetic. */ magVar: number;
     /** Wind, true direction it blows from and knots; null shows NO DATA. */ wind: {
         direction: number;
@@ -124,6 +125,9 @@ export declare class GlassPfd {
     private clock;
     private timers;
     private ui;
+    /** DIRECT TO's identifier, spelled with the FMS knob. */ private dtoEntry;
+    /** PROC: the same flow as the MFD's PROCEDURES page; its airport identifier is spelled in `procEntry`. */ private proc;
+    private procEntry;
     /** The container must be visible: layout is measured once here. */
     constructor(container: HTMLElement, options?: PfdOptions);
     private updateTurnRate;
@@ -143,6 +147,8 @@ export declare class GlassPfd {
     /** The flight plan's PAGE MENU options; those without `patch` are dim. */
     private pageMenu;
     private fms;
+    private dtoPoint;
+    private dtoEnt;
     private timerValue;
     private timerField;
     private timerAction;

@@ -61,6 +61,7 @@ export declare class GlassMfd {
     private raw;
     private map;
     private mapPartial;
+    /** Pan mode's pointer and info bar, over the full map. */ private panLayer;
     private frame;
     private pages;
     /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ private overlay;
@@ -89,6 +90,10 @@ export declare class GlassMfd {
     private loadPage;
     /** Merge new values into the state and redraw. */
     set(patch: Partial<MfdState>): void;
+    private panView;
+    private panInfo;
+    /** Pan mode: the pointer, and the info bar across the top of the map (layout from the v13 trainer, drawn here). */
+    private drawPan;
     private softkeys;
     private topKeys;
     private tune;

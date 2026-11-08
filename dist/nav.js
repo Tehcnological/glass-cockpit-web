@@ -104,6 +104,16 @@ export function asWaypoint(p) {
     const { approach: _a, role: _r, ...w } = p;
     return w;
 }
+/** A waypoint by identifier: navigation points, then flight plan points (approach fixes), then airports. */
+export const findPoint = (s, id) => s.points.find((p) => p.id === id) ?? s.route.find((r) => typeof r === "object" && r.id === id) ?? routePoint(id, [], s.airports);
+/** DIRECT TO's ACTIVATE: the leg to `p` from here, in the flight plan if it is there, else as a plan of its own. */
+export function directToPatch(s, p) {
+    const i = s.route.findIndex((r) => routePoint(r, s.points, s.airports)?.id === p.id);
+    const directFrom = { lat: s.lat, lon: s.lon };
+    if (i >= 0)
+        return { activeLeg: i, directFrom, vtf: false };
+    return { route: [s.points.includes(p) || p.type === "APT" ? p.id : asWaypoint(p)], activeLeg: 0, directFrom, vtf: false };
+}
 /**
  * Vector-to-final after a waypoint is inserted or deleted at `at`, with the final approach fix active at `activeLeg`. Its
  * intercept may start at any approach fix before the FAF or at the aircraft (see `vtfPatch`), so an edit at or before the

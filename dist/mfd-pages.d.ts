@@ -3,6 +3,7 @@ import { type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { Highlighter, type Key } from "./ui.js";
 import { type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
+import type { Pan } from "./pan.js";
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
 export interface Checklist {
     group: string;
@@ -22,6 +23,7 @@ export interface MfdUi {
     /** Airways key state, 0 to 3. */ airways: number;
     /** MAP menu toggles. */ layers: Record<string, boolean>;
     /** Waypoints entered in DIRECT TO and WAYPOINT ENTRY, latest first: their RECENT list. */ recent: string[];
+    /** Pan mode on the navigation map (joystick push), or null. */ pan: Pan | null;
 }
 /** What the MFD gives its pages. */
 export interface Mfd {
@@ -115,32 +117,15 @@ declare class DirectToPage extends MapPage {
 }
 declare class ProceduresPage extends MfdPage {
     navMap: "partial";
-    private airport;
-    private view;
-    private item;
-    private yes;
-    /** The activation NOT APPROVED FOR GPS asks about, and the view NO goes back to. */
-    private pending;
-    private grp;
-    private apr;
-    private trans;
     private entry;
+    private flow;
     constructor(m: Mfd, screen: SVGGElement, after: Element);
-    /** Opens on the PROCEDURES menu. SELECT APPROACH opens on the destination: the last airport in the flight plan, else the nearest. */
     open(): void;
-    private procs;
-    private transitions;
-    private loaded;
-    private enabled;
-    private confirm;
     keys(): Key[];
     toggleCrsr(): void;
     fms(outer: boolean, d: number): boolean;
     ent(): void;
     clr(): void;
-    private menuItem;
-    private activate;
-    private load;
     draw(): void;
 }
 export declare class PageMenuPage extends MfdPage {

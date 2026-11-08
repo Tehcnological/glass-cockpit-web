@@ -47,7 +47,7 @@
     const s = Object.fromEntries([...new FormData(f)].map(([k, v]) => [k, Number(v)]));
     f.querySelectorAll("label").forEach((l) => l.querySelector("output") && (l.querySelector("output").value = l.querySelector("input").value));
     pfd.set({ ...s, alerts: f.alert.checked ? ["DEMO - A sample message."] : [],
-      failed: { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked }, cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 } });
+      failed: { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked }, cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 } });
     mfd.set({
       heading: s.heading, headingBug: s.headingBug, course: s.course, selectedAlt: s.selectedAlt, alt: s.alt, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
       orientation: f.hdgUp.checked ? "HDG UP" : "NORTH UP",
@@ -58,6 +58,6 @@
   // Set once, so the sliders don't undo flight plan changes.
   const plan = { route: ["ABC", "WPONE", "KAAA"], activeLeg: 1 };
   mfd.set({ points, airports, procedures, ...plan });
-  pfd.set(plan);
+  pfd.set({ points, airports, procedures, ...plan });
   update();
 </script>

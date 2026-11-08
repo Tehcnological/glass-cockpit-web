@@ -11,6 +11,8 @@ import SURROUND from "./svg/surround-mfd.js";
 import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay, type DisplayOptions } from "./display.js";
 import { Page, clamp, deg3, mod } from "./page.js";
+import { panInfo, panMove, panStart, type PanView } from "./pan.js";
+import { latLon } from "./nav.js";
 import { drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import type { CdiSource } from "./glass-pfd.js";
@@ -100,6 +102,7 @@ export class GlassMfd {
   private raw: Page;
   private map: SVGGElement;
   private mapPartial: SVGGElement;
+  /** Pan mode's pointer and info bar, over the full map. */ private panLayer: SVGGElement;
   private frame: SVGTextElement;
   private pages: Pages;
   /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ private overlay: MfdPage | null = null;
@@ -108,7 +111,7 @@ export class GlassMfd {
   private hl = new Highlighter();
   private ui: MfdUi = {
     group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, airways: 0,
-    layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false }, recent: [],
+    layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false }, recent: [], pan: null,
   };
 
   /** The container must be visible: layout is measured once here. */
@@ -123,6 +126,7 @@ export class GlassMfd {
     // The map sits above its black background and below the range/orientation legend.
     this.map = mapGroup(screen, this.nav.el("Legend")!, MAP_FULL);
     this.mapPartial = mapGroup(screen, this.nav.el("Legend")!, MAP_PARTIAL);
+    this.panLayer = mapGroup(screen, this.nav.el("Legend")!, MAP_FULL);
     // Pages with no data source (weather, terrain, AUX) show their title and this line, under the surround.
     this.frame = document.createElementNS(NS, "text");
     for (const [k, v] of Object.entries({ x: "587", y: "110", "text-anchor": "middle", fill: "#ffffff", "font-size": "22", "font-family": "'Liberation Sans',Arial,sans-serif" })) {
@@ -223,10 +227,24 @@ export class GlassMfd {
         }
         return this.set({});
       }
+      case "JOYSTICK_PRESS":
+        // v13 trainer: the push starts pan mode on the full navigation map; again ends it and recenters the map.
+        if (this.overlay || this.groupPage.navMap !== "full") return;
+        this.ui.pan = this.ui.pan ? null : panStart(this.state);
+        return this.set({});
+      case "JOYSTICK_HORIZONTAL":
+      case "JOYSTICK_VERTICAL": {
+        const pan = this.ui.pan;
+        if (!pan || this.overlay) return;
+        const h = i.control === "JOYSTICK_HORIZONTAL";
+        this.ui.pan = panMove(pan, h ? i.value : 0, h ? 0 : i.value, this.panView());
+        return this.set({});
+      }
       case "DTO": {
-        // The waypoint selected on the page, else the active one.
+        // The waypoint selected on the page or under the pan pointer, else the active one.
         const act = this.state.route[this.state.activeLeg];
-        const id = page.selected() ?? (typeof act === "string" ? act : act?.id ?? null);
+        const under = this.ui.pan && !this.overlay ? this.panInfo().label : "MAP POINTER";
+        const id = page.selected() ?? (under !== "MAP POINTER" ? under : null) ?? (typeof act === "string" ? act : act?.id ?? null);
         this.openOverlay(this.pages.directTo);
         this.pages.directTo.open(id);
         return this.set({});
@@ -327,6 +345,7 @@ export class GlassMfd {
     const u = this.ui;
     this.closeOverlay();
     this.groupPage.show(false);
+    u.pan = null;
     u.shown = [u.group, u.page];
     u.menu = "top";
     this.groupPage.show(true);
@@ -357,11 +376,41 @@ export class GlassMfd {
       this.nav.tf("Legend", { tx: mode === "partial" ? MAP_PARTIAL.w - MAP_FULL.w : 0 });
       this.nav.text("RangeDisplay", rangeLabel(s.range));
       this.nav.text("OrientationDisplay", s.orientation);
-      drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center: base.center() ?? undefined }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
+      const center = (mode === "full" ? this.ui.pan?.center : null) ?? base.center() ?? undefined;
+      drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
     }
+    this.drawPan(mode === "full");
     this.frame.textContent = base.frame();
     if (base !== page) base.draw();
     page.draw();
+  }
+
+  private panView(): PanView {
+    const s = this.state;
+    return { w: MAP_FULL.w, h: MAP_FULL.h, scale: MAP_FULL.px / s.range, up: s.orientation === "HDG UP" ? s.heading : 0, lat: s.lat };
+  }
+
+  private panInfo() {
+    const s = this.state;
+    const named = [...s.points, ...s.route.filter((r): r is MapPoint => typeof r !== "string")];
+    return panInfo(this.ui.pan!, this.panView(), s, named, s.magVar);
+  }
+
+  /** Pan mode: the pointer, and the info bar across the top of the map (layout from the v13 trainer, drawn here). */
+  private drawPan(shown: boolean) {
+    const pan = shown ? this.ui.pan : null;
+    this.panLayer.style.display = pan ? "inline" : "none";
+    if (!pan) return;
+    const m = MAP_FULL;
+    const info = this.panInfo();
+    const [x, y] = [m.cx + pan.x, m.cy + pan.y];
+    const t = (tx: number, ty: number, s: string, anchor = "start") =>
+      `<text x="${tx}" y="${ty}" text-anchor="${anchor}" fill="#ffffff" font-size="18" font-family="'Liberation Sans',Arial,sans-serif">${s}</text>`;
+    this.panLayer.innerHTML =
+      `<path d="M${x} ${y}l0 22l6 -6l6 11l4 -2l-6 -11l9 0z" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>` +
+      `<rect x="${m.x}" y="${m.y}" width="${m.w}" height="48" fill="#000000" stroke="#808080" stroke-width="2"/>` +
+      t(m.x + 10, m.y + 20, info.label) + t(m.x + 10, m.y + 42, `${info.dis}  ${info.brg}`) +
+      t(m.x + m.w - 10, m.y + 20, latLon(info.lat, "N", "S"), "end") + t(m.x + m.w - 10, m.y + 42, latLon(info.lon, "E", "W"), "end");
   }
 
   // The softkeys: the page's own, or a menu shared by the pages (EIS engineMenu, NavigationMap mapMenu).

@@ -33,7 +33,7 @@ export interface Knobs {
 /**
  * A hotspot. `arrow`: it turns a knob or moves the joystick, repeating while held, drawn as an arrow here (`dir`, the
  * way it points in degrees, 0 right and 90 down; `size`, 1 for a large knob) or printed on the bezel. `also`: a
- * second input a click reports (the joystick's diagonals).
+ * second input a click reports (the joystick's diagonals). `shiftClick`: what Shift+click does, and pressing and holding.
  */
 export type Spot = {
   box: [number, number, number, number]; wheel?: Control; shiftWheel?: Control; click?: Control; shiftClick?: Control; value?: number;
@@ -108,6 +108,8 @@ const DETENT = 100;
 // Holding an arrow turns again after REPEAT_DELAY ms, then every REPEAT_EVERY ms.
 const REPEAT_DELAY = 350;
 const REPEAT_EVERY = 90;
+// Holding a key this long is a long press (COM transfer: 121.5; CLR on the MFD: navigation map), as on the real unit.
+const HOLD = 2000;
 
 /** Detents one wheel notch turns: HDG and CRS turn 5 when the wheel spins fast (`gap`, ms since the last notch), as a quick twist does. */
 export function wheelStep(control: Control, gap: number): number {
@@ -164,10 +166,19 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void):
 
   // Arrows turn on press and keep turning while held; other spots act on click.
   let timer = 0;
+  let held = false;
   const stop = () => clearTimeout(timer);
   layer.addEventListener("pointerdown", (e) => {
     const s = spot(e);
-    if (!s?.arrow || !s.click || e.button !== 0) return;
+    if (e.button !== 0) return;
+    if (s?.shiftClick && !s.arrow) {
+      stop();
+      held = false;
+      const control = s.shiftClick;
+      timer = window.setTimeout(() => ((held = true), fire(s, control)), HOLD);
+      return;
+    }
+    if (!s?.arrow || !s.click) return;
     const control = s.click;
     stop();
     fire(s, control);
@@ -180,6 +191,7 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void):
   layer.addEventListener("click", (e) => {
     const s = spot(e);
     if (!s || s.arrow) return;
+    if (held) return void (held = false); // the long press already acted
     const control = e.shiftKey ? s.shiftClick : s.click;
     if (control) fire(s, control);
   });

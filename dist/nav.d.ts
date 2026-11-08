@@ -123,6 +123,31 @@ export declare function approachPatch(route0: Route, pts: MapPoint[], mode: "loa
 };
 /** A fix entered by hand (WAYPOINT ENTRY, DIRECT TO) is an ordinary waypoint, even when picked from a loaded approach. */
 export declare function asWaypoint(p: MapPoint): MapPoint;
+type Plan = {
+    points: MapPoint[];
+    route: (string | MapPoint)[];
+    airports: Airport[];
+};
+/** A waypoint by identifier: navigation points, then flight plan points (approach fixes), then airports. */
+export declare const findPoint: (s: Plan, id: string) => MapPoint | undefined;
+/** DIRECT TO's ACTIVATE: the leg to `p` from here, in the flight plan if it is there, else as a plan of its own. */
+export declare function directToPatch(s: Plan & LatLon, p: MapPoint): {
+    activeLeg: number;
+    directFrom: {
+        lat: number;
+        lon: number;
+    };
+    vtf: boolean;
+    route?: undefined;
+} | {
+    route: (string | MapPoint)[];
+    activeLeg: number;
+    directFrom: {
+        lat: number;
+        lon: number;
+    };
+    vtf: boolean;
+};
 /**
  * Vector-to-final after a waypoint is inserted or deleted at `at`, with the final approach fix active at `activeLeg`. Its
  * intercept may start at any approach fix before the FAF or at the aircraft (see `vtfPatch`), so an edit at or before the

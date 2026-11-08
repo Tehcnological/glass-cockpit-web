@@ -29,23 +29,25 @@ only a reference. No trainer art, screenshots, data or text is copied.
 | HDG / push | Heading bug; push: sync to heading. Both units drive the same bug | Done (shared through `onChange`; the host must pass it on) |
 | ALT dual knob | Selected altitude, 1000 and 100 ft | Done |
 | ALT push | Nothing on the 172S | Done (no-op) |
-| COM vol / push | Volume; push: squelch off | Partial: push does nothing |
-| COM ⇄ / hold | Swap; hold 2 s: tune 121.5 | Done |
+| COM vol / push | Volume; push: squelch off (audio only; the trainer shows nothing) | Done (no-op) |
+| COM ⇄ / hold | Swap; hold 2 s: 121.5 in the active COM | Done (hold 2 s or Shift+click) |
 | COM dual knob / push | Tune standby; push: COM1/COM2 box | Done |
 | CRS/BARO / push | Course, baro; push: course to the station | Done |
 | RANGE | Map range, PFD inset or MFD map | Done |
-| Joystick push | Pan mode on the map (cursor, range ring, info for the point) | Missing |
-| Joystick 8 ways | Moves the pan cursor | Missing: the arrows report input, nothing acts on it |
-| DIRECT TO | Direct-to window | MFD done; PFD missing |
+| Joystick push | Trainer: on the MFD map, a pointer at the aircraft and an info bar (point id or MAP POINTER, distance, bearing, lat/lon); again ends it and recenters | Done (MFD navigation map; NXi range ring and measure not ported) |
+| Joystick 8 ways | Moves the pointer; at the map's edge the map scrolls | Done |
+| DIRECT TO | Direct-to window; again closes on the PFD | Done |
 | FPL | PFD: flight plan window toggles. MFD: FPL page, again goes back | Done |
-| CLR / hold | Back out; hold on the MFD: navigation map | Done |
+| CLR / hold | Back out; hold on the MFD: navigation map | Done (hold 2 s or Shift+click); PFD hold: to check in the manual |
 | MENU | PAGE MENU for the page; PFD with no window: PFD SETUP MENU | Partial: nav map and FPL only (see Page menus) |
-| PROC | Procedures window; again closes | MFD done; PFD missing |
+| PROC | Procedures window; again closes | Done |
 | ENT | Accept | Done where a page uses it |
 | FMS dual knob | Outer moves the cursor, inner changes the field or opens WPT entry; with no cursor the MFD outer/inner select page group/page | Done on the ported pages |
 | FMS push (CRSR) | Cursor on and off | Done on the ported pages |
 | Keyboard typing | Not on the real unit (NXi takes a keypad: letters, digits, BKSP, SPC). Wanted here for waypoint entry | Missing (later) |
-| Audio panel | GMA 1347 between the units: COM/NAV audio keys, MKR, intercom, and the red DISPLAY BACKUP (reversionary) button | Missing (later; reversionary is the useful part) |
+| Audio panel | GMA 1347 between the units: COM/NAV audio keys, MKR, intercom, and the red DISPLAY BACKUP (reversionary) button. The trainer has none; its Options menu toggles reversionary mode | Missing (later; reversionary is the useful part) |
+| Autopilot keys (MFD bezel) | Trainer: GFC 700 keys in the MFD's left column (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN). FG1000's bezel has none | Missing |
+| Reversionary mode | Trainer: the PFD with the engine strip down the left; softkeys ENGINE, INSET, PFD, OBS, CDI, DME, XPDR, IDENT, TMR/REF, NRST, ALERTS | Missing (later) |
 
 ## PFD softkeys (trainer layout, followed)
 
@@ -62,8 +64,8 @@ only a reference. No trainer art, screenshots, data or text is copied.
 | Window | Status |
 | --- | --- |
 | Flight plan (FPL) | Partial: shown and its PAGE MENU works (Invert, Delete, Remove Approach); no cursor editing on the PFD |
-| PROC (PROCEDURES, SELECT APPROACH and so on) | Missing |
-| DIRECT TO | Missing |
+| PROC (PROCEDURES, SELECT APPROACH and so on) | Done (the MFD's flow, in the NRST window's place) |
+| DIRECT TO | Done (no VNV fields) |
 | NRST | Done |
 | TMR/REF (REFERENCES) | Done |
 | ALERTS | Done |
@@ -75,7 +77,7 @@ only a reference. No trainer art, screenshots, data or text is copied.
 
 | Group | Page | Status |
 | --- | --- | --- |
-| MAP | Navigation map | Partial: no pan mode, no map setup |
+| MAP | Navigation map | Partial: no map setup |
 | MAP | Traffic map | Done (shows what the host passes) |
 | MAP | Stormscope, weather data link, TAWS | No data |
 | WPT | Airport information | Partial: info shown; its sub-pages (runways, frequencies, departure, arrival, approach, weather) missing |
@@ -115,7 +117,7 @@ only a reference. No trainer art, screenshots, data or text is copied.
 | Flow | Status |
 | --- | --- |
 | Waypoint entry (FMS inner knob spells the identifier, with the matching name) | Done on the MFD |
-| Direct-to, including from a page's cursor | MFD done |
+| Direct-to, including from a page's cursor or the pan pointer | Done |
 | PROC: activate vector-to-final, approach, missed; NOT APPROVED FOR GPS | Done on the MFD |
 | PROC: select arrival, select departure | Missing |
 | Hold at waypoint / present position | Missing |
@@ -127,12 +129,13 @@ only a reference. No trainer art, screenshots, data or text is copied.
 ## Not checked on the trainer yet
 
 Each needs a pass on the trainer before it is built: the PAGE MENU of every page other than the three above, the WPT
-airport sub-pages, the AUX pages, pan mode, the SUSP key, COM squelch, PFD DIRECT TO and PROC, hold entry, and the
-reversionary mode the audio panel's DISPLAY BACKUP button selects.
+airport sub-pages, the AUX pages, the SUSP key, hold entry, and CLR held on the PFD. The Cessna 172S G1000 Pilot's Guide
+is the next source for these.
 
 ## Phases
 
-1. **Controls that do nothing now:** joystick pan mode, COM squelch, PFD DIRECT TO and PROC, CLR hold on the PFD.
+1. **Controls that did nothing:** joystick pan mode, COM squelch, PFD DIRECT TO and PROC, long presses. Done, except CLR
+   held on the PFD.
 2. **Page menus:** read each page's options off the trainer, then wire the ones this package can carry out.
 3. **Missing pages and softkeys:** WPT airport sub-pages, nearest airport RNWY/FREQ/APR/LD APR, MAP PROFILE and AIRWAYS,
    AUX system setup.

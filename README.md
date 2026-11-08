@@ -60,10 +60,12 @@ The container must be in the page and visible when a display is created, since r
 
 Two callbacks let a host follow the controls:
 
-- `onChange(patch)` reports state the controls changed, so a host can keep a PFD and MFD in step. On the MFD it also reports `route`, `activeLeg` and `directFrom` when FPL, DIRECT TO or PROC change them.
-- `onInput({ control, value })` reports every input, including the FMS knob, menu keys and joystick, which the display does not act on.
+- `onChange(patch)` reports state the controls changed, so a host can keep a PFD and MFD in step. Both units also report `route`, `activeLeg`, `directFrom` and `vtf` when the flight plan's PAGE MENU, DIRECT TO or PROC change them.
+- `onInput({ control, value })` reports every input, including ones the display does not act on.
 
 ### PFD
+
+DIRECT TO and PROC open windows where NRST opens, and work as the MFD's do (see below): DIRECT TO needs `points` and `airports`, PROC `procedures`.
 
 FG1000 draws the turn rate scale above the compass rose but never moves anything on it; `turnRate` (degrees per second) draws a magenta trend vector there, the heading 6 seconds ahead, as the real unit does.
 
@@ -88,6 +90,7 @@ How the pages work:
 - **PROC:** opens the PROCEDURES menu (see below). SELECT APPROACH opens on the destination's approaches. Pick one, a transition, then LOAD? or ACTIVATE?. Its fixes join the flight plan after the en route waypoints.
 - **Softkeys:** ENGINE (LEAN, SYSTEM), MAP (traffic, profile and airway switches; the data keys are dim), DCLTR, CHKLIST, and each page's own keys.
 - **CLR held:** goes to the navigation map.
+- **Joystick push:** on the navigation map, pan mode: a pointer and an info bar (the point under the pointer, or MAP POINTER; distance and bearing from the aircraft; latitude and longitude). The joystick moves the pointer and scrolls the map at its edge. DIRECT TO takes the point under the pointer. Push again, or change page, to end it.
 
 ### Bezel controls
 
@@ -98,9 +101,9 @@ With `bezel: true`, the mouse works the controls as FlightGear's FG1000 window d
 | Wheel | Turns a knob |
 | Shift+wheel | Turns the outer ring of a dual knob |
 | Click | Pushes a knob or button |
-| Shift+click | Long press |
+| Shift+click, or holding 2 s | Long press: COM ⇄ tunes 121.5 in the active COM; CLR on the MFD goes to the navigation map |
 | Click an arrow beside a knob | Turns the knob one detent, left counterclockwise. On a dual knob the upper pair turns the outer ring and the lower pair the inner knob. Holding an arrow keeps turning. RANGE uses the - and + printed beside it. |
-| Click the joystick's arrows | Pans the map: up, down, left, right and the four diagonals. Holding keeps panning. |
+| Click the joystick's arrows | Moves the pan pointer: up, down, left, right and the four diagonals. Holding keeps moving it. |
 
 A fast spin of the wheel turns HDG and CRS 5° a notch; a slow one turns 1°. Every knob pushes, ALT included (its push does nothing).
 
@@ -138,6 +141,9 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
 - **VSI** scale reads 1 and 2 (thousand fpm) and stops at ±2000 fpm (FG1000: ±4000). The readout shows from 100 fpm, rounded to 50 fpm as the NXi G1000 does; the trainer could not be climbed to check.
 - **MENU** on the PFD opens the PFD SETUP MENU (brightness, shown on AUTO; not ported), or with the flight plan window open its PAGE MENU. On the MFD it opens the page's PAGE MENU: on the navigation map, Declutter works; on the flight plan page, Invert Flight Plan, Delete Flight Plan and Remove Approach work. Other options are listed grey, and the other pages have no menu yet. The FMS knob moves the cursor over the options that work, ENT carries one out, and CLR, MENU again or pushing the FMS knob closes it.
 - **FPL and PROC again:** on the MFD, FPL again goes back to the page shown before it, and PROC again closes the PROCEDURES window.
+- **Pan mode** (FG1000 has none): the joystick push on the MFD navigation map, with the trainer's info bar. The pointer and bar are drawn here, not the trainer's.
+- **PFD DIRECT TO and PROC** (FG1000 has neither): windows in the NRST window's place, laid out as the trainer's, sharing the MFD's flow. DIRECT TO and PROC again close them.
+- **Long press:** holding COM ⇄ or CLR for 2 s acts as on the real unit (FG1000: a separate key binding); COM ⇄ tunes 121.5, where FG1000 tunes 121.00.
 - **Bezel shading:** FG1000's fascia shades its left column darker than its right (an extra overlay and a fainter edge strip); here both match the right.
 - **Colors:** the cursor and selectable text are full cyan (FG1000: a paler #80ffff), and the page group window shows the selected page in cyan and the rest in white (FG1000: lilac and grey).
 
@@ -260,7 +266,8 @@ EOF
 - Synthetic vision, the arc HSI, DME HOLD, selected airspeed, autopilot annunciations and the GPS course-to-intercept diamond.
 - Map terrain and airways.
 - The audio panel (and its reversionary mode button), and typing waypoint names on the keyboard.
-- PAGE MENU on pages other than the navigation map and flight plan, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice); the PFD's PROC window.
+- PAGE MENU on pages other than the navigation map and flight plan, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice).
+- The autopilot keys the trainer's MFD bezel has (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN), reversionary mode, and the map's range ring and measure bearing/distance in pan mode.
 
 FG1000 renders in Liberation Sans Narrow, which is not bundled. Without that font installed, some narrow labels fall back to a wider font.
 

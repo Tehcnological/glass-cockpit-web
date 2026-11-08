@@ -69,6 +69,8 @@ const DETENT = 100;
 // Holding an arrow turns again after REPEAT_DELAY ms, then every REPEAT_EVERY ms.
 const REPEAT_DELAY = 350;
 const REPEAT_EVERY = 90;
+// Holding a key this long is a long press (COM transfer: 121.5; CLR on the MFD: navigation map), as on the real unit.
+const HOLD = 2000;
 /** Detents one wheel notch turns: HDG and CRS turn 5 when the wheel spins fast (`gap`, ms since the last notch), as a quick twist does. */
 export function wheelStep(control, gap) {
     return (control === "HEADING" || control === "CRS") && gap < 100 ? 5 : 1;
@@ -126,10 +128,20 @@ export function bezelInput(svg, onInput) {
     }, { passive: false });
     // Arrows turn on press and keep turning while held; other spots act on click.
     let timer = 0;
+    let held = false;
     const stop = () => clearTimeout(timer);
     layer.addEventListener("pointerdown", (e) => {
         const s = spot(e);
-        if (!s?.arrow || !s.click || e.button !== 0)
+        if (e.button !== 0)
+            return;
+        if (s?.shiftClick && !s.arrow) {
+            stop();
+            held = false;
+            const control = s.shiftClick;
+            timer = window.setTimeout(() => ((held = true), fire(s, control)), HOLD);
+            return;
+        }
+        if (!s?.arrow || !s.click)
             return;
         const control = s.click;
         stop();
@@ -144,6 +156,8 @@ export function bezelInput(svg, onInput) {
         const s = spot(e);
         if (!s || s.arrow)
             return;
+        if (held)
+            return void (held = false); // the long press already acted
         const control = e.shiftKey ? s.shiftClick : s.click;
         if (control)
             fire(s, control);
