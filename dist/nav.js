@@ -105,6 +105,13 @@ export function asWaypoint(p) {
     const { approach: _a, role: _r, ...w } = p;
     return w;
 }
+/** How waypoint `p` goes into the flight plan: by id when the host's data has it, an approach fix as a plain
+ * waypoint, and a Parallel Track point as the entry it was offset from (an edit cancels Parallel Track). */
+export function planEntry(s, p) {
+    if (p.parallel !== undefined)
+        return p.parallel;
+    return s.points.includes(p) || p.type === "APT" ? p.id : asWaypoint(p);
+}
 /** A waypoint by identifier: navigation points, then flight plan points (approach fixes), then airports. */
 export const findPoint = (s, id) => s.points.find((p) => p.id === id) ?? s.route.find((r) => typeof r === "object" && r.id === id) ?? routePoint(id, [], s.airports);
 /** DIRECT TO's ACTIVATE: the leg to `p` from here, in the flight plan if it is there, else as a plan of its own. */
@@ -117,7 +124,7 @@ export function directToPatch(s, p) {
     const directFrom = { lat: s.lat, lon: s.lon };
     if (i >= 0)
         return { ...(s.route.some(isParallel) && { route }), activeLeg: i, directFrom, vtf: false };
-    return { route: [s.points.includes(p) || p.type === "APT" ? p.id : asWaypoint(p)], activeLeg: 0, directFrom, vtf: false };
+    return { route: [planEntry(s, p)], activeLeg: 0, directFrom, vtf: false };
 }
 /**
  * The Direct-to window's Cancel Direct-To NAV (Pilot's Guide): the plan resumes on the leg closest to the aircraft; a
@@ -238,6 +245,12 @@ export function parallelTrack(s, side, nm) {
     if (s.directFrom || nm < 1 || nm > 99 || !Number.isInteger(nm) || s.activeLeg >= end || end - start < 2)
         return null;
     const pts = route.map((r) => routePoint(r, s.points, s.airports));
+    // A zero-length leg has no direction to offset from: invalid geometry.
+    for (let i = start + 1; i < end; i++) {
+        const [a, b] = [pts[i - 1], pts[i]];
+        if (!a || !b || bearingDistance(a.lat, a.lon, b.lat, b.lon).dist < 1e-6)
+            return null;
+    }
     const out = [...route];
     for (let i = start; i < end; i++) {
         const p = pts[i];

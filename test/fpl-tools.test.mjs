@@ -124,3 +124,15 @@ test("an offset before the active waypoint lies on the inbound leg even when the
   assert.ok(near(r.point.lat, 0) && near(r.point.lon, 2 - 10 / 60, 1e-4));
   assert.equal(atkOffset({ ...off, lat: 0.1, lon: 1.95 }, 2, -10), null, "under 7 nm to go");
 });
+
+test("parallel track is unavailable with a zero-length leg", () => {
+  assert.equal(parallelTrack({ ...s, route: ["A", "A", "B"], activeLeg: 1 }, "R", 5), null);
+});
+
+test("a waypoint entered from a parallel plan goes in as the waypoint it came from", async () => {
+  const { planEntry } = await import("../dist/nav.js");
+  const route = parallelTrack({ ...s, activeLeg: 2 }, "R", 6);
+  assert.equal(planEntry(s, route[1]), "B");
+  assert.equal(planEntry(s, B), "B");
+  assert.deepEqual(planEntry(s, { ...pt("F", 1, 1), approach: "X", role: "FAF" }), pt("F", 1, 1));
+});

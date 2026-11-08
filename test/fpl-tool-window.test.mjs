@@ -108,3 +108,11 @@ test("CLR while spelling cancels the entry; CLR again closes", () => {
   assert.equal(t.rows(s)[1].value, "_____");
   assert.equal(t.clr(), true);
 });
+
+test("ATK offset on the active leg: ahead or behind by along-track position, not slant distance", () => {
+  const t = tool();
+  const off = { ...s, lat: 0.2, lon: 1.5 }; // 12 nm north of B-C, abeam 1.5
+  t.open("Create ATK Offset Waypoint", off, 1);
+  for (let i = 0; i < 28; i++) t.fms(off, false, 1); // +29: lon 1.483, behind
+  assert.equal(t.ent(off).patch.activeLeg, 3);
+});

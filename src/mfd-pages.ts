@@ -3,7 +3,7 @@
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
 import { ORIENTATIONS, TRACK_VECTOR, mapGroup, mapUp, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
-import { asWaypoint, bearingDistance, cancelDirectTo, cancelParallel, directToPatch, findPoint, isParallel, latLon, nearest, planName, routePoint, vtfEdit, type Airport, type Procedure } from "./nav.js";
+import { bearingDistance, cancelDirectTo, cancelParallel, directToPatch, findPoint, isParallel, latLon, nearest, planEntry, planName, routePoint, vtfEdit, type Airport, type Procedure } from "./nav.js";
 import { FPL_TOOLS, FplTool, toolEnabled, type FplToolName } from "./fpl-tools.js";
 import { BLANK, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key, type Key } from "./ui.js";
 import { firstOption, fplMenu, stepMenu, type MenuOption } from "./page-menu.js";
@@ -771,7 +771,7 @@ class FlightPlanPage extends MapPage {
   private insert(at: number, p: MapPoint) {
     const s = this.s;
     const route = cancelParallel(s.route); // editing the plan cancels Parallel Track (Pilot's Guide)
-    route.splice(at, 0, s.points.includes(p) || p.type === "APT" ? p.id : asWaypoint(p));
+    route.splice(at, 0, planEntry(s, p));
     const activeLeg = at <= s.activeLeg && s.route.length ? s.activeLeg + 1 : s.activeLeg;
     this.m.change({ route, activeLeg, ...vtfEdit(s.vtf, at, s.activeLeg) });
     this.rows.sel = at;

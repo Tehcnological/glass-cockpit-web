@@ -110,8 +110,14 @@ export class FplTool {
             let activeLeg = r.at < s.activeLeg ? s.activeLeg + 1 : s.activeLeg;
             const to = routePoint(route[r.at + 1] ?? "", s.points, s.airports);
             if (r.at === s.activeLeg && to) {
-                const ahead = bearingDistance(r.point.lat, r.point.lon, to.lat, to.lon).dist < bearingDistance(s.lat, s.lon, to.lat, to.lon).dist;
-                if (!ahead)
+                // Along-track distance back from the active waypoint, on the leg into it (off course, slant distance misleads).
+                const from = s.directFrom ?? routePoint(route[r.at - 1] ?? "", s.points, s.airports) ?? s;
+                const leg = bearingDistance(to.lat, to.lon, from.lat, from.lon).brg;
+                const back = (p) => {
+                    const { brg, dist } = bearingDistance(to.lat, to.lon, p.lat, p.lon);
+                    return dist * Math.cos(((brg - leg) * Math.PI) / 180);
+                };
+                if (back(r.point) >= back(s))
                     activeLeg++;
             }
             return { patch: { route, activeLeg, ...vtfEdit(s.vtf, r.at, s.activeLeg) }, close: true };

@@ -128,6 +128,9 @@ type Plan = {
     route: (string | MapPoint)[];
     airports: Airport[];
 };
+/** How waypoint `p` goes into the flight plan: by id when the host's data has it, an approach fix as a plain
+ * waypoint, and a Parallel Track point as the entry it was offset from (an edit cancels Parallel Track). */
+export declare function planEntry(s: Plan, p: MapPoint): string | MapPoint;
 /** A waypoint by identifier: navigation points, then flight plan points (approach fixes), then airports. */
 export declare const findPoint: (s: Plan, id: string) => MapPoint | undefined;
 /** DIRECT TO's ACTIVATE: the leg to `p` from here, in the flight plan if it is there, else as a plan of its own. */
