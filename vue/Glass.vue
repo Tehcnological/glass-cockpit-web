@@ -43,8 +43,8 @@ onMounted(async () => {
   const onChange = (patch: object) => {
     const back = pick(patch, props.state);
     if (Object.keys(back).length) emit("change", back);
-    // The flight plan's keys always go back, so a host that never set `vtf` still shares vector-to-final.
-    const map = pick(patch, { route: 0, activeLeg: 0, directFrom: 0, vtf: 0, ...props.mfd });
+    // The flight plan's keys and user waypoints (`points`) always go back, so a host that never set `vtf` still shares it.
+    const map = pick(patch, { route: 0, activeLeg: 0, directFrom: 0, vtf: 0, points: 0, ...props.mfd });
     if (Object.keys(map).length) emit("mfd", map);
   };
   if (props.unit === "mfd") mfd = new lib.GlassMfd(box.value!, { bezel: props.bezel, onChange });

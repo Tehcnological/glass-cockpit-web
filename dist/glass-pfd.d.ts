@@ -128,6 +128,7 @@ export declare class GlassPfd {
     /** DIRECT TO's identifier, spelled with the FMS knob. */ private dtoEntry;
     /** PROC: the same flow as the MFD's PROCEDURES page; its airport identifier is spelled in `procEntry`. */ private proc;
     private procEntry;
+    /** The window the flight plan menu's Closest Point of FPL and Parallel Track open. */ private tool;
     /** The container must be visible: layout is measured once here. */
     constructor(container: HTMLElement, options?: PfdOptions);
     private updateTurnRate;
@@ -144,7 +145,7 @@ export declare class GlassPfd {
     private later;
     private defaults;
     private nearest;
-    /** The PAGE MENU options, the flight plan's or the DIRECT TO window's; those without `patch` are dim. */
+    /** The PAGE MENU options, the flight plan's or the DIRECT TO window's; those without `patch` or `tool` are dim. */
     private pageMenu;
     private fms;
     private dtoPoint;

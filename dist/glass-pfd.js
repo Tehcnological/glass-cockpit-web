@@ -18,6 +18,7 @@ import { alertsKey, seenAlerts } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
 import { BLANK as blank, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key as k, screenBox } from "./ui.js";
 import { firstOption, fplMenu, stepMenu } from "./page-menu.js";
+import { FPL_TOOLS, FplTool, toolEnabled } from "./fpl-tools.js";
 import { vsiPointer, vsiText } from "./vsi.js";
 export { GlassMfd } from "./glass-mfd.js";
 export { gpsApproved, vtfLeg } from "./nav.js";
@@ -29,6 +30,9 @@ const DEFAULTS = {
     xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
     vspeedsOn: { Vglide: false, Vr: false, Vx: false, Vy: false }, minimums: null, failed: {}, // v13 trainer: references start off
 };
+/** SETUP: the PFD SETUP MENU; MENU: the flight plan's PAGE MENU. */
+/** Whether a PAGE MENU option can be chosen: it makes a change or opens a window. */
+const on = (o) => !!(o.patch || o.tool);
 const BRG_SOURCES = ["OFF", "NAV1", "NAV2", "GPS", "ADF"];
 const VSPEEDS = ["Vglide", "Vr", "Vx", "Vy"];
 const TMR_FIELDS = ["time", "dir", "action", "Vglide", "Vr", "Vx", "Vy", "minimums", "minalt"];
@@ -85,6 +89,7 @@ export class GlassPfd {
     /** DIRECT TO's identifier, spelled with the FMS knob. */ dtoEntry;
     /** PROC: the same flow as the MFD's PROCEDURES page; its airport identifier is spelled in `procEntry`. */ proc;
     procEntry;
+    /** The window the flight plan menu's Closest Point of FPL and Parallel Track open. */ tool;
     /** The container must be visible: layout is measured once here. */
     constructor(container, options = {}) {
         this.options = options;
@@ -93,6 +98,7 @@ export class GlassPfd {
         this.p = new Page(screen, "PFDInstruments");
         this.dtoEntry = new IdEntry(this.p, 5);
         this.procEntry = new IdEntry(this.p, 4);
+        this.tool = new FplTool(new IdEntry(this.p, 5));
         this.proc = new ProcFlow({ s: () => this.state, change: (patch) => this.change(patch), close: () => (this.ui.window = null) }, this.procEntry);
         this.surround = new Surround(screen);
         this.nrst = new Page(screen, "NearestAirportsPFD");
@@ -216,18 +222,31 @@ export class GlassPfd {
                     u.window = u.window === "MENU" && u.menuOf === "DTO" ? "DTO" : null;
                 else if (u.window === "DTO" || u.fpl) {
                     u.menuOf = u.window === "DTO" ? "DTO" : "FPL";
-                    [u.window, u.cursor] = ["MENU", firstOption(this.pageMenu().map((o) => !!o.patch))];
+                    [u.window, u.cursor] = ["MENU", firstOption(this.pageMenu().map(on))];
                 }
                 else
                     u.window = "SETUP";
                 return this.set({});
             case "FMS_CRSR":
-                if (u.window === "SETUP" || u.window === "MENU")
+                if (u.window === "SETUP" || u.window === "MENU" || u.window === "TOOL")
                     u.window = null;
                 return this.set({});
             case "ENT":
+                if (u.window === "TOOL") {
+                    const r = this.tool.ent(this.state);
+                    if (r.close)
+                        u.window = null;
+                    if (r.patch)
+                        this.change(r.patch);
+                    return this.set({});
+                }
                 if (u.window === "MENU") {
                     const o = this.pageMenu()[u.cursor];
+                    if (o?.tool) {
+                        this.tool.open(o.tool, this.state);
+                        u.window = "TOOL";
+                        return this.set({});
+                    }
                     if (o?.patch) {
                         u.window = null;
                         // The whole patch, so a host sharing it with the MFD also clears its direct-to and vector-to-final.
@@ -277,7 +296,7 @@ export class GlassPfd {
             case "FPL":
                 // PFDInstrumentsController.handleFPL: shows or hides the flight plan window.
                 u.fpl = !u.fpl;
-                if (!u.fpl && u.window === "MENU" && u.menuOf === "FPL")
+                if (!u.fpl && ((u.window === "MENU" && u.menuOf === "FPL") || u.window === "TOOL"))
                     u.window = null;
                 return this.set({});
         }
@@ -403,16 +422,22 @@ export class GlassPfd {
         return nearest(s.airports, s.lat, s.lon, s.magVar).map((n) => ({ ...n, a: n.item }));
     }
     // FMS knob in a window: the outer ring moves the cursor, the inner changes the field (NRST: both scroll the list).
-    /** The PAGE MENU options, the flight plan's or the DIRECT TO window's; those without `patch` are dim. */
+    /** The PAGE MENU options, the flight plan's or the DIRECT TO window's; those without `patch` or `tool` are dim. */
+    // Create ATK Offset Waypoint needs the waypoint under a cursor, which this flight plan window does not have yet.
     pageMenu() {
         if (this.ui.menuOf === "DTO")
             return [{ label: "Cancel Direct-To NAV", patch: cancelDirectTo(this.state) }];
-        return fplMenu(this.state.route, this.state.activeLeg);
+        return fplMenu(this.state.route, this.state.activeLeg).map((o) => {
+            const t = o.label;
+            return FPL_TOOLS.includes(t) ? { label: o.label, tool: toolEnabled(t, this.state, null) ? t : undefined } : o;
+        });
     }
     fms(outer, d) {
         const u = this.ui;
         if (u.window === "MENU")
-            u.cursor = stepMenu(this.pageMenu().map((o) => !!o.patch), u.cursor, d);
+            u.cursor = stepMenu(this.pageMenu().map(on), u.cursor, d);
+        if (u.window === "TOOL")
+            this.tool.fms(this.state, outer, d);
         if (u.window === "NRST" && !u.nrstInfo)
             u.cursor = clamp(u.cursor + d, 0, Math.max(0, this.nearest().length - 1));
         // shortcut: no HOLD mode; add it when a scenario needs DME hold.
@@ -800,7 +825,13 @@ export class GlassPfd {
             const shown = Math.max(1, Math.floor((h - 8) / 22) - 2);
             const top = firstRow(u.cursor, opts.length, shown);
             rows.push({ label: "PAGE MENU", cells: [], title: true }, { label: "OPTIONS", cells: [] });
-            opts.slice(top, top + shown).forEach((o, i) => rows.push({ label: o.label, cells: [], color: o.patch ? CYAN : "#808080", cur: top + i === u.cursor }));
+            opts.slice(top, top + shown).forEach((o, i) => rows.push({ label: o.label, cells: [], color: on(o) ? CYAN : "#808080", cur: top + i === u.cursor }));
+        }
+        else if (u.window === "TOOL") {
+            for (const r of this.tool.rows(s)) {
+                const cells = r.value === undefined ? [] : [{ text: r.value, right: end, cur: !!r.cur }];
+                rows.push({ label: r.label, cells, title: r.title, color: r.dim ? "#808080" : undefined, cur: !!r.cur && r.value === undefined });
+            }
         }
         else {
             for (const a of s.alerts)

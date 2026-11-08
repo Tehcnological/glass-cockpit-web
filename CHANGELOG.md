@@ -4,6 +4,7 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 
 ## Unreleased
 
+- PFD and MFD: the flight plan PAGE MENU's Closest Point Of FPL and Parallel Track, and on the MFD Create ATK Offset Waypoint, open their windows (Pilot's Guide). `MapPoint` gains `parallel`; `closestPointOfFpl`, `atkOffset`, `parallelTrack` and `cancelParallel` in `nav.ts`, the windows' logic in `fpl-tools.ts`. Direct-to, loading an approach and editing the plan cancel Parallel Track. The demo and the Vue component share `points` between the units, so a user waypoint reaches both.
 - MFD: MAP SETUP from the navigation map's PAGE MENU: ORIENTATION and TRACK VECTOR (Pilot's Guide). `orientation` gains TRK UP and DTK UP. The demo's heading-up checkbox is gone; MAP SETUP sets it.
 - MFD: the navigation map's Measure Bearing/Distance (Pilot's Guide), built on pan mode.
 - Demo: a round red DISPLAY BACKUP button between the units (`display-backup.ts`); the displays have no reversionary mode yet.

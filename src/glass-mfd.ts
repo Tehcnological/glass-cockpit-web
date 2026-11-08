@@ -374,7 +374,7 @@ export class GlassMfd {
     this.updateEIS(s.engine);
     // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO and
     // WAYPOINT ENTRY are windows over the page, which stays drawn.
-    const base = page === this.pages.directTo || page === this.pages.waypointEntry || page === this.pages.pageMenu || page === this.pages.mapSetup ? under : page;
+    const base = page === this.pages.directTo || page === this.pages.waypointEntry || page === this.pages.pageMenu || page === this.pages.mapSetup || page === this.pages.fplTool ? under : page;
     const mode = base.navMap;
     this.nav.show("Group", mode !== null);
     this.map.style.display = mode === "full" ? "inline" : "none";

@@ -13,6 +13,7 @@ export interface MapPoint {
     /** Flight plan legs: the published altitude, e.g. "3600+" (see `ProcLeg`). */ alt?: string | null;
     /** Flight plan legs: the fix's role in an approach (see `ProcLeg`). */ role?: string;
     /** Flight plan legs: the approach PROC loaded this fix from, e.g. "ILS RWY 36". */ approach?: string;
+    /** Flight plan legs: Parallel Track's point, offset from this flight plan entry (see `parallelTrack`). */ parallel?: string | MapPoint;
 }
 /** A position only. */
 export interface LatLon {

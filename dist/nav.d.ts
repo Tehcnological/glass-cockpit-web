@@ -138,15 +138,7 @@ export declare function directToPatch(s: Plan & LatLon, p: MapPoint): {
         lon: number;
     };
     vtf: boolean;
-    route?: undefined;
-} | {
-    route: (string | MapPoint)[];
-    activeLeg: number;
-    directFrom: {
-        lat: number;
-        lon: number;
-    };
-    vtf: boolean;
+    route?: Route | undefined;
 };
 /**
  * The Direct-to window's Cancel Direct-To NAV (Pilot's Guide): the plan resumes on the leg closest to the aircraft; a
@@ -176,4 +168,37 @@ export declare function vtfEdit(vtf: boolean, at: number, activeLeg: number): {
     vtf: boolean;
     directFrom?: null;
 };
+/**
+ * Closest Point of FPL (Pilot's Guide): the point on the plan nearest the reference waypoint `ref`, as a user waypoint
+ * to insert at `at`, with the true bearing and distance to it from `ref`. Null with no leg.
+ */
+export declare function closestPointOfFpl(s: Plan, ref: MapPoint): {
+    brg: number;
+    dist: number;
+    at: number;
+    point: MapPoint;
+} | null;
+/**
+ * Create ATK Offset Waypoint (Pilot's Guide): a waypoint `nm` (1 to 999, negative before) along the plan from the one at
+ * `at`, to insert at the returned `at`. Null where the Pilot's Guide forbids it: past the leg's length (on the active
+ * waypoint, the distance to go), with no leg that side, or at or after the final approach fix.
+ */
+export declare function atkOffset(s: Plan & LatLon & {
+    activeLeg: number;
+}, at: number, nm: number): {
+    at: number;
+    point: MapPoint;
+} | null;
+export declare const isParallel: (r: string | MapPoint) => r is MapPoint;
+/** The plan without Parallel Track: each offset point back to the entry it came from. */
+export declare const cancelParallel: (route: Route) => Route;
+/**
+ * Parallel Track (Pilot's Guide): the plan with its en route points from the active leg's start on offset `nm` (1 to
+ * 99) to side `L` or `R`, named with a lower case p, so both legs at a turn stay `nm` off. The approach is not offset.
+ * Null where the Pilot's Guide makes it unavailable: on a direct-to, an approach leg, or a turn over 120 degrees.
+ */
+export declare function parallelTrack(s: Plan & {
+    activeLeg: number;
+    directFrom: LatLon | null;
+}, side: "L" | "R", nm: number): Route | null;
 export {};

@@ -150,7 +150,8 @@ export function loadedApproach(route: Route): { start: number; name: string; pts
 
 /** PROC's change to the flight plan: the approach `pts` after the en route waypoints (replacing one loaded before), loaded, activated or vectors-to-final. */
 export function approachPatch(route0: Route, pts: MapPoint[], mode: "load" | "activate" | "vectors", here: LatLon) {
-  const enroute = route0.filter((r) => !isApproach(r));
+  // Loading an approach cancels Parallel Track (Pilot's Guide).
+  const enroute = cancelParallel(route0).filter((r) => !isApproach(r));
   const route = [...enroute, ...pts];
   if (mode === "load") return { route, vtf: false };
   if (mode === "activate") return { route, activeLeg: enroute.length, directFrom: here, vtf: false };
@@ -171,9 +172,11 @@ export const findPoint = (s: Plan, id: string): MapPoint | undefined =>
 
 /** DIRECT TO's ACTIVATE: the leg to `p` from here, in the flight plan if it is there, else as a plan of its own. */
 export function directToPatch(s: Plan & LatLon, p: MapPoint) {
-  const i = s.route.findIndex((r) => routePoint(r, s.points, s.airports)?.id === p.id);
+  // A direct-to cancels Parallel Track (Pilot's Guide): the plan goes back to its own waypoints.
+  const route = cancelParallel(s.route);
+  const i = route.findIndex((r) => routePoint(r, s.points, s.airports)?.id === p.id);
   const directFrom = { lat: s.lat, lon: s.lon };
-  if (i >= 0) return { activeLeg: i, directFrom, vtf: false };
+  if (i >= 0) return { ...(s.route.some(isParallel) && { route }), activeLeg: i, directFrom, vtf: false };
   return { route: [s.points.includes(p) || p.type === "APT" ? p.id : asWaypoint(p)], activeLeg: 0, directFrom, vtf: false };
 }
 
@@ -209,4 +212,107 @@ export function cancelDirectTo(s: Plan & LatLon & { activeLeg: number; directFro
 export function vtfEdit(vtf: boolean, at: number, activeLeg: number): { vtf: boolean; directFrom?: null } {
   if (!vtf) return { vtf: false };
   return at > activeLeg ? { vtf: true } : { vtf: false, directFrom: null };
+}
+
+// Flat-earth nm around `o` (x east, y north): close enough over a flight plan leg for the FPL tools below.
+function local(o: LatLon) {
+  const k = 60 * Math.cos((o.lat * Math.PI) / 180);
+  return {
+    to: (p: LatLon): [number, number] => [(p.lon - o.lon) * k, (p.lat - o.lat) * 60],
+    from: ([x, y]: [number, number]): LatLon => ({ lat: o.lat + y / 60, lon: o.lon + x / k }),
+  };
+}
+
+/** A user waypoint name from `id` not already in `route`: `id` and a digit. */
+// shortcut: the Pilot's Guide only says the name comes from the reference's; upgrade if the trainer shows its scheme.
+function userName(id: string, route: Route): string {
+  const ids = new Set(route.map((r) => (typeof r === "string" ? r : r.id)));
+  for (let n = 1; ; n++) if (!ids.has(`${id.slice(0, 5)}${n}`)) return `${id.slice(0, 5)}${n}`;
+}
+
+/**
+ * Closest Point of FPL (Pilot's Guide): the point on the plan nearest the reference waypoint `ref`, as a user waypoint
+ * to insert at `at`, with the true bearing and distance to it from `ref`. Null with no leg.
+ */
+export function closestPointOfFpl(s: Plan, ref: MapPoint) {
+  const pts = s.route.map((r) => routePoint(r, s.points, s.airports));
+  const { to, from } = local(ref);
+  let best: { at: number; d: number; xy: [number, number] } | null = null;
+  for (let i = 1; i < pts.length; i++) {
+    const [a, b] = [pts[i - 1], pts[i]];
+    if (!a || !b) continue;
+    const [[ax, ay], [bx, by]] = [to(a), to(b)];
+    const [dx, dy] = [bx - ax, by - ay];
+    const t = Math.max(0, Math.min(1, (-ax * dx - ay * dy) / (dx * dx + dy * dy || 1)));
+    const xy: [number, number] = [ax + t * dx, ay + t * dy];
+    const d = Math.hypot(...xy);
+    if (!best || d < best.d) best = { at: i, d, xy };
+  }
+  if (!best) return null;
+  const p = from(best.xy);
+  const point: MapPoint = { id: userName(ref.id, s.route), type: "WPT", lat: p.lat, lon: p.lon };
+  return { at: best.at, point, ...(({ brg, dist }) => ({ brg, dist }))(bearingDistance(ref.lat, ref.lon, p.lat, p.lon)) };
+}
+
+/**
+ * Create ATK Offset Waypoint (Pilot's Guide): a waypoint `nm` (1 to 999, negative before) along the plan from the one at
+ * `at`, to insert at the returned `at`. Null where the Pilot's Guide forbids it: past the leg's length (on the active
+ * waypoint, the distance to go), with no leg that side, or at or after the final approach fix.
+ */
+export function atkOffset(s: Plan & LatLon & { activeLeg: number }, at: number, nm: number) {
+  const faf = s.route.findIndex((r) => isApproach(r) && r.role === "FAF");
+  if (!Number.isInteger(nm) || !nm || Math.abs(nm) > 999 || (faf >= 0 && at >= faf)) return null;
+  const pts = s.route.map((r) => routePoint(r, s.points, s.airports));
+  const w = pts[at];
+  const other = nm < 0 && at === s.activeLeg ? { lat: s.lat, lon: s.lon } : pts[at + Math.sign(nm)];
+  if (!w || !other) return null;
+  const { to, from } = local(w);
+  const [x, y] = to(other);
+  const len = Math.hypot(x, y);
+  if (Math.abs(nm) >= len) return null;
+  const p = from([(x * Math.abs(nm)) / len, (y * Math.abs(nm)) / len]);
+  const point: MapPoint = { id: `${w.id.slice(0, 5)}${nm < 0 ? "-" : "+"}${Math.abs(nm)}`, type: "WPT", lat: p.lat, lon: p.lon };
+  return { at: nm < 0 ? at : at + 1, point };
+}
+
+export const isParallel = (r: string | MapPoint): r is MapPoint => typeof r !== "string" && r.parallel !== undefined;
+
+/** The plan without Parallel Track: each offset point back to the entry it came from. */
+export const cancelParallel = (route: Route): Route => route.map((r) => (isParallel(r) ? r.parallel! : r));
+
+/**
+ * Parallel Track (Pilot's Guide): the plan with its en route points from the active leg's start on offset `nm` (1 to
+ * 99) to side `L` or `R`, named with a lower case p, so both legs at a turn stay `nm` off. The approach is not offset.
+ * Null where the Pilot's Guide makes it unavailable: on a direct-to, an approach leg, or a turn over 120 degrees.
+ */
+// shortcut: it does not cancel itself when the offset tracks would overlap; upgrade with a leg-length check if needed.
+export function parallelTrack(s: Plan & { activeLeg: number; directFrom: LatLon | null }, side: "L" | "R", nm: number): Route | null {
+  const route = cancelParallel(s.route);
+  const end = route.findIndex(isApproach) < 0 ? route.length : route.findIndex(isApproach);
+  const start = Math.max(0, s.activeLeg - 1);
+  if (s.directFrom || nm < 1 || nm > 99 || !Number.isInteger(nm) || s.activeLeg >= end || end - start < 2) return null;
+  const pts = route.map((r) => routePoint(r, s.points, s.airports));
+  const out = [...route];
+  for (let i = start; i < end; i++) {
+    const p = pts[i];
+    if (!p) return null;
+    const { to, from } = local(p);
+    // Unit directions of the legs in and out of p, in p's frame; the first and last have one leg.
+    const dir = (q: MapPoint | undefined, sign: number) => {
+      if (!q) return null;
+      const [x, y] = to(q);
+      const l = Math.hypot(x, y) || 1;
+      return [(sign * x) / l, (sign * y) / l] as [number, number];
+    };
+    const din = i > start ? dir(pts[i - 1], -1) : null;
+    const dout = i < end - 1 ? dir(pts[i + 1], 1) : null;
+    const [ux, uy] = din && dout ? [din[0] + dout[0], din[1] + dout[1]] : (din ?? dout)!;
+    const turn = din && dout ? Math.acos(Math.max(-1, Math.min(1, din[0] * dout[0] + din[1] * dout[1]))) : 0;
+    if (turn > (120 * Math.PI) / 180) return null;
+    const l = Math.hypot(ux, uy);
+    const k = ((side === "R" ? 1 : -1) * nm) / Math.cos(turn / 2) / l;
+    const q = from([uy * k, -ux * k]); // right of (ux, uy) is (uy, -ux)
+    out[i] = { id: `${p.id}p`, type: "WPT", lat: q.lat, lon: q.lon, parallel: route[i] };
+  }
+  return out;
 }

@@ -3,8 +3,9 @@
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
 import { ORIENTATIONS, TRACK_VECTOR, mapGroup, mapUp, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
-import { asWaypoint, bearingDistance, cancelDirectTo, directToPatch, findPoint, latLon, nearest, planName, routePoint, vtfEdit, type Airport, type Procedure } from "./nav.js";
-import { BLANK, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, firstRow, key, type Key } from "./ui.js";
+import { asWaypoint, bearingDistance, cancelDirectTo, cancelParallel, directToPatch, findPoint, isParallel, latLon, nearest, planName, routePoint, vtfEdit, type Airport, type Procedure } from "./nav.js";
+import { FPL_TOOLS, FplTool, toolEnabled, type FplToolName } from "./fpl-tools.js";
+import { BLANK, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key, type Key } from "./ui.js";
 import { firstOption, fplMenu, stepMenu, type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
 import { panStart, type Pan } from "./pan.js";
@@ -63,6 +64,7 @@ const TITLES: Record<string, string> = {
   NearestAirspaces: "NRST - NEAREST AIRSPACES", DirectTo: "DIRECT TO", Procedures: "PROC - PROCEDURES",
   WaypointEntry: "FPL - ACTIVE FLIGHT PLAN", // a window over the flight plan page, which keeps its title
   MapSetup: "MAP - NAVIGATION MAP", // likewise over the navigation map
+  FplTool: "FPL - ACTIVE FLIGHT PLAN", // over the flight plan page
 };
 
 // The map windows of pages with their own map (their <page>NavMap-bg, in screen pixels); FG1000 keeps the full map's
@@ -723,22 +725,27 @@ const resolve = (s: MfdState, r: string | MapPoint) => routePoint(r, s.points, s
 // shortcut: ENT on a leg activates it (the real unit's MENU > Activate Leg; FG1000's ENT does nothing), and CLR deletes
 // without asking.
 class FlightPlanPage extends MapPage {
-  // PAGE MENU (v13 trainer's options): Invert, Delete and Remove Approach work here; the rest are dim.
+  // PAGE MENU (v13 trainer's options): Invert, Delete and Remove Approach work here, and Closest Point of FPL, Parallel
+  // Track and Create ATK Offset Waypoint (on the waypoint under the cursor) open their windows; the rest are dim.
   pageMenu(): MenuOption[] {
     // Each option's change is worked out again from the state when ENT carries it out (the host may have moved on).
     const now = (label: string) => fplMenu(this.s.route, this.s.activeLeg).find((o) => o.label === label)?.patch;
-    return fplMenu(this.s.route, this.s.activeLeg).map(({ label, patch }) => ({
+    const sel = this.crsr ? this.rows.sel : null;
+    return fplMenu(this.s.route, this.s.activeLeg).map(({ label, patch }) => (FPL_TOOLS as readonly string[]).includes(label) ? {
+      label,
+      act: toolEnabled(label as FplToolName, this.s, sel) ? () => this.m.open(this.tools().open(label as FplToolName, sel ?? 0)) : undefined,
+    } : {
       label,
       act: patch && (() => {
         const p = now(label);
         if (p) this.m.change(p);
       }),
-    }));
+    });
   }
 
   private rows = new ListView(this.p, ["Header", "Leg", "DTK", "DIS", "ALT"], 11, "Leg", false, { trough: "ScrollTrough", thumb: "ScrollThumb" });
 
-  constructor(m: Mfd, screen: SVGGElement, private entry: WaypointEntryPage) {
+  constructor(m: Mfd, screen: SVGGElement, private entry: WaypointEntryPage, private tools: () => FplToolPage) {
     super(m, "ActiveFlightPlanNarrow", screen, FPL_MAP);
   }
 
@@ -763,7 +770,7 @@ class FlightPlanPage extends MapPage {
 
   private insert(at: number, p: MapPoint) {
     const s = this.s;
-    const route = [...s.route];
+    const route = cancelParallel(s.route); // editing the plan cancels Parallel Track (Pilot's Guide)
     route.splice(at, 0, s.points.includes(p) || p.type === "APT" ? p.id : asWaypoint(p));
     const activeLeg = at <= s.activeLeg && s.route.length ? s.activeLeg + 1 : s.activeLeg;
     this.m.change({ route, activeLeg, ...vtfEdit(s.vtf, at, s.activeLeg) });
@@ -772,14 +779,16 @@ class FlightPlanPage extends MapPage {
 
   ent() {
     const at = this.rows.sel;
-    if (this.crsr && at > 0 && at < this.s.route.length) this.m.change({ activeLeg: at, directFrom: null, vtf: false });
+    const s = this.s;
+    // Activating a leg cancels Parallel Track (Pilot's Guide).
+    if (this.crsr && at > 0 && at < s.route.length) this.m.change({ ...(s.route.some(isParallel) && { route: cancelParallel(s.route) }), activeLeg: at, directFrom: null, vtf: false });
   }
 
   clr() {
     const s = this.s;
     const at = this.rows.sel;
     if (!this.crsr || at >= s.route.length) return;
-    const route = s.route.filter((_, i) => i !== at);
+    const route = cancelParallel(s.route).filter((_, i) => i !== at);
     const activeLeg = clamp(at < s.activeLeg ? s.activeLeg - 1 : s.activeLeg, 0, Math.max(0, route.length - 1));
     this.m.change({ route, activeLeg, ...vtfEdit(s.vtf, at, s.activeLeg) });
   }
@@ -1313,6 +1322,76 @@ export class MapSetupPage extends MfdPage {
   }
 }
 
+/** The window Closest Point of FPL, Parallel Track and Create ATK Offset Waypoint open over the flight plan, in
+ * MapSetupPage's style; its rows come from `FplTool`. */
+export class FplToolPage extends MfdPage {
+  private tool: FplTool;
+  private g: SVGGElement;
+
+  constructor(m: Mfd, screen: SVGGElement, after: Element) {
+    super(m, "FplTool", screen);
+    const g = document.createElementNS(NS, "g");
+    g.id = "Page-FplTool";
+    g.style.display = "none";
+    after.after(g);
+    this.root = this.g = g;
+    this.tool = new FplTool(new IdEntry(this.p, 5));
+  }
+
+  open(name: FplToolName, sel: number) {
+    this.tool.open(name, this.s, sel);
+    this.crsr = true;
+    return this;
+  }
+
+  fms(outer: boolean, d: number) {
+    this.tool.fms(this.s, outer, d);
+    return true;
+  }
+
+  ent() {
+    const r = this.tool.ent(this.s);
+    if (r.patch) this.m.change(r.patch);
+    if (r.close) this.m.close();
+  }
+
+  // Pilot's Guide: the FMS knob or CLR cancels.
+  clr() {
+    this.m.close();
+  }
+
+  toggleCrsr() {
+    this.m.close();
+  }
+
+  draw() {
+    const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px`;
+    // `cur`: the cursor's cyan box goes behind it, measured once drawn.
+    const text = (t: string, x: number, y: number, anchor: string, fill: string, cur = false) =>
+      `<text ${cur ? "data-cur " : ""}x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style}">${esc(t)}</text>`;
+    const rows = this.tool.rows(this.s);
+    let out = `<rect x="724.5" y="53.5" width="310" height="${rows.length * 27 + 90}" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>`;
+    rows.forEach((r, i) => {
+      const y = i === 0 ? 82 : 100 + i * 27;
+      if (r.title) {
+        out += text(r.label, 874, y, "middle", "#ffffff");
+        return;
+      }
+      const onLabel = !!r.cur && r.value === undefined;
+      out += text(r.label, 744, y, "start", onLabel ? "#000000" : r.dim ? "#808080" : "#ffffff", onLabel);
+      if (r.value !== undefined) out += text(r.value, 1014, y, "end", r.cur ? "#000000" : CYAN, r.cur);
+    });
+    const y = 100 + rows.length * 27 + 10;
+    this.g.innerHTML = out + text("Press the FMS CRSR knob to", 874, y, "middle", "#ffffff") + text("cancel", 874, y + 25, "middle", "#ffffff");
+    for (const t of this.g.querySelectorAll<SVGTextElement>("text[data-cur]")) {
+      const b = t.getBBox();
+      const box = document.createElementNS(NS, "rect");
+      for (const [k, v] of Object.entries({ x: b.x - 2, y: b.y - 1, width: b.width + 4, height: b.height + 2, fill: CYAN })) box.setAttribute(k, String(v));
+      t.before(box);
+    }
+  }
+}
+
 export interface Pages {
   groups: MfdPage[][];
   directTo: DirectToPage;
@@ -1320,6 +1399,7 @@ export interface Pages {
   waypointEntry: WaypointEntryPage;
   pageMenu: PageMenuPage;
   mapSetup: MapSetupPage;
+  fplTool: FplToolPage;
 }
 
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
@@ -1341,7 +1421,7 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
       case "IntersectionInfo": return new NavInfoPage(m, name, screen, "FIX", 5);
       case "AirportInfo": return new AirportInfoPage(m, screen);
       case "Checklist": return new ChecklistPage(m, screen);
-      case "ActiveFlightPlanNarrow": return new FlightPlanPage(m, screen, waypointEntry);
+      case "ActiveFlightPlanNarrow": return new FlightPlanPage(m, screen, waypointEntry, () => fplTool);
     }
     // No data: the map pages keep the navigation map under their title.
     const p = new MfdPage(m, name, screen);
@@ -1353,6 +1433,7 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
   const procedures = new ProceduresPage(m, screen, roots[roots.length - 1].parentNode as Element);
   const pageMenu = new PageMenuPage(m, screen, roots[roots.length - 1].parentNode as Element);
   const mapSetup = new MapSetupPage(m, screen, roots[roots.length - 1].parentNode as Element);
+  const fplTool = new FplToolPage(m, screen, roots[roots.length - 1].parentNode as Element);
   for (const r of roots) r.style.display = "none";
-  return { groups, directTo, procedures, waypointEntry, pageMenu, mapSetup };
+  return { groups, directTo, procedures, waypointEntry, pageMenu, mapSetup, fplTool };
 }

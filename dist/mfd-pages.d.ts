@@ -1,5 +1,6 @@
 import { Page } from "./page.js";
 import { type LatLon, type MapGeometry, type MapPoint } from "./map.js";
+import { type FplToolName } from "./fpl-tools.js";
 import { Highlighter, type Key } from "./ui.js";
 import { type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
@@ -157,6 +158,19 @@ export declare class MapSetupPage extends MfdPage {
     toggleCrsr(): void;
     draw(): void;
 }
+/** The window Closest Point of FPL, Parallel Track and Create ATK Offset Waypoint open over the flight plan, in
+ * MapSetupPage's style; its rows come from `FplTool`. */
+export declare class FplToolPage extends MfdPage {
+    private tool;
+    private g;
+    constructor(m: Mfd, screen: SVGGElement, after: Element);
+    open(name: FplToolName, sel: number): this;
+    fms(outer: boolean, d: number): boolean;
+    ent(): void;
+    clr(): void;
+    toggleCrsr(): void;
+    draw(): void;
+}
 export interface Pages {
     groups: MfdPage[][];
     directTo: DirectToPage;
@@ -164,6 +178,7 @@ export interface Pages {
     waypointEntry: WaypointEntryPage;
     pageMenu: PageMenuPage;
     mapSetup: MapSetupPage;
+    fplTool: FplToolPage;
 }
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
 export declare function makePages(m: Mfd, screen: SVGGElement): Pages;
