@@ -79,19 +79,21 @@ Garmin art, screenshots, data or manual text is copied.
 
 | Group | Page | Status |
 | --- | --- | --- |
-| MAP | Navigation map | Partial: no map setup |
+| MAP | Navigation map | Partial: Map Setup's Map, Airways and Profile groups only |
 | MAP | Traffic map | Done (shows what the host passes) |
 | MAP | Stormscope, weather data link, TAWS | No data |
 | WPT | Airport information | Partial: info and APPROACH INFORMATION (APR) done; departure, arrival and weather (DP, STAR, WX) grey with no data; INFO-2 directory missing |
 | WPT | Intersection, NDB, VOR information | Done |
 | WPT | User waypoint information | Missing (no user waypoints) |
-| AUX | Utility | Partial: generic, flight and departure timers and trip statistics done; scheduler and flight data logger missing |
-| AUX | Trip planning, GPS status, XM, system status | No data |
+| AUX | Utility | Partial: timers, trip statistics and scheduler done (times stepped, not typed); flight data logger missing |
+| AUX | Trip planning | Partial: AUTO and MANUAL, flight plan mode; WPTS mode and ESA missing |
+| AUX | GPS status, system status | Partial: aircraft position and LRUs; no satellite, RAIM, SBAS, version or database data |
+| AUX | XM | No data |
 | AUX | System setup | Partial: time format and offset, MFD data bar fields, page navigation, nearest airport criteria done; display units, alerts, GPS CDI, COM spacing shown grey |
 | FPL | Active flight plan | Partial: insert, delete, activate leg, PAGE MENU; no VNV, no airways, no stored plans |
 | FPL | Flight plan catalog, stored plans | Missing |
 | LST | Checklists | Done |
-| NRST | Airports | Partial: no dashed line to the selected airport on the map |
+| NRST | Airports | Done |
 | NRST | Intersections, NDB, VOR | Partial: VOR's FREQ key missing |
 | NRST | Frequencies | Done |
 | NRST | User waypoints, airspaces | Missing / No data |
@@ -113,7 +115,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 
 | Page | Options | Status |
 | --- | --- | --- |
-| Navigation map | Map Setup (orientation, auto zoom, track vector, wind vector, nav range ring, fuel range, field of view, topo, airways, land, aviation, traffic, weather groups), Declutter, Measure Bearing/Distance, Show/Hide Profile View, Show Chart | Partial: Map Setup (Map group: orientation, track vector), Declutter, Measure Bearing/Distance (no elevation), Show/Hide Profile View |
+| Navigation map | Map Setup (orientation, auto zoom, track vector, wind vector, nav range ring, fuel range, field of view, topo, airways, land, aviation, traffic, weather groups), Declutter, Measure Bearing/Distance, Show/Hide Profile View, Show Chart | Partial: Map Setup (Map group: orientation, track vector; Airways group; Profile group grey), Declutter, Measure Bearing/Distance (no elevation), Show/Hide Profile View |
 | Active flight plan | Activate Leg, Load Waypoint, Store Flight Plan, Invert Flight Plan, Delete Flight Plan, Create ATK Offset Waypoint, Parallel Track, Closest Point of FPL, Collapse/Expand Airways, Hold At Wpt, Hold At Present Position, Remove Departure/Arrival/Approach, Enable/Cancel VNV, VNV Direct-To, Select VNV Profile Window | Partial: Invert, Delete, Remove Approach, Closest Point of FPL, Parallel Track (no overlap cancel, no VNV), Create ATK Offset Waypoint (10 nm / 1 nm knob steps) |
 | Flight plan catalog | Create New, Activate, Invert & Activate, Copy, Edit, Delete, Delete All | Missing (no stored plans) |
 | Direct-to window | Cancel Direct-To NAV, Clear Vertical Constraints | Partial: Cancel Direct-To NAV (no VNV) |
@@ -123,7 +125,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Nearest airports | Select Airport/Runway/Frequency/Approach Window, Load Approach | Done |
 | Nearest VOR | Select VOR Window, Select Frequency Window | Missing |
 | Nearest airspaces | Select Alerts Window | Missing / No data |
-| Trip planning | Flight Plan Mode, Waypoints Mode, Auto Mode, Manual Mode | Missing |
+| Trip planning | Flight Plan Mode, Waypoints Mode, Auto Mode, Manual Mode | Partial: AUTO, MANUAL and FPL as softkeys; no PAGE MENU |
 | Utility | Reset Flight Timer, Reset Departure Time, Reset Trip ODOM/AVG GS, Reset Odometer, Reset Maximum Speed, Reset All | Done |
 | AUX GPS status | Set WPT to Present Position (RAIM prediction) | Missing |
 | Weather (XM, FIS-B, Connext), traffic, TAWS, terrain, Stormscope, Iridium phone and text | Product groups, legends, operate/standby/test, inhibit, show flight IDs, call and message actions | No data |
@@ -151,7 +153,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | A failed sensor or unit red-X's its fields: attitude (AHRS), heading (AHRS or magnetometer), air data (ADC), COM/NAV 1 or 2 (GIA), transponder, engine data, OAT | Partial: `failed` flags attitude, airspeed, altitude, vertical speed and heading; not COM/NAV, transponder, engine or OAT |
 | Start-up: attitude, airspeed and altitude invalid for the first 40 to 60 s while the AHRS aligns | Missing |
 | GFC 700: AFCS and PFT annunciations above the airspeed tape; the autopilot cannot engage until the preflight test passes | Missing (with the autopilot) |
-| AUX SYSTEM STATUS: unit health and software versions on the MFD | Missing (Phase 3, AUX pages) |
+| AUX SYSTEM STATUS: unit health and software versions on the MFD | Partial: every LRU in; no versions |
 | System message advisories: about 150 messages in the Pilot's Guide appendix | Host data: GCW shows what the host posts |
 
 ## Not checked on the trainer yet

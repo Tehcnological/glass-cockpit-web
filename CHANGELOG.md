@@ -4,6 +4,10 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 
 ## Unreleased
 
+- MFD: AUX - TRIP PLANNING (AUTO or MANUAL, REM or a leg: trip, fuel, sunrise and sunset, density altitude and true airspeed), AUX - GPS STATUS (position, time, altitude, groundspeed and track; accuracy, RAIM and SBAS grey) and AUX - SYSTEM STATUS (LRUs in; airframe and database grey), from the Pilot's Guide. The sums are in `trip-planning.ts`.
+- MFD: AUX - UTILITY's scheduler: ten One-time, Periodic or Event messages typed with the FMS knobs (`scheduler.ts`). New MFD option `onScheduler(message)` hands one to the host when it comes due; the demo adds it to the PFD's `alerts`.
+- MFD: MAP SETUP's Airways group (AIRWAYS and the low and high airway ranges) and Profile group (grey). `shownAirways` takes the ranges; `AIRWAY_RANGE` exported from `map.ts`; `map-setup.ts` holds the groups.
+- MFD: NRST - NEAREST AIRPORTS draws a dashed white line from the aircraft to the selected airport (Pilot's Guide). `MapData` gains `nearestLine`.
 - PFD: the pitch ladder no longer moves its cut-off with the horizon. It shows inside a circle under the roll scale, wide enough for the 20° labels, cut flat at the heading box, and gains red extreme pitch chevrons (from 50° up and 30° down). The heading box sits on the turn rate band, whose ticks and trend vector now lie inside it; past 4°/s the trend vector ends in an arrowhead. New export `turnVector`. The airspeed tape gains its color strip, from new option `speedRanges` (default `SPEEDS_172S`), whose `vne` also reds the IAS box when `vne` is not set. The demo's pitch runs to ±80° and its turn rate follows bank and airspeed. Past +30°/-20° pitch or 65° bank the PFD declutters as the Pilot's Guide describes unusual attitudes, and their softkeys dim; new export `unusualAttitude`.
 
 - Navdata: `buildNasr` builds V, T, J and Q airways from NASR's `AWY_SEG_ALT.csv` (optional in `NasrCsv`, any row order; `Nasr` gains `airways`, each point an id and its type), and `near` returns `airways` for the MFD, the segments within range with every point they use in `points`.
