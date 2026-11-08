@@ -144,6 +144,7 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
   | GPS | none | Add a "GPS NAV LOST" message to `alerts` and set `cdiValid: false` on GPS |
 
   `heading` flags the heading box (FG1000's flag; the trainer's magnetometer failure was not checked). FG1000's NO GPS POSITION flag is not used on the PFD.
+- **DME:** PFD > DME shows the DME window left of the HSI: the NAV radio, its active frequency and the distance from `bearings` (dashes without one). The top-row DME key opens DME TUNING, where the small FMS knob switches NAV1 and NAV2. No HOLD.
 
 ## Navdata
 
@@ -244,7 +245,7 @@ EOF
 - MFD pages that need data this package has no source for: weather, terrain, XM, trip planning, GPS status, stored flight plans, user waypoints, nearest airspaces.
 - DIRECT TO's VNAV fields, approach suspend and missed-approach sequencing.
 - USER and AIRWAY waypoint lists.
-- Synthetic vision, the arc HSI, DME window, selected airspeed, autopilot annunciations and the GPS course-to-intercept diamond.
+- Synthetic vision, the arc HSI, DME HOLD, selected airspeed, autopilot annunciations and the GPS course-to-intercept diamond.
 - Map terrain and airways.
 
 FG1000 renders in Liberation Sans Narrow, which is not bundled. Without that font installed, some narrow labels fall back to a wider font.

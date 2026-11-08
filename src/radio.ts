@@ -35,3 +35,8 @@ export function cdiLabel(source: CdiSource, radios: Radios): string {
   const n = source === "NAV1" ? 1 : 2;
   return (isLocalizer(radios[`nav${n}`].active) ? "LOC" : "VOR") + n;
 }
+
+/** The DME window's distance: one decimal, or dashes with no station. */
+export function dmeText(p?: { distance?: number }): string {
+  return p?.distance === undefined ? "-.--NM" : `${p.distance.toFixed(1)}NM`;
+}

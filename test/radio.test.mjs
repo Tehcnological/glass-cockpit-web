@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cdiLabel, isLocalizer, tuneNav } from "../dist/radio.js";
+import { cdiLabel, dmeText, isLocalizer, tuneNav } from "../dist/radio.js";
 
 const points = [
   { id: "PXR", type: "VOR", lat: 33.43302, lon: -111.9702, freq: "115.60", magVar: 12 },
@@ -34,4 +34,10 @@ test("CDI label follows the active NAV frequency", () => {
   assert.equal(cdiLabel("NAV1", r), "VOR1");
   assert.equal(cdiLabel("NAV2", r), "LOC2");
   assert.equal(cdiLabel("OFF", r), "");
+});
+
+test("DME distance text", () => {
+  assert.equal(dmeText({ distance: 12.34 }), "12.3NM");
+  assert.equal(dmeText({}), "-.--NM");
+  assert.equal(dmeText(undefined), "-.--NM");
 });

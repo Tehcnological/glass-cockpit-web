@@ -13,7 +13,7 @@ import { adjust, bezelInput, type Input } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type MapGeometry, type MapPoint } from "./map.js";
 import { bearingDistance, bestApproach, latLon, nearest, nrstFreq, planName, routePoint, type Airport } from "./nav.js";
 import { alertsKey } from "./alerts.js";
-import { cdiLabel } from "./radio.js";
+import { cdiLabel, dmeText } from "./radio.js";
 import { BLANK as blank, CYAN, Highlighter, ListView, NS, dimKey, esc, key as k, screenBox, type Key } from "./ui.js";
 
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
@@ -109,7 +109,7 @@ const DEFAULTS: PfdState = {
 };
 
 type Menu = "top" | "inset" | "pfd" | "wind" | "synvis" | "hsi" | "altunit" | "xpdr" | "code";
-type Window = "TMR/REF" | "NRST" | "ALERTS" | null;
+type Window = "TMR/REF" | "NRST" | "ALERTS" | "DME" | null;
 const BRG_SOURCES: BrgSource[] = ["OFF", "NAV1", "NAV2", "GPS", "ADF"];
 const VSPEEDS: VSpeed[] = ["Vglide", "Vr", "Vx", "Vy"];
 const TMR_FIELDS = ["time", "dir", "action", "Vglide", "Vr", "Vx", "Vy", "minimums", "minalt"] as const;
@@ -119,7 +119,7 @@ const FONT = `font-family="'Liberation Sans',Arial,sans-serif" font-size="18"`;
 const FAILURES: [Failure, string][] = [["attitude", "NoAttitude"], ["airspeed", "NoASI"], ["altitude", "NoAlt"], ["vsi", "NoVS"], ["heading", "NoHDG"]];
 
 // Parts of the FG1000 PFD this port does not drive. L_NoGPS: the v13 trainer's PFD shows a GPS failure only as an alert.
-const HIDDEN = ["L_NoGPS", "GSPD", "PFD-Multilines", "Annunciation", "DME1", "SelectedALT-meters", "SelectedSPD-bug", "SelectedSPD-bg", "SelectedSPD-text", "SelectedSPD-symbol"];
+const HIDDEN = ["L_NoGPS", "GSPD", "PFD-Multilines", "Annunciation", "SelectedALT-meters", "SelectedSPD-bug", "SelectedSPD-bg", "SelectedSPD-text", "SelectedSPD-symbol"];
 
 // Tape clipping, as "rect(top, right, bottom, left)" in screen coordinates.
 const CLIPS: Record<string, [number, number, number, number]> = {
@@ -157,6 +157,7 @@ export class GlassPfd {
     wind: 0, meters: false, hpa: false, xpdrEdit: null as string | null, fpl: false,
     timer: { up: true, running: false, base: 0, since: 0 },
     /** How many of `alerts` the ALERTS window has shown. */ alertsSeen: 0,
+    /** PFD > DME shows the DME window; DME TUNING picks its NAV radio. */ dme: false, dmeSource: "NAV1" as "NAV1" | "NAV2",
   };
 
   /** The container must be visible: layout is measured once here. */
@@ -294,7 +295,7 @@ export class GlassPfd {
           s.route.length ? k("OBS", () => this.change({ obs: !s.obs }), s.obs) : dimKey("OBS"),
           // PFDInstrumentsController.incrCDISource: GPS, NAV1, NAV2.
           k("CDI", () => this.change({ cdiSource: cdi[(cdi.indexOf(s.cdiSource) + 1) % 3] })),
-          blank, k("XPDR", () => this.go("xpdr")), k("IDENT", () => this.ident()),
+          k("DME", () => this.openWindow("DME"), u.window === "DME"), k("XPDR", () => this.go("xpdr")), k("IDENT", () => this.ident()),
           k("TMR/REF", () => this.openWindow("TMR/REF"), u.window === "TMR/REF"),
           k("NRST", () => this.openWindow("NRST"), u.window === "NRST"), alerts,
         ];
@@ -309,7 +310,8 @@ export class GlassPfd {
       case "pfd": {
         const next = (b: BrgSource) => BRG_SOURCES[(BRG_SOURCES.indexOf(b) + 1) % BRG_SOURCES.length];
         return [
-          k("SYN VIS", () => this.go("synvis")), k("DFLTS", () => this.defaults()), k("WIND", () => this.go("wind")), blank,
+          k("SYN VIS", () => this.go("synvis")), k("DFLTS", () => this.defaults()), k("WIND", () => this.go("wind")),
+          k("DME", () => (u.dme = !u.dme), u.dme), // v13 trainer: the DME window (FG1000 has the artwork, no key)
           k("BRG1", () => this.change({ brg1: next(s.brg1) }), s.brg1 !== "OFF"), k("HSI FRMT", () => this.go("hsi")),
           k("BRG2", () => this.change({ brg2: next(s.brg2) }), s.brg2 !== "OFF"), blank, k("ALT UNIT", () => this.go("altunit")),
           k("STD BARO", () => this.change({ baro: 29.92 })), back("top"), alerts,
@@ -382,6 +384,8 @@ export class GlassPfd {
   private fms(outer: boolean, d: number) {
     const u = this.ui;
     if (u.window === "NRST" && !u.nrstInfo) u.cursor = clamp(u.cursor + d, 0, Math.max(0, this.nearest().length - 1));
+    // shortcut: no HOLD mode; add it when a scenario needs DME hold.
+    if (u.window === "DME" && !outer) u.dmeSource = u.dmeSource === "NAV1" ? "NAV2" : "NAV1";
     if (u.window === "TMR/REF") {
       if (outer) u.cursor = mod(u.cursor + d, TMR_FIELDS.length);
       else this.timerField(d);
@@ -459,6 +463,13 @@ export class GlassPfd {
     this.p.tf("Heading-bug", { rot: s.headingBug });
     this.p.text("SelectedHDG-text", deg3(s.headingBug));
     for (const [f, id] of FAILURES) this.p.show(id, !!s.failed[f]);
+    this.p.show("DME1", this.ui.dme);
+    if (this.ui.dme) {
+      const src = this.ui.dmeSource;
+      this.p.text("DME1-SRC-text", src);
+      this.p.text("DME1-FREQ-text", s.radios[src === "NAV1" ? "nav1" : "nav2"].active.toFixed(2));
+      this.p.text("DME1-DST-text", dmeText(s.bearings[src]));
+    }
     this.setCDISource(s.cdiSource, cdiLabel(s.cdiSource, s.radios));
     this.p.text("SelectedCRS-text", deg3(s.course), s.cdiSource === "GPS" ? MAGENTA : GREEN);
     this.p.text("SelectedCRS-bgtext", s.cdiSource === "GPS" ? "DTK" : "CRS"); // v13 trainer: DTK on GPS (FG1000: always CRS)
@@ -606,7 +617,7 @@ export class GlassPfd {
   private drawWindow() {
     const u = this.ui;
     const s = this.state;
-    if (u.window !== "TMR/REF" && u.window !== "ALERTS") {
+    if (u.window !== "TMR/REF" && u.window !== "ALERTS" && u.window !== "DME") {
       this.win.innerHTML = "";
       return;
     }
@@ -634,6 +645,10 @@ export class GlassPfd {
         { text: s.minimums === null ? "OFF" : "BARO", field: "minimums", right: 180 },
         { text: s.minimums === null ? "____FT" : `${s.minimums}FT`, field: "minalt", right: end },
       ] });
+    } else if (u.window === "DME") {
+      // v13 trainer: DME TUNING, the NAV radio the DME window shows; the small FMS knob switches it.
+      rows.push({ label: "DME TUNING", cells: [], title: true });
+      rows.push({ label: "DME  MODE", cells: [{ text: u.dmeSource, field: "mode", right: end }] });
     } else {
       for (const a of s.alerts) rows.push({ label: a, cells: [] });
     }
@@ -646,7 +661,7 @@ export class GlassPfd {
         ? `<text x="${x + w / 2}" y="${ty}" text-anchor="middle" ${FONT} fill="#ffffff">${esc(label)}</text>`
         : `<text x="${x + 10}" y="${ty}" ${FONT} fill="#ffffff">${esc(label)}</text>`;
       for (const c of cells) {
-        const cur = u.window === "TMR/REF" && TMR_FIELDS[u.cursor] === c.field;
+        const cur = (u.window === "TMR/REF" && TMR_FIELDS[u.cursor] === c.field) || c.field === "mode";
         if (cur) out += `<rect x="${x + c.right - width(c.text) + 4}" y="${ty - line * 0.8}" width="${width(c.text)}" height="${line}" fill="${CYAN}"/>`;
         out += `<text x="${x + c.right}" y="${ty}" text-anchor="end" ${FONT} fill="${cur ? "#000" : CYAN}">${esc(c.text)}</text>`;
       }

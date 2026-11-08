@@ -16,3 +16,7 @@ export declare function tuneNav(radios: Radios, points: MapPoint[], lat: number,
 export declare function isLocalizer(mhz: number): boolean;
 /** The CDI source as the v13 trainer names it: GPS, VOR1, LOC1, VOR2, LOC2 (FG1000 shows NAV1 and NAV2). "" for OFF. */
 export declare function cdiLabel(source: CdiSource, radios: Radios): string;
+/** The DME window's distance: one decimal, or dashes with no station. */
+export declare function dmeText(p?: {
+    distance?: number;
+}): string;
