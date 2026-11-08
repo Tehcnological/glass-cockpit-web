@@ -6,7 +6,7 @@ Only the latest commit on `main` is supported. Fixes are not backported.
 
 ## Reporting a vulnerability
 
-Do not open a public issue. Email Chris DeFoe at chris@defoe.me with:
+Do not open a public issue. Use [Report a vulnerability](https://github.com/Tehcnological/glass-cockpit-web/security/advisories/new) on the repo's Security tab, or email Chris DeFoe at chris@defoe.me. Include:
 
 - what the problem is and where (file, function or input),
 - how to reproduce it,
