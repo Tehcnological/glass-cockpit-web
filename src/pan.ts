@@ -15,8 +15,9 @@ const MARGIN = 10;
 const NEAR = 6;
 
 /** `center`: the map's center; `x`, `y`: the pointer, in pixels from the map window's center; `up`: the map's rotation,
- * held while panning so a heading-up map does not turn under the pointer. */
-export interface Pan { center: LatLon; x: number; y: number; up: number }
+ * held while panning so a heading-up map does not turn under the pointer; `from`: while measuring (Measure
+ * Bearing/Distance), the start point the info bar measures from. */
+export interface Pan { center: LatLon; x: number; y: number; up: number; from?: LatLon }
 /** The map window: its size, pixels per nm, the map's up direction (degrees true), the aircraft's latitude, and the height
  * the info bar covers at its top. */
 export interface PanView { w: number; h: number; scale: number; up: number; lat: number; bar?: number }
@@ -49,16 +50,25 @@ export function panMove(p: Pan, dx: number, dy: number, v: PanView): Pan {
 
 export const panPoint = (p: Pan, v: PanView): LatLon => unproject(p.center, p.x, p.y, v);
 
+/** Where `q` is on the map, in pixels from the map window's center. */
+export const panProject = (p: Pan, q: LatLon, v: PanView) => project(p.center, q, v);
+
+/** ENT while measuring: the start point moves to the pointer (Pilot's Guide). */
+export const panMeasureFrom = (p: Pan, v: PanView): Pan => ({ ...p, from: panPoint(p, v) });
+
 /** RANGE while panning: the map recenters on the pointer (Pilot's Guide, Weather Data Link page; NXi on every map). */
 export const panTarget = (p: Pan, v: PanView): Pan => ({ ...p, center: panPoint(p, v), x: 0, y: 0 });
 
-/** The pointer and the info bar across the top of the map window `m`, as SVG, text `font` px high. Drawn here, not the trainer's. */
-export function panMarkup(p: Pan, info: ReturnType<typeof panInfo>, m: MapGeometry, font: number): string {
+/** The pointer and the info bar across the top of the map window `m`, as SVG, text `font` px high, and while measuring
+ * the line from `start`. Drawn here, not the trainer's. */
+export function panMarkup(p: Pan, info: ReturnType<typeof panInfo>, m: MapGeometry, font: number, start?: [number, number]): string {
   const [x, y, k] = [m.cx + p.x, m.cy + p.y, font / 18];
   const t = (tx: number, ty: number, s: string, anchor = "start") =>
     `<text x="${tx}" y="${ty}" text-anchor="${anchor}" fill="#ffffff" font-size="${font}" font-family="'Liberation Sans',Arial,sans-serif">${s}</text>`;
   const [pad, l1, l2] = [font * 0.55, m.y + font * 1.1, m.y + font * 2.3];
-  return `<path d="M${x} ${y}l0 ${22 * k}l${6 * k} ${-6 * k}l${6 * k} ${11 * k}l${4 * k} ${-2 * k}l${-6 * k} ${-11 * k}l${9 * k} 0z" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>` +
+  // Measuring: a dashed line from the start point (`start`, from panProject) to the pointer.
+  const line = start ? `<line x1="${m.cx + start[0]}" y1="${m.cy + start[1]}" x2="${x}" y2="${y}" stroke="#ffffff" stroke-width="2" stroke-dasharray="6 4"/>` : "";
+  return line + `<path d="M${x} ${y}l0 ${22 * k}l${6 * k} ${-6 * k}l${6 * k} ${11 * k}l${4 * k} ${-2 * k}l${-6 * k} ${-11 * k}l${9 * k} 0z" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>` +
     `<rect x="${m.x}" y="${m.y}" width="${m.w}" height="${font * 2.7}" fill="#000000" stroke="#808080" stroke-width="2"/>` +
     t(m.x + pad, l1, esc(info.label)) + t(m.x + pad, l2, `${info.dis}  ${info.brg}`) +
     t(m.x + m.w - pad, l1, latLon(info.lat, "N", "S"), "end") + t(m.x + m.w - pad, l2, latLon(info.lon, "E", "W"), "end");

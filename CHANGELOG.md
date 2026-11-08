@@ -4,6 +4,8 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 
 ## Unreleased
 
+- MFD: the navigation map's Measure Bearing/Distance (Pilot's Guide), built on pan mode.
+- Demo: a round red DISPLAY BACKUP button between the units (`display-backup.ts`); the displays have no reversionary mode yet.
 - PFD and MFD: MENU in DIRECT TO offers Cancel Direct-To NAV, which resumes the flight plan on the closest leg (Pilot's Guide). PFD state gains `vtf`, which dims it during vector-to-final.
 - Softkeys follow the G1000 trainer (v13.02, 172S): its layouts on the PFD and MFD menus, and dim keys for what is unavailable.
 - PFD: the ALERTS key reads ADVISORY while a message is unread.

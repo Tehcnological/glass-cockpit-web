@@ -11,7 +11,7 @@ import SURROUND from "./svg/surround-mfd.js";
 import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay } from "./display.js";
 import { Page, clamp, deg3, mod } from "./page.js";
-import { panInfo, panMarkup, panMove, panStart, panTarget } from "./pan.js";
+import { panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget } from "./pan.js";
 import { drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
@@ -151,7 +151,11 @@ export class GlassMfd {
                 page.toggleCrsr();
                 return this.set({});
             case "ENT":
-                page.ent();
+                // Measuring (Pilot's Guide): ENT moves the start point to the pointer.
+                if (this.ui.pan?.from && !this.overlay)
+                    this.ui.pan = panMeasureFrom(this.ui.pan, this.panView());
+                else
+                    page.ent();
                 return this.set({});
             case "CLR":
                 page.clr();
@@ -347,7 +351,7 @@ export class GlassMfd {
     panInfo() {
         const s = this.state;
         const named = [...s.points, ...s.route.filter((r) => typeof r !== "string")];
-        return panInfo(this.ui.pan, this.panView(), s, named, s.magVar);
+        return panInfo(this.ui.pan, this.panView(), this.ui.pan.from ?? s, named, s.magVar);
     }
     /** Pan mode: the pointer, and the info bar across the top of the map (layout from the v13 trainer, drawn here). */
     drawPan(shown) {
@@ -355,7 +359,8 @@ export class GlassMfd {
         this.panLayer.style.display = pan ? "inline" : "none";
         if (!pan)
             return;
-        this.panLayer.innerHTML = panMarkup(pan, this.panInfo(), MAP_FULL, PAN_FONT);
+        const start = pan.from && panProject(pan, pan.from, this.panView());
+        this.panLayer.innerHTML = panMarkup(pan, this.panInfo(), MAP_FULL, PAN_FONT, start);
     }
     // The softkeys: the page's own, or a menu shared by the pages (EIS engineMenu, NavigationMap mapMenu).
     softkeys() {

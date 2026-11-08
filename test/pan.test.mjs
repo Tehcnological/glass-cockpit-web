@@ -1,7 +1,7 @@
 // Map pan mode (joystick), as on the v13 trainer.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { panInfo, panMarkup, panMove, panPoint, panStart, panTarget, PAN_STEP } from "../dist/pan.js";
+import { panInfo, panMarkup, panMeasureFrom, panMove, panPoint, panProject, panStart, panTarget, PAN_STEP } from "../dist/pan.js";
 
 // 100 px a nm, north up, a 400 x 300 px map.
 const view = { w: 400, h: 300, scale: 100, up: 0, lat: 0 };
@@ -65,4 +65,22 @@ test("the info bar escapes identifiers", () => {
   const info = { label: "<x>&", dis: "1.0NM", brg: "090°", lat: 0, lon: 0 };
   const svg = panMarkup({ center: here, x: 0, y: 0 }, info, { x: 0, y: 0, w: 200, h: 100, cx: 100, cy: 50 }, 18);
   assert.ok(!svg.includes("<x>") && svg.includes("&#60;x&#62;&#38;"));
+});
+
+// Pilot's Guide: Measure Bearing/Distance draws a dashed line from the start point, and ENT moves the start.
+test("measuring: ENT moves the start point to the pointer", () => {
+  const p = { ...panStart(here), x: 100, y: 0, from: here };
+  const m = panMeasureFrom(p, view);
+  assert.deepEqual(m.from, panPoint(p, view));
+  assert.deepEqual([m.x, m.y], [100, 0], "the pointer stays");
+});
+
+test("measuring draws a dashed line from the start to the pointer", () => {
+  const p = { ...panStart(here), x: 100, y: 0, from: here };
+  const g = { x: 0, y: 0, w: 400, h: 300, cx: 200, cy: 150 };
+  const info = { label: "MAP POINTER", dis: "1.0NM", brg: "090°", lat: 0, lon: 0 };
+  assert.deepEqual(panProject(p, here, view).map((n) => n + 0), [0, 0]);
+  const svg = panMarkup(p, info, g, 18, panProject(p, here, view));
+  assert.match(svg, /<line x1="200" y1="150" x2="300" y2="150"[^>]*stroke-dasharray/);
+  assert.doesNotMatch(panMarkup(p, info, g, 18), /<line/, "no line when panning");
 });

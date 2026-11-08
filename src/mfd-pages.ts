@@ -7,7 +7,7 @@ import { asWaypoint, bearingDistance, cancelDirectTo, directToPatch, findPoint, 
 import { BLANK, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, firstRow, key, type Key } from "./ui.js";
 import { firstOption, fplMenu, stepMenu, type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
-import type { Pan } from "./pan.js";
+import { panStart, type Pan } from "./pan.js";
 import { PROC_MENU, ProcFlow } from "./procedures.js";
 
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
@@ -177,12 +177,17 @@ class NavigationMapPage extends MfdPage {
       11: key("CHKLIST", () => this.m.go("LstPageGroup", "Checklist")),
     });
   }
-  // v13 trainer's options; only Declutter has something to do here (no map setup, measuring, charts or profile view).
+  // v13 trainer's options; Declutter and Measure Bearing/Distance work here (no map setup, charts or profile view).
   pageMenu(): MenuOption[] {
     const u = this.m.ui;
+    const s = this.s;
+    // Pilot's Guide: the measure pointer starts on the aircraft; while measuring the option reads Stop Measuring.
+    const measure: MenuOption = u.pan?.from
+      ? { label: "Stop Measuring", act: () => (u.pan = null) }
+      : { label: "Measure Bearing/Distance", act: () => (u.pan = { ...panStart(s, s.orientation === "HDG UP" ? s.heading : 0), from: { lat: s.lat, lon: s.lon } }) };
     return [
       { label: "Map Setup" }, { label: "Declutter", act: () => (u.dcltr = (u.dcltr + 1) % 4) },
-      { label: "Measure Bearing/Distance" }, { label: "Show Chart" }, { label: "Show Profile View" },
+      measure, { label: "Show Chart" }, { label: "Show Profile View" },
     ];
   }
 }
