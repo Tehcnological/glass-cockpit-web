@@ -99,6 +99,7 @@ With `bezel: true`, the mouse works the controls as FlightGear's FG1000 window d
 | Shift+wheel | Turns the outer ring of a dual knob |
 | Click | Pushes a knob or button |
 | Shift+click | Long press |
+| Click an arrow at a knob's top corner | Turns the knob one detent, left counterclockwise; with Shift, the outer ring of a dual knob. RANGE uses the - and + printed beside it. The small volume knobs have no arrows. |
 
 On both units:
 
@@ -129,6 +130,8 @@ FlightGear draws the map from its own navigation database. Here the map shows on
 ### Where it follows the G1000 trainer
 
 Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this package follows the trainer, in behavior and labels only; the artwork is still FG1000's.
+
+- **Knob arrows:** as on the trainer, clicking beside a knob turns it. Here small arrows (original, not the trainer's) sit at the top corners of the NAV, HDG, ALT, COM, CRS/BARO and FMS knobs, and RANGE turns on its printed - and +. The joystick's left and right spots start below those marks.
 
 - **Softkey layouts** follow the trainer: DME on the PFD's top row and PFD menu; WX LGND, PRECIP and METAR in the inset menu; DCLTR, SHW CHRT and CHKLIST in the last three MFD slots; BACK in the eleventh slot of the ENGINE, LEAN, SYSTEM and MAP menus; LEAN's CYL SLCT and ASSIST and SYSTEM's RST FUEL and GAL REM where the trainer has them.
 - **Dim keys:** a key whose function is unavailable is grey and does nothing. OBS is dim with no flight plan. Keys for data this package has no source for (weather, topography, terrain, charts, map legend) are always dim. The inset's DCLTR stays working, although the trainer dims it.

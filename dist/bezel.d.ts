@@ -18,6 +18,17 @@ export interface Knobs {
     comVolume: number;
     /** NAV station identifier audio, switched by pushing the NAV volume knob. */ navIdent: boolean;
 }
+/** A hotspot. `arrow`: it turns a knob one detent per click, drawn as an arrow here or printed on the bezel. */
+export type Spot = {
+    box: [number, number, number, number];
+    wheel?: Control;
+    shiftWheel?: Control;
+    click?: Control;
+    shiftClick?: Control;
+    value?: number;
+    arrow?: "drawn" | "printed";
+};
+export declare const SPOTS: Spot[];
 /** Adds the hotspots to a display drawn with its bezel and reports each input. */
 export declare function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void): void;
 /**

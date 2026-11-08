@@ -1,7 +1,7 @@
 // Knob math from SurroundController.nas: node --test (after npm run build).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { adjust } from "../dist/bezel.js";
+import { SPOTS, adjust } from "../dist/bezel.js";
 
 const k = {
   heading: 359.6, headingBug: 359, course: 0, baro: 29.92, alt: 3040, selectedAlt: null,
@@ -46,4 +46,20 @@ test("CRS push, volume and NAV ID", () => {
   assert.deepEqual(go("COM_VOL"), { comVolume: 1 }); // clamped
   assert.deepEqual(go("COM_VOL", -1), { comVolume: 0.99 });
   assert.deepEqual(go("NAV_ID"), { navIdent: true });
+});
+
+test("arrows at a knob's top corners turn it one detent each way", () => {
+  const arrows = SPOTS.filter((s) => s.arrow);
+  const turns = (c) => arrows.filter((s) => s.click === c).map((s) => s.value).sort();
+  for (const c of ["NAV_INNER", "HEADING", "ALT_INNER", "COM_INNER", "CRS", "RANGE", "FMS_INNER"]) assert.deepEqual(turns(c), [-1, 1], c);
+  const alt = arrows.find((s) => s.click === "ALT_INNER");
+  assert.equal(alt.shiftClick, "ALT_OUTER"); // shift turns the outer ring
+  assert.equal(alt.wheel, "ALT_INNER"); // the wheel still works over an arrow
+  assert.equal(arrows.find((s) => s.click === "HEADING").shiftClick, "HEADING"); // a single knob has no outer ring
+});
+
+test("an arrow covers no other button", () => {
+  const overlap = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+  for (const a of SPOTS.filter((s) => s.arrow))
+    for (const s of SPOTS.filter((s) => !s.arrow && s.wheel !== a.wheel)) assert.ok(!overlap(a.box, s.box), `${a.click} ${a.value} over ${s.click ?? s.wheel}`);
 });

@@ -1,10 +1,17 @@
 // Mouse input on the bezel, as FG1000's GUI window takes it (Nasal/GUI.nas, Copyright 2018 Stuart Buchanan,
 // GPL-2.0-or-later): the wheel turns a knob (with shift, the outer ring of a dual knob), a click pushes it or a
 // button (with shift, a long press), and the twelve keys under the screen are softkeys 1 to 12.
+// v13 trainer: a click on an arrow at a knob's top corner also turns it (FG1000 has the wheel only).
 // Knob and button behavior: Nasal/MFDPages/Surround/SurroundController.nas.
 import { clamp, mod } from "./page.js";
+// v13 trainer: clicking beside a knob turns it a detent, the left side counterclockwise, with shift the outer ring.
+// Here the arrows sit in the top corners of the knob's box (its label is above); the wheel works over them too.
+const ARROW = 18;
+const arrows = ({ box: [x1, y1, x2], wheel, shiftWheel }) => [[x1, -1], [x2 - ARROW, 1]].map(([x, value]) => ({
+    box: [x, y1 - 4, x + ARROW, y1 + ARROW - 4], wheel, shiftWheel, click: wheel, shiftClick: shiftWheel ?? wheel, value, arrow: "drawn",
+}));
 // GUI.nas WHEEL_HOT_SPOTS and CLICK_HOT_SPOTS merged per control, in bezel pixels (top left, bottom right).
-const SPOTS = [
+export const SPOTS = [
     { box: [65, 45, 112, 90], wheel: "NAV_VOL", click: "NAV_ID" },
     { box: [100, 102, 150, 138], click: "NAV_FREQ_TRANSFER" },
     { box: [45, 168, 135, 250], wheel: "NAV_INNER", shiftWheel: "NAV_OUTER", click: "NAV_TOGGLE" },
@@ -15,8 +22,9 @@ const SPOTS = [
     { box: [1275, 170, 1355, 245], wheel: "COM_INNER", shiftWheel: "COM_OUTER", click: "COM_TOGGLE" },
     { box: [1275, 331, 1355, 410], wheel: "CRS", shiftWheel: "BARO", click: "CRS_CENTER" },
     { box: [1295, 500, 1345, 550], wheel: "RANGE", click: "JOYSTICK_PRESS" },
-    { box: [1255, 500, 1285, 550], click: "JOYSTICK_HORIZONTAL", value: -1 },
-    { box: [1345, 500, 1380, 550], click: "JOYSTICK_HORIZONTAL", value: 1 },
+    // Below the RANGE - and + (GUI.nas starts these at 500).
+    { box: [1255, 518, 1285, 550], click: "JOYSTICK_HORIZONTAL", value: -1 },
+    { box: [1345, 518, 1380, 550], click: "JOYSTICK_HORIZONTAL", value: 1 },
     { box: [1295, 465, 1345, 500], click: "JOYSTICK_VERTICAL", value: -1 },
     { box: [1295, 550, 1345, 585], click: "JOYSTICK_VERTICAL", value: 1 },
     { box: [1255, 620, 1305, 660], click: "DTO" },
@@ -28,7 +36,12 @@ const SPOTS = [
     { box: [1275, 800, 1355, 880], wheel: "FMS_INNER", shiftWheel: "FMS_OUTER", click: "FMS_CRSR" },
     // SOFTKEY_HOTSPOTS
     ...[205, 290, 375, 460, 545, 630, 715, 800, 885, 970, 1055, 1145].map((x, i) => ({ box: [x, 830, x + 60, 875], click: "SOFTKEY", value: i + 1 })),
+    // RANGE turns on the - and + printed beside it; the small volume knobs have no room for arrows.
+    { box: [1264, 496, 1284, 516], wheel: "RANGE", click: "RANGE", value: -1, arrow: "printed" },
+    { box: [1347, 496, 1367, 516], wheel: "RANGE", click: "RANGE", value: 1, arrow: "printed" },
 ];
+// After the knobs' own spots, so an arrow is on top of the knob it turns.
+SPOTS.push(...SPOTS.filter((s) => ["NAV_INNER", "HEADING", "ALT_INNER", "COM_INNER", "CRS", "FMS_INNER"].includes(s.wheel ?? "")).flatMap(arrows));
 const NS = "http://www.w3.org/2000/svg";
 // fascia.svg draws the bezel 1 px right of and 132 px below GUI.nas's coordinates.
 const DX = 1;
@@ -37,6 +50,15 @@ const DY = 132;
 const DETENT = 100;
 /** Adds the hotspots to a display drawn with its bezel and reports each input. */
 export function bezelInput(svg, onInput) {
+    const marks = svg.appendChild(document.createElementNS(NS, "g"));
+    marks.setAttribute("fill", "#e6e6e6");
+    for (const { box: [x1, y1, x2, y2], arrow, value } of SPOTS) {
+        if (arrow !== "drawn")
+            continue;
+        const [x, y, d] = [(x1 + x2) / 2 + DX, (y1 + y2) / 2 + DY, value < 0 ? 1 : -1];
+        const p = marks.appendChild(document.createElementNS(NS, "path"));
+        p.setAttribute("d", `M${x + 4 * d} ${y - 5}L${x - 4 * d} ${y}L${x + 4 * d} ${y + 5}Z`);
+    }
     const layer = svg.appendChild(document.createElementNS(NS, "g"));
     layer.setAttribute("fill", "transparent");
     layer.setAttribute("cursor", "pointer");
