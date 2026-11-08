@@ -2,6 +2,7 @@
 // Nasal/canvas/PFD GroupElement, HighlightElement and DefaultStyle (Copyright 2018 Stuart Buchanan), GPL-2.0-or-later.
 import { clamp, mod } from "./page.js";
 export const key = (label, act, lit = false) => ({ label, act, lit });
+export const dimKey = (label) => ({ label, dim: true });
 export const BLANK = key("");
 /** DefaultStyle.HIGHLIGHT_COLOR: the cursor box. */
 export const CYAN = "#80ffff";

@@ -12,7 +12,7 @@ import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
 import { bearingDistance, bestApproach, latLon, nearest, nrstFreq, planName, routePoint } from "./nav.js";
-import { BLANK as blank, CYAN, Highlighter, ListView, NS, esc, key as k, screenBox } from "./ui.js";
+import { BLANK as blank, CYAN, Highlighter, ListView, NS, dimKey, esc, key as k, screenBox } from "./ui.js";
 export { GlassMfd } from "./glass-mfd.js";
 const DEFAULTS = {
     pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
@@ -187,9 +187,10 @@ export class GlassPfd {
         switch (u.menu) {
             case "top": {
                 const cdi = ["GPS", "NAV1", "NAV2"];
+                // v13 trainer: OBS is dim with no flight plan (FG1000 always offers it).
                 return [
                     blank, k("INSET", () => { u.inset = true; this.go("inset"); }), blank, k("PFD", () => this.go("pfd")),
-                    k("OBS", () => this.change({ obs: !s.obs }), s.obs),
+                    s.route.length ? k("OBS", () => this.change({ obs: !s.obs }), s.obs) : dimKey("OBS"),
                     // PFDInstrumentsController.incrCDISource: GPS, NAV1, NAV2.
                     k("CDI", () => this.change({ cdiSource: cdi[(cdi.indexOf(s.cdiSource) + 1) % 3] })),
                     blank, k("XPDR", () => this.go("xpdr")), k("IDENT", () => this.ident()),
@@ -198,9 +199,11 @@ export class GlassPfd {
                 ];
             }
             case "inset":
+                // v13 trainer layout (FG1000: OFF, DCLTR, -, TRAFFIC, TOPO, TERRAIN). Keys for data GCW has no source for are dim;
+                // DCLTR stays working although the trainer dims it.
                 return [
-                    k("OFF", () => { u.inset = false; this.go("top"); }), k(DCLTR[u.dcltr], () => (u.dcltr = (u.dcltr + 1) % 4)), blank,
-                    toggle(u.layers, "TRAFFIC"), toggle(u.layers, "TOPO"), toggle(u.layers, "TERRAIN"), blank, blank, blank, blank, back("top"), alerts,
+                    k("OFF", () => { u.inset = false; this.go("top"); }), k(DCLTR[u.dcltr], () => (u.dcltr = (u.dcltr + 1) % 4)), dimKey("WX LGND"),
+                    toggle(u.layers, "TRAFFIC"), dimKey("TOPO"), dimKey("TERRAIN"), blank, dimKey("PRECIP"), blank, dimKey("METAR"), back("top"), alerts,
                 ];
             case "pfd": {
                 const next = (b) => BRG_SOURCES[(BRG_SOURCES.indexOf(b) + 1) % BRG_SOURCES.length];
@@ -386,7 +389,7 @@ export class GlassPfd {
         this.surround.setVolume("Nav", s.navVolume);
         this.surround.setVolume("Comm", s.comVolume);
         const keys = this.menu();
-        this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit));
+        this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit), keys.map((k) => !!k.dim));
         this.updateLeg(s.leg);
         this.updateXpdr();
         this.updateWind(s);

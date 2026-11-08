@@ -4,7 +4,7 @@
 import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { bearingDistance, latLon, nearest, planName, routePoint, type Airport, type Procedure } from "./nav.js";
-import { BLANK, Highlighter, IdEntry, ListView, NS, firstRow, key, type Key } from "./ui.js";
+import { BLANK, Highlighter, IdEntry, ListView, NS, dimKey, firstRow, key, type Key } from "./ui.js";
 import type { MfdState } from "./glass-mfd.js";
 
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
@@ -161,9 +161,11 @@ class NavigationMapPage extends MfdPage {
   }
   keys() {
     const u = this.m.ui;
+    // v13 trainer slots: DCLTR tenth, SHW CHRT (dim, no charts) eleventh, CHKLIST twelfth (FG1000: ninth and eleventh).
     return this.m.topKeys({
-      8: key(["DCLTR", "DCLTR-1", "DCLTR-2", "DCLTR-3"][u.dcltr], () => (u.dcltr = (u.dcltr + 1) % 4)),
-      10: key("CHKLIST", () => this.m.go("LstPageGroup", "Checklist")),
+      9: key(["DCLTR", "DCLTR-1", "DCLTR-2", "DCLTR-3"][u.dcltr], () => (u.dcltr = (u.dcltr + 1) % 4)),
+      10: dimKey("SHW CHRT"),
+      11: key("CHKLIST", () => this.m.go("LstPageGroup", "Checklist")),
     });
   }
 }

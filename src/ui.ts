@@ -2,8 +2,10 @@
 // Nasal/canvas/PFD GroupElement, HighlightElement and DefaultStyle (Copyright 2018 Stuart Buchanan), GPL-2.0-or-later.
 import { Page, clamp, mod } from "./page.js";
 
-export type Key = { label: string; act?: () => void; lit?: boolean };
+/** A dim key is grey and does nothing: the v13 trainer dims keys whose function is unavailable. */
+export type Key = { label: string; act?: () => void; lit?: boolean; dim?: boolean };
 export const key = (label: string, act?: () => void, lit = false): Key => ({ label, act, lit });
+export const dimKey = (label: string): Key => ({ label, dim: true });
 export const BLANK = key("");
 
 /** DefaultStyle.HIGHLIGHT_COLOR: the cursor box. */

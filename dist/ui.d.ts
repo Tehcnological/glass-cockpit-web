@@ -1,10 +1,13 @@
 import { Page } from "./page.js";
+/** A dim key is grey and does nothing: the v13 trainer dims keys whose function is unavailable. */
 export type Key = {
     label: string;
     act?: () => void;
     lit?: boolean;
+    dim?: boolean;
 };
 export declare const key: (label: string, act?: () => void, lit?: boolean) => Key;
+export declare const dimKey: (label: string) => Key;
 export declare const BLANK: Key;
 /** DefaultStyle.HIGHLIGHT_COLOR: the cursor box. */
 export declare const CYAN = "#80ffff";

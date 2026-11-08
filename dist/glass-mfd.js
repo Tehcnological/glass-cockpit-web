@@ -14,7 +14,7 @@ import { Page, clamp, deg3, mod } from "./page.js";
 import { drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
-import { BLANK, Highlighter, NS, key } from "./ui.js";
+import { BLANK, Highlighter, NS, dimKey, key } from "./ui.js";
 import { PAGE_GROUPS, makePages } from "./mfd-pages.js";
 const DEFAULTS = {
     heading: 0, headingBug: 0, course: 0, baro: 29.92, alt: 0, selectedAlt: null, track: 0, groundspeed: 0, dtk: null, ete: null,
@@ -261,7 +261,7 @@ export class GlassMfd {
         this.surround.setVolume("Nav", s.navVolume);
         this.surround.setVolume("Comm", s.comVolume);
         const keys = this.softkeys();
-        this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit));
+        this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit), keys.map((k) => !!k.dim));
         this.updateHeader(s);
         this.updateEIS(s.engine);
         // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO and
@@ -288,20 +288,23 @@ export class GlassMfd {
         const to = (m) => () => (u.menu = m);
         const eis = () => [key("ENGINE", to("engine"), u.menu === "engine"), key("LEAN", to("lean"), u.menu === "lean"), key("SYSTEM", to("system"), u.menu === "system")];
         const fill = (k) => [...k, ...Array(12).fill(BLANK)].slice(0, 12);
+        // v13 trainer layouts: BACK in the eleventh slot, LEAN's and SYSTEM's keys where the trainer has them (FG1000 packs
+        // them after SYSTEM), and dim keys for data GCW has no source for.
         switch (u.menu) {
             // shortcut: the engine strip has only its ENGINE page (as FG1000); LEAN and SYSTEM change the softkeys only.
             case "engine":
-                return fill([...eis(), BLANK, BLANK, BLANK, BLANK, BLANK, key("BACK", to("top"))]);
+                return fill([...eis(), BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, key("BACK", to("top"))]);
             case "lean":
-                return fill([...eis(), key("CYL SELECT"), key("ASSIST"), BLANK, BLANK, BLANK, BLANK, key("BACK", to("engine"))]);
+                return fill([...eis(), BLANK, key("CYL SLCT"), key("ASSIST"), BLANK, BLANK, BLANK, BLANK, key("BACK", to("engine"))]);
             case "system":
-                return fill([...eis(), key("RST FUEL"), key("GAL REM"), key("BACK", to("engine"))]);
+                return fill([...eis(), BLANK, BLANK, BLANK, key("RST FUEL"), key("GAL REM"), BLANK, BLANK, key("BACK", to("engine"))]);
             case "map": {
-                // shortcut: no traffic, profile, topography, terrain or airway data; these keys switch only their setting.
+                // shortcut: no traffic, profile or airway data; these keys switch only their setting.
                 const layer = (n) => key(n, () => (u.layers[n] = !u.layers[n]), u.layers[n]);
                 const airways = ["AIRWAYS", "AIRWY ON", "AIRWY LO", "AIRWY HI"];
-                return fill([layer("TRAFFIC"), layer("PROFILE"), layer("TOPO"), layer("TERRAIN"),
-                    key(airways[u.airways], () => (u.airways = (u.airways + 1) % 4), u.airways > 0), BLANK, BLANK, BLANK, BLANK, BLANK, key("BACK", to("top"))]);
+                return fill([layer("TRAFFIC"), layer("PROFILE"), dimKey("TOPO"), dimKey("TERRAIN"),
+                    key(airways[u.airways], () => (u.airways = (u.airways + 1) % 4), u.airways > 0), BLANK, dimKey("PRECIP"), BLANK, dimKey("METAR"),
+                    dimKey("LEGEND"), key("BACK", to("top"))]);
             }
         }
         return fill(this.page.keys());

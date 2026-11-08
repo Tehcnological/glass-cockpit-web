@@ -38,7 +38,7 @@ export declare class Surround {
     destroy(): void;
     /** `navSource` is the NAV radio driving the CDI; its active frequency shows green. */
     setRadios(r: Radios, navSource: 1 | 2 | null): void;
-    /** Twelve labels, left to right; "" leaves a key blank. A lit key (an option that is on) is black on grey. */
-    setSoftkeys(labels: string[], lit?: boolean[]): void;
+    /** Twelve labels, left to right; "" leaves a key blank. A lit key (an option that is on) is black on grey; a dim key is grey. */
+    setSoftkeys(labels: string[], lit?: boolean[], dim?: boolean[]): void;
     setPageTitle(title: string): void;
 }
