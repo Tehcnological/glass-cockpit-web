@@ -4,15 +4,19 @@
 <title>glass-cockpit-web demo</title>
 <style>
   body { margin: 0; padding: 16px; background: #17191c; color: #d9dadc; font: 14px system-ui, sans-serif; }
-  .units { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 16px; }
+  .units { display: flex; gap: 6px; align-items: flex-end; }
+  #pfd, #mfd { flex: 1407 1 0; } #backup { flex: 100 1 0; }
   .units svg { display: block; width: 100%; height: auto; }
   form { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 16px; margin-top: 12px; }
   label { display: grid; grid-template-columns: 90px 1fr 48px; gap: 8px; align-items: center; }
 </style>
-<div class="units"><div id="pfd"></div><div id="mfd"></div></div>
+<div class="units"><div id="pfd"></div><div id="backup"></div><div id="mfd"></div></div>
 <form id="f"></form>
 <script type="module">
   import { GlassPfd, GlassMfd } from "./dist/glass-pfd.js";
+  import { DisplayBackup } from "./dist/display-backup.js";
+  // shortcut: the displays have no reversionary mode yet, so the button only shows its state.
+  new DisplayBackup(document.getElementById("backup"));
   // The two units share their knobs and flight plan, as a real G1000's do: a change on one is set on the other, and the
   // sliders follow. RANGE and the map stay each unit's own.
   const SHARED = ["headingBug", "course", "baro", "selectedAlt", "radios", "navVolume", "comVolume", "navIdent", "route", "activeLeg", "directFrom", "vtf"];
