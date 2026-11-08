@@ -78,6 +78,7 @@ The pages draw from what you pass in:
 | `points` | Map symbols, WPT and NRST details (`name`, `freq` and the rest) |
 | `airports` | Runways, frequencies, approach names |
 | `stations` | ARTCC, FSS and weather frequencies |
+| `airways` | The map's AIRWAYS key: `{ id, type: "LO" \| "HI", points }`, `points` being ids in `points` |
 | `procedures` | Approach legs by transition, for PROC |
 | `checklists` | CHKLIST |
 
@@ -88,7 +89,7 @@ How the pages work:
 - **DIRECT TO:** opens on the selected waypoint with ACTIVATE? highlighted, so ENT goes direct; the inner knob enters another.
 - **WAYPOINT ENTRY and DIRECT TO:** turning the inner knob left before typing opens the FPL, NRST and RECENT lists; the outer knob scrolls a list and ENT takes the waypoint.
 - **PROC:** opens the PROCEDURES menu (see below). SELECT APPROACH opens on the destination's approaches. Pick one, a transition, then LOAD? or ACTIVATE?. Its fixes join the flight plan after the en route waypoints.
-- **Softkeys:** ENGINE (LEAN, SYSTEM), MAP (traffic, profile and airway switches; the data keys are dim), DCLTR, CHKLIST, and each page's own keys.
+- **Softkeys:** ENGINE (LEAN, SYSTEM), MAP (PROFILE and AIRWAYS; a traffic switch; the data keys are dim), DCLTR, CHKLIST, and each page's own keys.
 - **CLR held:** goes to the navigation map.
 - **Joystick push:** on the navigation map (and the PFD's inset map), pan mode: a pointer and an info bar (the point under the pointer, or MAP POINTER; distance and bearing from the aircraft; latitude and longitude). The joystick moves the pointer and scrolls the map at its edge. RANGE recenters the map on the pointer. DIRECT TO takes the point under the pointer. Push again, or change page, to end it.
 
@@ -130,6 +131,10 @@ Every PFD softkey that is not dim works:
 ### Map
 
 FlightGear draws the map from its own navigation database. Here the map shows only the points passed in, with FG1000's symbols for airports, VORs, NDBs, fixes and flight plan waypoints, each layer at FG1000's default ranges: airports and VORs up to 150 nm, NDBs and fixes up to 15 nm, flight plan points always.
+
+`airways` are drawn with the AIRWAYS key (Pilot's Guide): AIRWY ON all, AIRWY LO the low ones in grey, AIRWY HI the high ones in green, over the low. Low airways show at map ranges up to 200 nm, high up to 300; their fixes show at any range while they do. A fix missing from `points` breaks the airway there. Airway names are not labeled, and the Map Setup Airways group is not ported. `glass-cockpit-web/navdata` does not build airways yet.
+
+**Profile View** (Pilot's Guide; FG1000 has none), from the PROFILE key or the PAGE MENU's Show/Hide Profile View: a window along the bottom of the navigation map with an altitude scale, the aircraft at `alt`, and a distance scale half the map range (PROFILE NOT AVAILABLE under 1 nm); the range box moves above it. A white box on the map marks the path it looks along: the track, 4 nm wide (the en route width; the MFD does not know the flight phase). There is no terrain or obstacle data, so it shows no terrain; its altitude steps and layout are this package's own.
 
 `airspaces` takes Class B, C and D outlines. FG1000 draws none, so they follow the sectional chart: B solid blue, C solid magenta, D dashed blue, shown up to 150 nm.
 
@@ -270,7 +275,7 @@ EOF
 - DIRECT TO's VNAV fields, approach suspend and missed-approach sequencing.
 - USER and AIRWAY waypoint lists.
 - Synthetic vision, the arc HSI, DME HOLD, selected airspeed, autopilot annunciations and the GPS course-to-intercept diamond.
-- Map terrain and airways.
+- Map terrain (and Profile View's terrain), airway labels and the Map Setup Airways and Profile groups.
 - The audio panel (and its reversionary mode button), and typing waypoint names on the keyboard.
 - PAGE MENU on pages other than the navigation map, flight plan and DIRECT TO, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice).
 - The autopilot keys the trainer's MFD bezel has (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN), reversionary mode, and the map's range ring and measure bearing/distance in pan mode.

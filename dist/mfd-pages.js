@@ -152,9 +152,10 @@ class NavigationMapPage extends MfdPage {
         const measure = u.pan?.from
             ? { label: "Stop Measuring", act: () => (u.pan = null) }
             : { label: "Measure Bearing/Distance", act: () => (u.pan = { ...panStart(s, mapUp(s)), from: { lat: s.lat, lon: s.lon } }) };
+        const profile = { label: u.layers.PROFILE ? "Hide Profile View" : "Show Profile View", act: () => (u.layers.PROFILE = !u.layers.PROFILE) };
         return [
             { label: "Map Setup", act: () => this.m.open(this.setup().open()) }, { label: "Declutter", act: () => (u.dcltr = (u.dcltr + 1) % 4) },
-            measure, { label: "Show Chart" }, { label: "Show Profile View" },
+            measure, { label: "Show Chart" }, profile,
         ];
     }
 }

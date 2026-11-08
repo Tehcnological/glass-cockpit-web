@@ -12,7 +12,7 @@ import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay } from "./display.js";
 import { Page, clamp, mod } from "./page.js";
 import { panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget } from "./pan.js";
-import { drawMap, mapGroup, mapUp, rangeLabel, stepRange } from "./map.js";
+import { drawMap, mapGroup, mapUp, profileView, rangeLabel, shownAirways, stepRange } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
 import { BLANK, Highlighter, NS, dimKey, key } from "./ui.js";
@@ -23,7 +23,7 @@ const PAN_FONT = 18;
 const DEFAULTS = {
     heading: 0, headingBug: 0, course: 0, baro: 29.92, alt: 0, selectedAlt: null, track: 0, groundspeed: 0, dtk: null, ete: null,
     lat: 0, lon: 0, magVar: 0, range: 10, orientation: "NORTH UP",
-    points: [], airspaces: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null, vtf: false,
+    points: [], airspaces: [], airways: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null, vtf: false,
     engine: { rpm: 0, fuelFlow: 0, oilPressure: 0, oilTemp: 0, egt: 0, vacuum: 0, fuelLeft: 0, fuelRight: 0, volts: 0, engineHours: 0 },
     radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, cdiSource: "NAV1", bearings: {}, checklists: [],
 };
@@ -36,6 +36,10 @@ const POINTERS = [
 // Constants.nas MAP_FULL and MAP_PARTIAL: header 56 px, footer 25 px, engine strip 150 px, data display 300 px; the
 // map's range is 689/2 px (NavMap.nas) either way.
 const MAP_FULL = { x: 150, y: 56, w: 874, h: 687, cx: 587, cy: 399.5, px: 344.5 };
+/** Profile View's window, along the bottom of the full map; and the profile's total width, nm. shortcut: the en
+ * route width always (the Pilot's Guide narrows it by flight phase, which the MFD does not know). */
+const PROFILE = { x: 150, y: 573, w: 874, h: 170 };
+const PROFILE_WIDTH = 4;
 const MAP_PARTIAL = { x: 150, y: 56, w: 574, h: 687, cx: 437, cy: 399.5, px: 344.5 };
 // Surround.showMenu: the selected group and page, and the rest.
 // v13 trainer: the page group window shows the selected page in cyan and the rest in white (FG1000: lilac and grey).
@@ -53,6 +57,8 @@ export class GlassMfd {
     map;
     mapPartial;
     /** Pan mode's pointer and info bar, over the full map. */ panLayer;
+    /** Profile View's window, and the range box it pushes up. */ profile;
+    rangeBox;
     frame;
     pages;
     /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ overlay = null;
@@ -77,6 +83,12 @@ export class GlassMfd {
         this.map = mapGroup(screen, this.nav.el("Legend"), MAP_FULL);
         this.mapPartial = mapGroup(screen, this.nav.el("Legend"), MAP_PARTIAL);
         this.panLayer = mapGroup(screen, this.nav.el("Legend"), MAP_FULL);
+        this.profile = mapGroup(screen, this.nav.el("Legend"), { ...PROFILE, cx: 0, cy: 0, px: 0 });
+        // The range box (not the orientation box, in the same group) moves above Profile View.
+        this.rangeBox = document.createElementNS(NS, "g");
+        const box = this.nav.el("Legend").querySelector("rect");
+        box.before(this.rangeBox);
+        this.rangeBox.append(box, this.nav.el("RangeDisplay"));
         // Pages with no data source (weather, terrain, AUX) show their title and this line, under the surround.
         this.frame = document.createElementNS(NS, "text");
         for (const [k, v] of Object.entries({ x: "587", y: "110", "text-anchor": "middle", fill: "#ffffff", "font-size": "22", "font-family": "'Liberation Sans',Arial,sans-serif" })) {
@@ -118,7 +130,7 @@ export class GlassMfd {
             go: (group, page) => this.goToPage(group, page),
             tune: (freq) => this.tune(freq),
             topKeys: (extra) => this.topKeys(extra),
-            drawMap: (g, geom, center, preview) => drawMap(g, { ...this.state, center, preview }, geom, this.ui.dcltr),
+            drawMap: (g, geom, center, preview) => drawMap(g, { ...this.state, center, preview, airways: this.airways() }, geom, this.ui.dcltr),
             open: (p) => this.openOverlay(p),
             close: () => this.closeOverlay(),
         };
@@ -338,6 +350,8 @@ export class GlassMfd {
         // WAYPOINT ENTRY are windows over the page, which stays drawn.
         const base = page === this.pages.directTo || page === this.pages.waypointEntry || page === this.pages.pageMenu || page === this.pages.mapSetup || page === this.pages.fplTool ? under : page;
         const mode = base.navMap;
+        // Profile View: the navigation map page's (Pilot's Guide), with the PROFILE key or the PAGE MENU.
+        const profile = mode === "full" && base.name === "NavigationMap" && !!this.ui.layers.PROFILE;
         this.nav.show("Group", mode !== null);
         this.map.style.display = mode === "full" ? "inline" : "none";
         this.mapPartial.style.display = mode === "partial" ? "inline" : "none";
@@ -347,8 +361,11 @@ export class GlassMfd {
             this.nav.text("OrientationDisplay", s.orientation);
             const pan = mode === "full" ? this.ui.pan : null;
             const center = pan?.center ?? base.center() ?? undefined;
-            drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center, up: pan?.up, trackVector: mode === "full" ? this.ui.trackVector : 0 }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
+            const prof = profile && profileView(s.alt, s.range);
+            const profilePath = prof ? { nm: prof.nm, width: PROFILE_WIDTH, ticks: prof.nm >= 4 ? prof.ticks.map((t) => t.nm) : [] } : undefined;
+            drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center, up: pan?.up, trackVector: mode === "full" ? this.ui.trackVector : 0, airways: this.airways(), profilePath }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
         }
+        this.drawProfile(profile);
         this.drawPan(mode === "full");
         this.frame.textContent = base.frame();
         if (base !== page)
@@ -391,7 +408,7 @@ export class GlassMfd {
             case "system":
                 return fill([...eis(), BLANK, BLANK, BLANK, key("RST FUEL"), key("GAL REM"), BLANK, BLANK, key("BACK", to("engine"))]);
             case "map": {
-                // shortcut: no traffic, profile or airway data; these keys switch only their setting.
+                // shortcut: no traffic data; TRAFFIC switches only its setting.
                 const layer = (n) => key(n, () => (u.layers[n] = !u.layers[n]), u.layers[n]);
                 const airways = ["AIRWAYS", "AIRWY ON", "AIRWY LO", "AIRWY HI"];
                 return fill([layer("TRAFFIC"), layer("PROFILE"), dimKey("TOPO"), dimKey("TERRAIN"),
@@ -418,6 +435,44 @@ export class GlassMfd {
             return;
         const which = nav ? `nav${this.surround.sel.nav}` : `com${this.surround.sel.com}`;
         this.change({ radios: { ...r, [which]: { ...r[which], standby: freq } } });
+    }
+    /** The airways the AIRWAYS key shows at this range. */
+    airways() {
+        return shownAirways(this.state.airways, this.ui.airways, this.state.range);
+    }
+    // Profile View (Pilot's Guide; FG1000 has none): a window under the navigation map with an altitude scale, the
+    // aircraft at its altitude, and the distance scale, half the map range. shortcut: no terrain or obstacle data, so
+    // the window is empty of terrain; our own layout.
+    drawProfile(on) {
+        this.profile.style.display = on ? "inline" : "none";
+        this.rangeBox.setAttribute("transform", on ? `translate(0 ${-PROFILE.h})` : "");
+        if (!on)
+            return;
+        const s = this.state;
+        const p = profileView(s.alt, s.range);
+        const { x, y, w, h } = PROFILE;
+        const font = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:16px`;
+        const text = (t, tx, ty, anchor, fill = "#ffffff") => `<text x="${tx}" y="${ty}" fill="${fill}" text-anchor="${anchor}" style="${font}">${t}</text>`;
+        let out = `<rect x="${x + 0.5}" y="${y + 0.5}" width="${w - 1}" height="${h - 1}" fill="#000000" stroke="#ffffff"/>`;
+        if (!p) {
+            this.profile.innerHTML = out + text("PROFILE NOT AVAILABLE", x + w / 2, y + h / 2 + 6, "middle");
+            return;
+        }
+        const [l, r, top, bot] = [x + 60, x + w - 20, y + 12, y + h - 28];
+        const altY = (ft) => bot - ((ft - p.bottom) / (p.step * 4)) * (bot - top);
+        for (let i = 0; i <= 4; i++) {
+            const ft = p.bottom + i * p.step;
+            out += `<line x1="${l}" y1="${altY(ft)}" x2="${r}" y2="${altY(ft)}" stroke="#404040"/>` + text(String(ft), l - 6, altY(ft) + 5, "end");
+        }
+        out += `<line x1="${l}" y1="${bot}" x2="${r}" y2="${bot}" stroke="#ffffff"/>`;
+        for (const t of p.ticks) {
+            const tx = l + (t.nm / p.nm) * (r - l);
+            out += `<line x1="${tx}" y1="${bot}" x2="${tx}" y2="${bot + 6}" stroke="#ffffff"/>` + text(t.label, tx, bot + 22, t.nm === 0 ? "start" : t.nm === p.nm ? "end" : "middle");
+        }
+        // The aircraft, seen from the side, at its altitude.
+        const ay = altY(Math.min(s.alt, p.bottom + p.step * 4));
+        out += `<path d="M ${l} ${ay - 6} L ${l + 18} ${ay} L ${l} ${ay + 6} Z" fill="#ffffff" stroke="#000000"/>`;
+        this.profile.innerHTML = out;
     }
     // Surround.updateHeaderData, MFD half: FG1000's GS, DTK, TRK, ETE, or the fields AUX - SYSTEM SETUP picks.
     updateHeader(s) {

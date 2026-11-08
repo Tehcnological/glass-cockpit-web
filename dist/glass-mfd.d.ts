@@ -1,5 +1,5 @@
 import { type DisplayOptions } from "./display.js";
-import { type Airspace, type LatLon, type MapPoint, type Orientation } from "./map.js";
+import { type Airspace, type Airway, type LatLon, type MapPoint, type Orientation } from "./map.js";
 import type { CdiSource } from "./glass-pfd.js";
 import { type Knobs } from "./bezel.js";
 import type { Airport, Procedure, Station } from "./nav.js";
@@ -30,6 +30,7 @@ export interface MfdState extends Knobs {
     /** Map symbols, and the VORs, NDBs and fixes the NRST and WPT pages list (`name`, `freq` and the rest fill in their details). */
     points: MapPoint[];
     airspaces: Airspace[];
+    /** Airways for the map's AIRWAYS key; their fixes must be in `points`. */ airways: Airway[];
     /** For the NRST and WPT airport pages, DIRECT TO and PROC. */ airports: Airport[];
     /** ARTCC, FSS and weather frequencies for NRST - NEAREST FREQUENCIES. */ stations: Station[];
     /** Approaches PROC can load, for the airports in `airports`. */ procedures: Procedure[];
@@ -62,6 +63,8 @@ export declare class GlassMfd {
     private map;
     private mapPartial;
     /** Pan mode's pointer and info bar, over the full map. */ private panLayer;
+    /** Profile View's window, and the range box it pushes up. */ private profile;
+    private rangeBox;
     private frame;
     private pages;
     /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ private overlay;
@@ -98,6 +101,9 @@ export declare class GlassMfd {
     private softkeys;
     private topKeys;
     private tune;
+    /** The airways the AIRWAYS key shows at this range. */
+    private airways;
+    private drawProfile;
     private updateHeader;
     private updateEIS;
 }
