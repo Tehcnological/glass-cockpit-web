@@ -1,7 +1,7 @@
 // PROC: the PROCEDURES menu, SELECT APPROACH and NOT APPROVED FOR GPS, as the v13 trainer has them. FG1000 has no
 // procedures page. DOM-free, so the MFD page and the PFD window share it and the tests can run it.
 import { clamp } from "./page.js";
-import { approachPatch, gpsApproved, loadedApproach, nearest, routePoint, vtfPatch, type Airport, type Procedure } from "./nav.js";
+import { approachPatch, approachPoints, gpsApproved, loadedApproach, nearest, routePoint, vtfPatch, type Airport, type Procedure } from "./nav.js";
 import type { LatLon, MapPoint } from "./map.js";
 
 export const PROC_MENU = ["ACTIVATE VECTOR-TO-FINAL", "ACTIVATE APPROACH", "ACTIVATE MISSED APPROACH", "SELECT APPROACH", "SELECT ARRIVAL", "SELECT DEPARTURE"];
@@ -15,7 +15,7 @@ export interface ProcHost {
 }
 
 /** Spells an identifier with the FMS knob: the inner turns the character, the outer moves along. */
-export type Speller = { editing: boolean; inner(d: number): void; outer(d: number): boolean; ent(): string | null; cancel(): void };
+export type Speller = { editing: boolean; readonly value: string; inner(d: number): void; outer(d: number): boolean; ent(): string | null; cancel(): void };
 
 export class ProcFlow {
   airport: string | null = null;
@@ -163,13 +163,10 @@ export class ProcFlow {
     if (!p) return;
     const s = this.h.s();
     const name = this.transitions()[this.trans];
-    const legs = [...(p.transitions[name] ?? []), ...p.legs];
-    const pts: MapPoint[] = legs
-      .filter((l, i) => i === 0 || l.fix !== legs[i - 1].fix)
-      .map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, role: l.role, approach: p.name }));
+    const pts = approachPoints(p, name);
     this.h.change(approachPatch(s.route, pts, !activate ? "load" : name === "VECTORS" ? "vectors" : "activate", { lat: s.lat, lon: s.lon }));
     this.h.close();
   }
 }
 
-const noSpeller: Speller = { editing: false, inner() {}, outer: () => false, ent: () => null, cancel() {} };
+const noSpeller: Speller = { editing: false, value: "", inner() {}, outer: () => false, ent: () => null, cancel() {} };

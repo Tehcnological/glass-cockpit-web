@@ -48,6 +48,7 @@ export interface MapData {
     /** Index into `route` of the active waypoint; the leg into it is magenta. */ activeLeg: number;
     /** After a Direct-To: where it started; the magenta leg runs from here to the active waypoint. */ directFrom?: LatLon | null;
     /** Map center when not the aircraft (WPT pages center on the waypoint). */ center?: LatLon;
+    /** A procedure previewed on a WPT page: its fixes in order, white, the missed approach dashed. */ preview?: MapPoint[];
 }
 /** Map window in screen pixels: clip box, aircraft position, and pixels per `range`. */
 export interface MapGeometry {

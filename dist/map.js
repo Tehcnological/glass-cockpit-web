@@ -85,11 +85,17 @@ export function drawMap(g, s, m, declutter = 0) {
         const [x2, y2] = xy(route[i]);
         out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${i === s.activeLeg ? "#ff00ff" : "#ffffff"}" stroke-width="2"/>`;
     }
+    const preview = s.preview ?? [];
+    for (let i = 1; i < preview.length; i++) {
+        const [[x1, y1], [x2, y2]] = [xy(preview[i - 1]), xy(preview[i])];
+        const dash = preview[i].role === "MISSED" ? ` stroke-dasharray="8 6"` : "";
+        out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ffffff" stroke-width="${dash ? 2 : 3}"${dash}/>`;
+    }
     if (s.activeLeg === 0 && s.directFrom && route[0]) {
         const [[x1, y1], [x2, y2]] = [xy(s.directFrom), xy(route[0])];
         out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ff00ff" stroke-width="2"/>`;
     }
-    for (const p of [...s.points, ...route.filter((r) => !byId.has(r.id))]) {
+    for (const p of [...s.points, ...route.filter((r) => !byId.has(r.id)), ...preview]) {
         const [x, y] = xy(p);
         if (!shown(p.type) && !route.includes(p))
             continue;

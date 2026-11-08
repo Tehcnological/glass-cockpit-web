@@ -1,7 +1,7 @@
 // PROC: the PROCEDURES menu, SELECT APPROACH and NOT APPROVED FOR GPS, as the v13 trainer has them. FG1000 has no
 // procedures page. DOM-free, so the MFD page and the PFD window share it and the tests can run it.
 import { clamp } from "./page.js";
-import { approachPatch, gpsApproved, loadedApproach, nearest, routePoint, vtfPatch } from "./nav.js";
+import { approachPatch, approachPoints, gpsApproved, loadedApproach, nearest, routePoint, vtfPatch } from "./nav.js";
 export const PROC_MENU = ["ACTIVATE VECTOR-TO-FINAL", "ACTIVATE APPROACH", "ACTIVATE MISSED APPROACH", "SELECT APPROACH", "SELECT ARRIVAL", "SELECT DEPARTURE"];
 const SELECT_APPROACH = 3;
 export class ProcFlow {
@@ -173,12 +173,9 @@ export class ProcFlow {
             return;
         const s = this.h.s();
         const name = this.transitions()[this.trans];
-        const legs = [...(p.transitions[name] ?? []), ...p.legs];
-        const pts = legs
-            .filter((l, i) => i === 0 || l.fix !== legs[i - 1].fix)
-            .map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, role: l.role, approach: p.name }));
+        const pts = approachPoints(p, name);
         this.h.change(approachPatch(s.route, pts, !activate ? "load" : name === "VECTORS" ? "vectors" : "activate", { lat: s.lat, lon: s.lon }));
         this.h.close();
     }
 }
-const noSpeller = { editing: false, inner() { }, outer: () => false, ent: () => null, cancel() { } };
+const noSpeller = { editing: false, value: "", inner() { }, outer: () => false, ent: () => null, cancel() { } };

@@ -82,7 +82,7 @@ Garmin art, screenshots, data or manual text is copied.
 | MAP | Navigation map | Partial: no map setup |
 | MAP | Traffic map | Done (shows what the host passes) |
 | MAP | Stormscope, weather data link, TAWS | No data |
-| WPT | Airport information | Partial: info shown; its sub-pages (runways, frequencies, departure, arrival, approach, weather) missing |
+| WPT | Airport information | Partial: info and APPROACH INFORMATION (APR) done; departure, arrival and weather (DP, STAR, WX) grey with no data; INFO-2 directory missing |
 | WPT | Intersection, NDB, VOR information | Done |
 | WPT | User waypoint information | Missing (no user waypoints) |
 | AUX | Trip planning, utility, GPS status, XM, system status | Missing / No data |

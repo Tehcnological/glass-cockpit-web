@@ -9,6 +9,7 @@ import { BLANK, CYAN, IdEntry, ListView, NS, dimKey, esc, firstRow, key } from "
 import { firstOption, fplMenu, stepMenu } from "./page-menu.js";
 import { panStart } from "./pan.js";
 import { PROC_MENU, ProcFlow } from "./procedures.js";
+import { AprInfo } from "./apr-info.js";
 // Surround.PAGE_GROUPS
 export const PAGE_GROUPS = [
     { group: "MapPageGroup", label: "MapPageGroupLabel", pages: ["NavigationMap", "TrafficMap", "Stormscope", "WeatherDataLink", "TAWSB"] },
@@ -114,8 +115,8 @@ class MapPage extends MfdPage {
         const before = this.p.el("Legend") ?? this.p.el("RangeDisplay") ?? this.root.querySelector('[id="Background"]');
         this.g = mapGroup(screen, before, geom);
     }
-    drawOwnMap() {
-        this.m.drawMap(this.g, this.geom, this.center() ?? undefined);
+    drawOwnMap(preview) {
+        this.m.drawMap(this.g, this.geom, this.center() ?? undefined, preview);
         this.p.text("RangeDisplay", rangeLabel(this.s.range));
         this.p.text("OrientationDisplay", this.s.orientation);
     }
@@ -476,15 +477,100 @@ class NavInfoPage extends MapPage {
         this.drawOwnMap();
     }
 }
-// AirportInfo: identifier, airport details, runways and frequencies.
+// The code-drawn windows' text: Map Setup's style.
+const PANEL_FONT = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px`;
+const panelText = (t, x, y, anchor, fill, cur = false) => `<text ${cur ? "data-cur " : ""}x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${PANEL_FONT}">${esc(t)}</text>`;
+/** Puts the cursor's cyan box behind each `data-cur` text in `g`, measured once drawn. */
+function cursorBoxes(g) {
+    for (const t of g.querySelectorAll("text[data-cur]")) {
+        const b = t.getBBox();
+        const box = document.createElementNS(NS, "rect");
+        for (const [k, v] of Object.entries({ x: b.x - 2, y: b.y - 1, width: b.width + 4, height: b.height + 2, fill: CYAN }))
+            box.setAttribute(k, String(v));
+        t.before(box);
+    }
+}
+// WPT - APPROACH INFORMATION's boxes: title, top, rows shown. Fixed, so the sequence box gets what is left.
+const APR_BOXES = { AIRPORT: [77, 2], APPROACHES: [166, 5], TRANSITIONS: [338, 3], MINIMUMS: [458, 1], SEQUENCE: [524, 7] };
+/** Draws WPT - APPROACH INFORMATION's window from `AprInfo.view` (our own layout: FG1000 has no such page). */
+function aprPanel(v, use, name) {
+    const BG = "#1a3030";
+    let out = `<rect x="724.5" y="53.5" width="310" height="689" fill="${BG}" stroke="#ffffff"/>`;
+    const box = (title) => {
+        const [y, n] = APR_BOXES[title];
+        out += `<rect x="730.5" y="${y}" width="289" height="${n * 26 + 16}" fill="#000000" stroke="#ffffff"/>` +
+            `<rect x="745.5" y="${y - 10}" width="${title.length * 9 + 12}" height="20" fill="${BG}" stroke="#ffffff"/>` +
+            `<text x="751" y="${y + 5}" fill="#ffffff" style="font-family:'Liberation Sans',sans-serif;font-size:14.5px">${title}</text>`;
+        return (i) => y + 30 + i * 26; // the first row clear of the title tab
+    };
+    // A list scrolled to keep the cursor (or the first row) in view.
+    const list = (title, rows, fill) => {
+        const row = box(title);
+        const n = APR_BOXES[title][1];
+        const at = Math.max(0, rows.findIndex((r) => r.cur));
+        const top = clamp(at - n + 1, 0, Math.max(0, rows.length - n));
+        rows.slice(top, top + n).forEach((r, i) => {
+            out += panelText(r.label, 740, row(i), "start", r.cur ? "#000000" : fill(r), r.cur);
+            if (r.role)
+                out += panelText(r.role, 1010, row(i), "end", r.cur ? "#000000" : "#ffffff");
+        });
+    };
+    const apt = box("AIRPORT");
+    out += panelText(v.apt, 740, apt(0), "start", v.aptCur ? "#000000" : CYAN, v.aptCur) + panelText(use, 1010, apt(0), "end", CYAN) +
+        panelText(name, 740, apt(1) - 2, "start", "#ffffff");
+    list("APPROACHES", v.approaches, (r) => (r.dim ? "#808080" : CYAN));
+    list("TRANSITIONS", v.transitions, () => CYAN);
+    const min = box("MINIMUMS");
+    out += panelText(v.min.mode, 740, min(0), "start", v.min.cur ? "#000000" : CYAN, v.min.cur) +
+        panelText(v.min.alt, 1010, min(0), "end", v.min.altCur ? "#000000" : v.min.mode === "OFF" ? "#808080" : CYAN, v.min.altCur);
+    list("SEQUENCE", v.sequence, () => "#ffffff");
+    return out;
+}
+// AirportInfo: identifier, airport details, runways and frequencies. Its softkeys (Pilot's Guide) show the airport's
+// other pages: APR its approaches (WPT - APPROACH INFORMATION, drawn here in place of FG1000's boxes), INFO-1 back.
+// DP, STAR and WX are dim: no departure, arrival or weather data. INFO-2 (the AOPA directory) is not ported.
 class AirportInfoPage extends MapPage {
     id = null;
     grp = "ID";
     rwy = 0;
     entry = new IdEntry(this.p, 4);
     freqs = new ListView(this.p, ["FreqLabel", "Freq"], 7, "Freq", false, { trough: "FreqScrollBar", thumb: "FreqScroll" });
+    view = "INFO";
+    apr = new AprInfo(new IdEntry(this.p, 4));
+    /** FG1000's boxes, and the approach window drawn in their place. */ info;
+    panel;
     constructor(m, screen) {
         super(m, "AirportInfo", screen, INFO_MAP);
+        const host = this.root.querySelector('[id="Background"]').parentElement;
+        const map = this.g.parentNode;
+        this.info = document.createElementNS(NS, "g");
+        this.panel = document.createElementNS(NS, "g");
+        for (const c of [...host.children])
+            if (c !== map)
+                this.info.appendChild(c);
+        host.append(this.info, this.panel);
+    }
+    get title() {
+        return this.view === "APR" ? "WPT - APPROACH INFORMATION" : super.title;
+    }
+    ctx() {
+        return { airport: this.apt, procedures: this.s.procedures };
+    }
+    setView(v) {
+        if (v === this.view)
+            return;
+        [this.view, this.crsr] = [v, false];
+        this.entry.cancel();
+        this.apr.clr();
+        // Pilot's Guide: the approach page opens on the airport page's airport.
+        if (v === "APR")
+            [this.apr.grp, this.apr.apr, this.apr.trans, this.apr.seq] = ["APT", 0, 0, 0];
+    }
+    keys() {
+        return this.m.topKeys({
+            4: key("INFO-1", () => this.setView("INFO"), this.view === "INFO"), 5: dimKey("DP"), 6: dimKey("STAR"),
+            7: key("APR", () => this.setView("APR"), this.view === "APR"), 8: dimKey("WX"),
+        });
     }
     get apt() {
         const a = this.s.airports;
@@ -500,8 +586,14 @@ class AirportInfoPage extends MapPage {
         super.toggleCrsr();
         this.grp = "ID";
         this.entry.cancel();
+        this.apr.clr();
+        this.apr.grp = "APT";
     }
     fms(outer, d) {
+        if (this.view === "APR") {
+            this.apr.fms(this.ctx(), outer, d);
+            return true;
+        }
         if (this.entry.editing || (this.grp === "ID" && !outer)) {
             if (outer)
                 this.entry.outer(d);
@@ -519,7 +611,14 @@ class AirportInfoPage extends MapPage {
         return true;
     }
     ent() {
-        if (this.entry.editing) {
+        if (this.view === "APR") {
+            if (!this.crsr)
+                return;
+            const v = this.apr.ent(this.ctx());
+            if (v)
+                [this.id, this.rwy, this.freqs.sel] = [v, 0, 0];
+        }
+        else if (this.entry.editing) {
             const v = this.entry.ent();
             if (v)
                 [this.id, this.rwy, this.freqs.sel] = [v, 0, 0];
@@ -532,9 +631,18 @@ class AirportInfoPage extends MapPage {
     }
     clr() {
         this.entry.cancel();
+        this.apr.clr();
     }
     draw() {
         const a = this.apt;
+        this.info.style.display = this.view === "INFO" ? "inline" : "none";
+        this.panel.style.display = this.view === "APR" ? "inline" : "none";
+        if (this.view === "APR") {
+            this.panel.innerHTML = aprPanel(this.apr.view(this.ctx(), this.crsr), a?.use ?? "", (a?.name ?? "").toUpperCase());
+            cursorBoxes(this.panel);
+            this.drawOwnMap(this.apr.preview(this.ctx()));
+            return;
+        }
         const none = "_______";
         this.entry.draw(a?.id ?? this.id ?? "####", this.crsr && this.grp === "ID", this.m.hl);
         this.p.text("Usage", a ? a.use ?? "" : none);
@@ -1313,9 +1421,7 @@ export class FplToolPage extends MfdPage {
         this.m.close();
     }
     draw() {
-        const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px`;
-        // `cur`: the cursor's cyan box goes behind it, measured once drawn.
-        const text = (t, x, y, anchor, fill, cur = false) => `<text ${cur ? "data-cur " : ""}x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style}">${esc(t)}</text>`;
+        const text = panelText;
         const rows = this.tool.rows(this.s);
         let out = `<rect x="724.5" y="53.5" width="310" height="${rows.length * 27 + 90}" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>`;
         rows.forEach((r, i) => {
@@ -1331,13 +1437,7 @@ export class FplToolPage extends MfdPage {
         });
         const y = 100 + rows.length * 27 + 10;
         this.g.innerHTML = out + text("Press the FMS CRSR knob to", 874, y, "middle", "#ffffff") + text("cancel", 874, y + 25, "middle", "#ffffff");
-        for (const t of this.g.querySelectorAll("text[data-cur]")) {
-            const b = t.getBBox();
-            const box = document.createElementNS(NS, "rect");
-            for (const [k, v] of Object.entries({ x: b.x - 2, y: b.y - 1, width: b.width + 4, height: b.height + 2, fill: CYAN }))
-                box.setAttribute(k, String(v));
-            t.before(box);
-        }
+        cursorBoxes(this.g);
     }
 }
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */

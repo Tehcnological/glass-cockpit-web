@@ -163,7 +163,7 @@ export class GlassMfd {
       go: (group, page) => this.goToPage(group, page),
       tune: (freq) => this.tune(freq),
       topKeys: (extra) => this.topKeys(extra),
-      drawMap: (g, geom, center) => drawMap(g, { ...this.state, center }, geom, this.ui.dcltr),
+      drawMap: (g, geom, center, preview) => drawMap(g, { ...this.state, center, preview }, geom, this.ui.dcltr),
       open: (p) => this.openOverlay(p),
       close: () => this.closeOverlay(),
     };
@@ -370,6 +370,7 @@ export class GlassMfd {
     this.surround.setVolume("Comm", s.comVolume);
     const keys = this.softkeys();
     this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit), keys.map((k) => !!k.dim));
+    this.surround.setPageTitle(page.title); // a page's softkeys may change its title (the airport page's APR)
     this.updateHeader(s);
     this.updateEIS(s.engine);
     // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO and

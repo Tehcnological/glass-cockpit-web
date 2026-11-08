@@ -36,7 +36,7 @@ export interface Mfd {
     go(group: string, page: string): void;
     /** Puts a frequency in the standby of the selected NAV or COM, by band. */ tune(freq: number): void;
     /** ENGINE and MAP, plus the page's own keys by index. */ topKeys(extra?: Record<number, Key>): Key[];
-    /** Draws the map into a page's own map window. */ drawMap(g: SVGGElement, geom: MapGeometry, center?: LatLon): void;
+    /** Draws the map into a page's own map window, with a procedure to preview. */ drawMap(g: SVGGElement, geom: MapGeometry, center?: LatLon, preview?: MapPoint[]): void;
     /** Opens a window over the page (WAYPOINT ENTRY). */ open(p: MfdPage): void;
     /** Closes DIRECT TO, PROC or WAYPOINT ENTRY. */ close(): void;
 }
@@ -81,7 +81,7 @@ declare class MapPage extends MfdPage {
     private geom;
     protected g: SVGGElement;
     constructor(m: Mfd, name: string, screen: SVGGElement, geom: MapGeometry);
-    protected drawOwnMap(): void;
+    protected drawOwnMap(preview?: MapPoint[]): void;
 }
 declare class WaypointEntryPage extends MapPage {
     private dest;

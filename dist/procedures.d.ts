@@ -15,6 +15,7 @@ export interface ProcHost {
 /** Spells an identifier with the FMS knob: the inner turns the character, the outer moves along. */
 export type Speller = {
     editing: boolean;
+    readonly value: string;
     inner(d: number): void;
     outer(d: number): boolean;
     ent(): string | null;

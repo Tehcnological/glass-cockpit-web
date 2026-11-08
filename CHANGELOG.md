@@ -4,6 +4,7 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 
 ## Unreleased
 
+- MFD: WPT - APPROACH INFORMATION from the airport page's APR softkey: approaches, transitions, BARO minimums and the fix sequence, previewed on the map (Pilot's Guide). The airport page gains INFO-1, APR and grey DP, STAR and WX. `approachPoints` in `nav.ts`, the page's logic in `apr-info.ts`; `MapData` gains `preview`.
 - MFD: Nearest Airports gains LD APR and a PAGE MENU (Select Airport/Runway/Frequency/Approach Window, Load Approach); ENT on the airport list moves to the next airport (Pilot's Guide). `ProcFlow.loadApproach`.
 - PFD and MFD: the flight plan PAGE MENU's Closest Point Of FPL and Parallel Track, and on the MFD Create ATK Offset Waypoint, open their windows (Pilot's Guide). `MapPoint` gains `parallel`; `closestPointOfFpl`, `atkOffset`, `parallelTrack` and `cancelParallel` in `nav.ts`, the windows' logic in `fpl-tools.ts`. Direct-to, loading an approach and editing the plan cancel Parallel Track. The demo and the Vue component share `points` between the units, so a user waypoint reaches both.
 - MFD: MAP SETUP from the navigation map's PAGE MENU: ORIENTATION and TRACK VECTOR (Pilot's Guide). `orientation` gains TRK UP and DTK UP. The demo's heading-up checkbox is gone; MAP SETUP sets it. Changed: heading, track and desired track are taken as magnetic, so HDG UP, TRK UP, DTK UP and the track vector add `magVar` to point true.
