@@ -110,6 +110,15 @@ export function planName(legs: (MapPoint | undefined)[]): string {
   return ids.length ? `${ids[0]} / ${ids[ids.length - 1]}` : "";
 }
 
+/** An approach's fixes from `transition` on, through the missed approach, as flight plan points (a fix shared by the
+ * transition's end and the approach's start once). An unknown transition gives the approach's own. */
+export function approachPoints(p: Procedure, transition: string): MapPoint[] {
+  const legs = [...(p.transitions[transition] ?? []), ...p.legs];
+  return legs
+    .filter((l, i) => i === 0 || l.fix !== legs[i - 1].fix)
+    .map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, role: l.role, approach: p.name }));
+}
+
 /** Whether the GPS may fly an approach (by `approachName`'s names): RNAV (GPS) and GPS approaches. The rest ask NOT APPROVED FOR GPS. */
 export function gpsApproved(name: string): boolean {
   return name.startsWith("RNAV (GPS)") || name.startsWith("GPS");

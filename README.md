@@ -78,6 +78,7 @@ The pages draw from what you pass in:
 | `points` | Map symbols, WPT and NRST details (`name`, `freq` and the rest) |
 | `airports` | Runways, frequencies, approach names |
 | `stations` | ARTCC, FSS and weather frequencies |
+| `airways` | The map's AIRWAYS key: `{ id, type: "LO" \| "HI", points }`, `points` being ids in `points` |
 | `procedures` | Approach legs by transition, for PROC |
 | `checklists` | CHKLIST |
 
@@ -88,7 +89,7 @@ How the pages work:
 - **DIRECT TO:** opens on the selected waypoint with ACTIVATE? highlighted, so ENT goes direct; the inner knob enters another.
 - **WAYPOINT ENTRY and DIRECT TO:** turning the inner knob left before typing opens the FPL, NRST and RECENT lists; the outer knob scrolls a list and ENT takes the waypoint.
 - **PROC:** opens the PROCEDURES menu (see below). SELECT APPROACH opens on the destination's approaches. Pick one, a transition, then LOAD? or ACTIVATE?. Its fixes join the flight plan after the en route waypoints.
-- **Softkeys:** ENGINE (LEAN, SYSTEM), MAP (traffic, profile and airway switches; the data keys are dim), DCLTR, CHKLIST, and each page's own keys.
+- **Softkeys:** ENGINE (LEAN, SYSTEM), MAP (PROFILE and AIRWAYS; a traffic switch; the data keys are dim), DCLTR, CHKLIST, and each page's own keys.
 - **CLR held:** goes to the navigation map.
 - **Joystick push:** on the navigation map (and the PFD's inset map), pan mode: a pointer and an info bar (the point under the pointer, or MAP POINTER; distance and bearing from the aircraft; latitude and longitude). The joystick moves the pointer and scrolls the map at its edge. RANGE recenters the map on the pointer. DIRECT TO takes the point under the pointer. Push again, or change page, to end it.
 
@@ -131,6 +132,10 @@ Every PFD softkey that is not dim works:
 
 FlightGear draws the map from its own navigation database. Here the map shows only the points passed in, with FG1000's symbols for airports, VORs, NDBs, fixes and flight plan waypoints, each layer at FG1000's default ranges: airports and VORs up to 150 nm, NDBs and fixes up to 15 nm, flight plan points always.
 
+`airways` are drawn with the AIRWAYS key (Pilot's Guide): AIRWY ON all, AIRWY LO the low ones in grey, AIRWY HI the high ones in green, over the low. Low airways show at map ranges up to 200 nm, high up to 300; their fixes show at any range while they do. A fix missing from `points` breaks the airway there. Airway names are not labeled, and the Map Setup Airways group is not ported. `glass-cockpit-web/navdata` does not build airways yet.
+
+**Profile View** (Pilot's Guide; FG1000 has none), from the PROFILE key or the PAGE MENU's Show/Hide Profile View: a window along the bottom of the navigation map with an altitude scale, the aircraft at `alt`, and a distance scale half the map range (PROFILE NOT AVAILABLE under 1 nm); the range box moves above it. A white box on the map marks the path it looks along: the track, 4 nm wide (the en route width; the MFD does not know the flight phase). There is no terrain or obstacle data, so it shows no terrain; its altitude steps and layout are this package's own.
+
 `airspaces` takes Class B, C and D outlines. FG1000 draws none, so they follow the sectional chart: B solid blue, C solid magenta, D dashed blue, shown up to 150 nm.
 
 ### Where it follows the G1000 trainer
@@ -142,6 +147,10 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
 - **MENU** on the PFD opens the PFD SETUP MENU (brightness, shown on AUTO; not ported), or with the flight plan window open its PAGE MENU, or in the DIRECT TO window that window's menu (Cancel Direct-To NAV: the flight plan resumes on the leg closest to the aircraft; CLR goes back to DIRECT TO). On the MFD it opens the page's PAGE MENU: on the navigation map, Map Setup, Declutter and Measure Bearing/Distance work. MAP SETUP (Map group) sets ORIENTATION (NORTH UP, TRK UP, DTK UP, HDG UP; `orientation`, reported through `onChange`) and TRACK VECTOR (off, or a light blue line to where the aircraft will be in 30 s to 20 min, always straight); heading, track and desired track are magnetic, and the map adds `magVar`; its other settings are grey. Measure Bearing/Distance (a pointer starts on the aircraft with a dashed line from the start point and the bearing and distance from it in the info bar; ENT moves the start point to the pointer; Stop Measuring or a joystick push ends it; no elevation, as there is no terrain data); on the flight plan page (and the PFD's flight plan window), Invert Flight Plan, Delete Flight Plan and Remove Approach work, and Closest Point Of FPL, Parallel Track and (MFD only, on the waypoint under the cursor) Create ATK Offset Waypoint open windows that follow the Pilot's Guide's steps. Closest Point Of FPL shows the bearing and distance from a reference waypoint to the nearest point on the plan and adds a user waypoint there to `points`, reported through `onChange`. Parallel Track (left or right, 1 to 99 nm) replaces the plan's points from the active leg on, up to an approach, with offset points named with a lower case p that carry `parallel`; a direct-to, loading an approach, editing the plan or activating a leg cancels it, and it is unavailable on a direct-to, an approach leg or a turn over 120 degrees. It does not cancel itself when offset tracks would overlap, and VNV is not ported. An ATK offset (1 to 999 nm, negative before the waypoint) is inserted into the plan; the large FMS knob steps it 10 nm, the small one 1 nm, not digit by digit. Window titles and field names are this package's own; in DIRECT TO, Cancel Direct-To NAV. Other options are listed grey, and the other pages have no menu yet. The FMS knob moves the cursor over the options that work, ENT carries one out, and CLR, MENU again or pushing the FMS knob closes it.
 - **FPL and PROC again:** on the MFD, FPL again goes back to the page shown before it, and PROC again closes the PROCEDURES window.
 - **Pan mode** (FG1000 has none): the joystick push on the MFD navigation map and the PFD inset map, as the Pilot's Guide and the trainer describe. The pointer and bar are drawn here, not Garmin's.
+- **WPT - APPROACH INFORMATION** (Pilot's Guide; FG1000 has none): the airport page's softkeys are INFO-1, DP, STAR, APR and WX. APR shows the airport's approaches (grey where `procedures` has none), the selected one's transitions, BARO minimums and its fix sequence, and previews it on the map, white with the missed approach dashed; INFO-1 goes back. The FMS knob and ENT step airport, approach, transition, minimums and sequence as the Pilot's Guide does. Its window is this package's own layout, in Map Setup's style. The minimums stay on this page (the PFD's are set at TMR/REF). DP, STAR and WX are grey (no departure, arrival or weather data), and INFO-2 (the AOPA directory) is not ported.
+- **AUX - SYSTEM SETUP** (Pilot's Guide; FG1000 has none), added to the AUX group after GPS STATUS: the date and time (local 12 or 24 hour with an offset, or UTC), the MFD data bar's four fields (BRG, DIS, DTK, END, ETA, ETE, FOB, GS, TKE, TRK; BRG and DIS to the active waypoint, FOB and END from the fuel gauges), page navigation (change on the first click, tab timeout 2 to 10 s) and the nearest airport criteria (runway surface and minimum length, which filter NRST - NEAREST AIRPORTS; airports without runway data stay). Numbers step with the small FMS knob (30 min, 1 s, 100 ft) rather than being typed. Display units, the baro transition, airspace, arrival and audio alerts, the flight director, GPS CDI and COM spacing are shown grey. The settings live in the MFD and are not reported to the host.
+- **AUX - UTILITY** (Pilot's Guide): the generic timer (UP or DN from a time, START?, STOP?, RESET?; a countdown past zero counts up), the flight timer and departure time from power on or lift off (taken as 30 kt groundspeed: the MFD has no air/ground switch), and trip statistics (odometer, trip odometer, average and maximum groundspeed, from `groundspeed` sampled each second; a gap over a minute is not counted). Its PAGE MENU resets them. The scheduler and flight data logger are not ported.
+- **NEAREST AIRPORTS LD APR** (Pilot's Guide; FG1000 has none): with an approach under the cursor, LD APR or the PAGE MENU's Load Approach opens PROC's SELECT APPROACH on it at its transitions (LOAD? when it has one); it is grey when `procedures` has no such approach. The PAGE MENU also selects the airport, runway, frequency and approach windows, and ENT on the airport list moves to the next airport.
 - **PFD DIRECT TO and PROC** (FG1000 has neither): windows in the NRST window's place, laid out as the trainer's, sharing the MFD's flow. DIRECT TO and PROC again close them.
 - **Long press:** holding COM ⇄ or CLR for 2 s acts as on the real unit (FG1000: a separate key binding); COM ⇄ tunes 121.5, where FG1000 tunes 121.00.
 - **Attitude and turn rate** (Pilot's Guide): the pitch ladder stops below the roll pointer and slip/skid bar instead of running through them, and the turn rate band has ticks at half-standard and standard rate each side, with the trend vector drawn through them. FG1000 draws the band alone.
@@ -261,11 +270,12 @@ EOF
 
 ## Not ported
 
-- MFD pages that need data this package has no source for: weather, terrain, XM, trip planning, GPS status, stored flight plans, user waypoints, nearest airspaces.
+- MFD pages that need data this package has no source for: weather, terrain, XM, trip planning, GPS status, system status, stored flight plans, user waypoints, nearest airspaces.
+- AUX - UTILITY's scheduler and flight data logger, and the AUX - SYSTEM SETUP settings shown grey.
 - DIRECT TO's VNAV fields, approach suspend and missed-approach sequencing.
 - USER and AIRWAY waypoint lists.
 - Synthetic vision, the arc HSI, DME HOLD, selected airspeed, autopilot annunciations and the GPS course-to-intercept diamond.
-- Map terrain and airways.
+- Map terrain (and Profile View's terrain), airway labels and the Map Setup Airways and Profile groups.
 - The audio panel (and its reversionary mode button), and typing waypoint names on the keyboard.
 - PAGE MENU on pages other than the navigation map, flight plan and DIRECT TO, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice).
 - The autopilot keys the trainer's MFD bezel has (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN), reversionary mode, and the map's range ring and measure bearing/distance in pan mode.

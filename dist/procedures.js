@@ -1,7 +1,7 @@
 // PROC: the PROCEDURES menu, SELECT APPROACH and NOT APPROVED FOR GPS, as the v13 trainer has them. FG1000 has no
 // procedures page. DOM-free, so the MFD page and the PFD window share it and the tests can run it.
 import { clamp } from "./page.js";
-import { approachPatch, gpsApproved, loadedApproach, nearest, routePoint, vtfPatch } from "./nav.js";
+import { approachPatch, approachPoints, gpsApproved, loadedApproach, nearest, routePoint, vtfPatch } from "./nav.js";
 export const PROC_MENU = ["ACTIVATE VECTOR-TO-FINAL", "ACTIVATE APPROACH", "ACTIVATE MISSED APPROACH", "SELECT APPROACH", "SELECT ARRIVAL", "SELECT DEPARTURE"];
 const SELECT_APPROACH = 3;
 export class ProcFlow {
@@ -27,6 +27,17 @@ export class ProcFlow {
         this.airport = apts[apts.length - 1]?.id ?? nearest(s.airports, s.lat, s.lon, 0, 1)[0]?.item.id ?? null;
         [this.view, this.item, this.grp, this.apr, this.trans, this.pending] = ["menu", SELECT_APPROACH, "APR", 0, 0, null];
         this.entry.cancel();
+    }
+    /** LD APR (Nearest Airports): SELECT APPROACH on `name` at `airport`, at its transitions (LOAD? with only one).
+     * False when there is no procedure data for it. */
+    loadApproach(airport, name) {
+        const i = this.h.s().procedures.filter((p) => p.airport === airport).findIndex((p) => p.name === name);
+        if (i < 0)
+            return false;
+        [this.airport, this.view, this.apr, this.trans, this.pending] = [airport, "select", i, 0, null];
+        this.entry.cancel();
+        this.grp = this.transitions().length > 1 ? "TRANS" : "LOAD";
+        return true;
     }
     procs() {
         return this.h.s().procedures.filter((p) => p.airport === this.airport);
@@ -162,12 +173,9 @@ export class ProcFlow {
             return;
         const s = this.h.s();
         const name = this.transitions()[this.trans];
-        const legs = [...(p.transitions[name] ?? []), ...p.legs];
-        const pts = legs
-            .filter((l, i) => i === 0 || l.fix !== legs[i - 1].fix)
-            .map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, role: l.role, approach: p.name }));
+        const pts = approachPoints(p, name);
         this.h.change(approachPatch(s.route, pts, !activate ? "load" : name === "VECTORS" ? "vectors" : "activate", { lat: s.lat, lon: s.lon }));
         this.h.close();
     }
 }
-const noSpeller = { editing: false, inner() { }, outer: () => false, ent: () => null, cancel() { } };
+const noSpeller = { editing: false, value: "", inner() { }, outer: () => false, ent: () => null, cancel() { } };

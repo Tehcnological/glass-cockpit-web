@@ -5,6 +5,35 @@ import { clipRect } from "./page.js";
 export const ORIENTATIONS = ["NORTH UP", "TRK UP", "DTK UP", "HDG UP"];
 /** MAP SETUP's track vector look-ahead times, seconds; 0 is off (Pilot's Guide: 30 s to 20 min, 60 s the default). */
 export const TRACK_VECTOR = [0, 30, 60, 120, 300, 600, 1200];
+// Pilot's Guide, Table 5-4: the map range at or under which each airway type shows.
+const AIRWAY_RANGE = { LO: 200, HI: 300 };
+/** The airways the AIRWAYS key shows at `range`: 0 none, 1 all, 2 low, 3 high. High ones last, drawn over the low. */
+export function shownAirways(all, mode, range) {
+    const want = (a) => (mode === 1 || (mode === 2 && a.type === "LO") || (mode === 3 && a.type === "HI")) && range <= AIRWAY_RANGE[a.type];
+    return [...all.filter((a) => a.type === "LO"), ...all.filter((a) => a.type === "HI")].filter(want);
+}
+/** Profile View's scales: half the map range (none under 1 nm), five distance marks, and four altitude steps with the
+ * aircraft at the start of the second. shortcut: our own altitude steps; the Pilot's Guide gives none. */
+export function profileView(alt, range) {
+    const nm = range / 2;
+    if (nm < 1)
+        return null;
+    const step = nm <= 5 ? 500 : nm <= 25 ? 1000 : 2000;
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => ({ nm: nm * f, label: Number.isInteger(nm * f) ? String(nm * f) : (nm * f).toFixed(1) }));
+    return { nm, ticks, step, bottom: Math.max(0, Math.floor(alt / step) * step - step) };
+}
+/** The points drawn as symbols: a layer's by its range and declutter level, airway fixes past their range (still
+ * decluttered), and the route's and a previewed procedure's always. A previewed fix already on the map draws once. */
+export function symbolPoints(s, declutter = 0) {
+    const byId = new Map(s.points.map((p) => [p.id, p]));
+    const route = s.route.map((r) => (typeof r === "string" ? byId.get(r) : r)).filter((p) => !!p);
+    const preview = s.preview ?? [];
+    const pinned = new Set([...route, ...preview].map((p) => p.id));
+    const onAirway = new Set((s.airways ?? []).flatMap((a) => a.points));
+    const extra = route.filter((r) => !byId.has(r.id));
+    const drawn = new Set([...byId.keys(), ...extra.map((p) => p.id)]);
+    return [...s.points, ...extra, ...preview.filter((p) => !drawn.has(p.id))].filter((p) => pinned.has(p.id) || (declutter <= DECLUTTER[p.type] && (s.range <= LAYER_RANGE[p.type] || onAirway.has(p.id))));
+}
 // Constants.nas RANGES, nm; the RANGE knob steps through them.
 export const RANGES = [500, 750, 1000, 1500, 2000].map((ft) => ft / 6076.12)
     .concat([0.5, 0.75, 1, 2, 3, 4, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 75, 100, 200, 500, 1000, 1500, 2000]);
@@ -85,14 +114,28 @@ export function drawMap(g, s, m, declutter = 0) {
         const [x2, y2] = xy(route[i]);
         out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${i === s.activeLeg ? "#ff00ff" : "#ffffff"}" stroke-width="2"/>`;
     }
+    // Airways: low grey (the roads' shade), high green (Pilot's Guide); their fixes show at any range.
+    for (const a of s.airways ?? []) {
+        for (let i = 1; i < a.points.length; i++) {
+            const [p, q] = [byId.get(a.points[i - 1]), byId.get(a.points[i])];
+            if (!p || !q)
+                continue;
+            const [[x1, y1], [x2, y2]] = [xy(p), xy(q)];
+            out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${a.type === "LO" ? "#808080" : "#00c000"}" stroke-width="2"/>`;
+        }
+    }
+    const preview = s.preview ?? [];
+    for (let i = 1; i < preview.length; i++) {
+        const [[x1, y1], [x2, y2]] = [xy(preview[i - 1]), xy(preview[i])];
+        const dash = preview[i].role === "MISSED" ? ` stroke-dasharray="8 6"` : "";
+        out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ffffff" stroke-width="${dash ? 2 : 3}"${dash}/>`;
+    }
     if (s.activeLeg === 0 && s.directFrom && route[0]) {
         const [[x1, y1], [x2, y2]] = [xy(s.directFrom), xy(route[0])];
         out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ff00ff" stroke-width="2"/>`;
     }
-    for (const p of [...s.points, ...route.filter((r) => !byId.has(r.id))]) {
+    for (const p of symbolPoints(s, declutter)) {
         const [x, y] = xy(p);
-        if (!shown(p.type) && !route.includes(p))
-            continue;
         if (x < m.x - 150 || x > m.x + m.w + 150 || y < m.y - 150 || y > m.y + m.h + 150)
             continue;
         const active = route[s.activeLeg]?.id === p.id;
@@ -104,8 +147,21 @@ export function drawMap(g, s, m, declutter = 0) {
         const [[x1, y1], [x2, y2]] = [xy(s), xy(trackVectorEnd({ lat: s.lat, lon: s.lon, track: s.track, groundspeed: s.groundspeed, magVar: s.magVar }, s.trackVector))];
         out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#00ffff" stroke-width="2"/>`;
     }
-    // APS_FG1000: the ownship icon at 30%, pointing along the heading relative to the map.
     const [ax, ay] = xy(s);
+    // Profile View's path: a white box along the track as far and wide as the profile looks, with its distance marks.
+    if (s.profilePath) {
+        // Along the track when moving; standing still, the track means nothing, so the heading.
+        const a = (((s.groundspeed && s.track !== undefined ? s.track : s.heading) + (s.magVar ?? 0) - up) * Math.PI) / 180;
+        const [f, r] = [[Math.sin(a), -Math.cos(a)], [Math.cos(a), Math.sin(a)]];
+        const [len, half] = [s.profilePath.nm * scale, (s.profilePath.width / 2) * scale];
+        const at = (d, side) => `${ax + f[0] * d + r[0] * side},${ay + f[1] * d + r[1] * side}`;
+        out += `<polygon points="${at(0, -half)} ${at(len, -half)} ${at(len, half)} ${at(0, half)}" fill="none" stroke="#ffffff" stroke-width="1.5"/>`;
+        for (const t of s.profilePath.ticks) {
+            for (const side of [-half, half])
+                out += `<polyline points="${at(t * scale, side)} ${at(t * scale, side + Math.sign(side) * 8)}" stroke="#ffffff" stroke-width="1.5"/>`;
+        }
+    }
+    // APS_FG1000: the ownship icon at 30%, pointing along the heading relative to the map.
     out += `<g transform="translate(${ax} ${ay}) rotate(${s.heading + (s.magVar ?? 0) - up}) scale(0.3) translate(-43.92 -76)">${APS}</g>`;
     g.innerHTML = out;
     // Labels on a white box (text_mode FILLEDBOUNDINGBOX, text_padding 2).

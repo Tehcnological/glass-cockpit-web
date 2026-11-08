@@ -51,3 +51,14 @@ test("CLR steps back: NOT APPROVED FOR GPS, then the menu, then closes", () => {
   h.flow.clr();
   assert.equal(h.closed, 1);
 });
+
+// Pilot's Guide: LD APR on the Nearest Airports page opens the approach loading page with the transitions field highlighted.
+test("LD APR opens SELECT APPROACH on that airport and approach, at the transition", () => {
+  const h = host();
+  h.s.procedures[1].transitions = { VECTORS: [], ABC: [] };
+  assert.equal(h.flow.loadApproach("KAAA", "RNAV (GPS) RWY 36"), true);
+  assert.deepEqual([h.flow.view, h.flow.airport, h.flow.apr, h.flow.grp], ["select", "KAAA", 1, "TRANS"]);
+  assert.equal(h.flow.loadApproach("KAAA", "ILS RWY 36"), true);
+  assert.equal(h.flow.grp, "LOAD", "one transition: straight to LOAD?");
+  assert.equal(h.flow.loadApproach("KAAA", "VOR RWY 18"), false, "no procedure data for it");
+});

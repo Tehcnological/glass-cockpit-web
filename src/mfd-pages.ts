@@ -10,6 +10,8 @@ import { firstOption, fplMenu, stepMenu, type MenuOption } from "./page-menu.js"
 import type { MfdState } from "./glass-mfd.js";
 import { panStart, type Pan } from "./pan.js";
 import { PROC_MENU, ProcFlow } from "./procedures.js";
+import { AprInfo, type AprRow } from "./apr-info.js";
+import { SETUP_FIELDS, UTILITY_FIELDS, Utility, airportMatches, clockText, hms, setupValue, stepSetup, type Setup, type UtilityField } from "./aux-pages.js";
 
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
 export interface Checklist { group: string; name: string; items: { name: string; value: string }[] }
@@ -26,6 +28,7 @@ export interface MfdUi {
   /** MAP menu toggles. */ layers: Record<string, boolean>;
   /** Waypoints entered in DIRECT TO and WAYPOINT ENTRY, latest first: their RECENT list. */ recent: string[];
   /** Pan mode on the navigation map (joystick push), or null. */ pan: Pan | null;
+  /** AUX - SYSTEM SETUP's settings. */ setup: Setup;
 }
 
 /** What the MFD gives its pages. */
@@ -37,7 +40,7 @@ export interface Mfd {
   go(group: string, page: string): void;
   /** Puts a frequency in the standby of the selected NAV or COM, by band. */ tune(freq: number): void;
   /** ENGINE and MAP, plus the page's own keys by index. */ topKeys(extra?: Record<number, Key>): Key[];
-  /** Draws the map into a page's own map window. */ drawMap(g: SVGGElement, geom: MapGeometry, center?: LatLon): void;
+  /** Draws the map into a page's own map window, with a procedure to preview. */ drawMap(g: SVGGElement, geom: MapGeometry, center?: LatLon, preview?: MapPoint[]): void;
   /** Opens a window over the page (WAYPOINT ENTRY). */ open(p: MfdPage): void;
   /** Closes DIRECT TO, PROC or WAYPOINT ENTRY. */ close(): void;
 }
@@ -46,7 +49,8 @@ export interface Mfd {
 export const PAGE_GROUPS = [
   { group: "MapPageGroup", label: "MapPageGroupLabel", pages: ["NavigationMap", "TrafficMap", "Stormscope", "WeatherDataLink", "TAWSB"] },
   { group: "WPTPageGroup", label: "WPTGroupLabel", pages: ["AirportInfo", "IntersectionInfo", "NDBInfo", "VORInfo", "UserWPTInfo"] },
-  { group: "AuxPageGroup", label: "AuxGroupLabel", pages: ["TripPlanning", "Utility", "GPSStatus", "XMRadio", "SystemStatus"] },
+  // System Setup after GPS Status, as the Pilot's Guide orders them (FG1000 has no System Setup).
+  { group: "AuxPageGroup", label: "AuxGroupLabel", pages: ["TripPlanning", "Utility", "GPSStatus", "SystemSetup", "XMRadio", "SystemStatus"] },
   { group: "FPLPageGroup", label: "FPLGroupLabel", pages: ["ActiveFlightPlanNarrow", "FlightPlanCatalog", "StoredFlightPlan"] },
   { group: "LstPageGroup", label: "LstGroupLabel", pages: ["Checklist"] },
   { group: "NrstPageGroup", label: "NrstGroupLabel", pages: ["NearestAirports", "NearestIntersections", "NearestNDB", "NearestVOR", "NearestUserWaypoints", "NearestFrequencies", "NearestAirspaces"] },
@@ -57,7 +61,7 @@ const TITLES: Record<string, string> = {
   NavigationMap: "MAP - NAVIGATION MAP", TrafficMap: "MAP - TRAFFIC MAP", Stormscope: "MAP - STORMSCOPE", WeatherDataLink: "MAP - WEATHER DATA LINK",
   TAWSB: "MAP - TAWS", AirportInfo: "WPT - AIRPORT INFORMATION", IntersectionInfo: "WPT - INTERSECTION INFORMATION", NDBInfo: "WPT - NDB INFORMATION",
   VORInfo: "WPT - VOR INFORMATION", UserWPTInfo: "WPT - USER WPT INFORMATION", TripPlanning: "AUX - TRIP PLANNING", Utility: "AUX - UTILITY",
-  GPSStatus: "AUX - GPS STATUS", XMRadio: "AUX - XM RADIO", SystemStatus: "AUX - SYSTEM STATUS", ActiveFlightPlanNarrow: "FPL - ACTIVE FLIGHT PLAN",
+  GPSStatus: "AUX - GPS STATUS", SystemSetup: "AUX - SYSTEM SETUP", XMRadio: "AUX - XM RADIO", SystemStatus: "AUX - SYSTEM STATUS", ActiveFlightPlanNarrow: "FPL - ACTIVE FLIGHT PLAN",
   FlightPlanCatalog: "FPL - FLIGHT PLAN CATALOG", StoredFlightPlan: "FPL - STORED FLIGHT PLAN", Checklist: "LST - CHECKLIST",
   NearestAirports: "NRST - NEAREST AIRPORTS", NearestIntersections: "NRST - NEAREST INTERSECTIONS", NearestNDB: "NRST - NEAREST NDB",
   NearestVOR: "NRST - NEAREST VOR", NearestUserWaypoints: "NRST - NEAREST USER WPTS", NearestFrequencies: "NRST - NEAREST FREQUENCIES",
@@ -82,6 +86,7 @@ const magVar = (v: number | undefined) => (v == null ? "" : v < 0 ? `${Math.roun
 /** A page: its SVG elements and how it takes the knobs. The base is a page with no data (title, NO DATA). */
 export class MfdPage {
   /** The FMS cursor is on the page (CRSR). */ crsr = false;
+  /** Redrawn every second (a clock on the page). */ live = false;
   /** The navigation map behind the page: the whole map, or the map beside the page's data. */
   navMap: "full" | "partial" | null = null;
   protected p: Page;
@@ -159,8 +164,8 @@ class MapPage extends MfdPage {
     this.g = mapGroup(screen, before, geom);
   }
 
-  protected drawOwnMap() {
-    this.m.drawMap(this.g, this.geom, this.center() ?? undefined);
+  protected drawOwnMap(preview?: MapPoint[]) {
+    this.m.drawMap(this.g, this.geom, this.center() ?? undefined, preview);
     this.p.text("RangeDisplay", rangeLabel(this.s.range));
     this.p.text("OrientationDisplay", this.s.orientation);
   }
@@ -193,9 +198,10 @@ class NavigationMapPage extends MfdPage {
     const measure: MenuOption = u.pan?.from
       ? { label: "Stop Measuring", act: () => (u.pan = null) }
       : { label: "Measure Bearing/Distance", act: () => (u.pan = { ...panStart(s, mapUp(s)), from: { lat: s.lat, lon: s.lon } }) };
+    const profile = { label: u.layers.PROFILE ? "Hide Profile View" : "Show Profile View", act: () => (u.layers.PROFILE = !u.layers.PROFILE) };
     return [
       { label: "Map Setup", act: () => this.m.open(this.setup().open()) }, { label: "Declutter", act: () => (u.dcltr = (u.dcltr + 1) % 4) },
-      measure, { label: "Show Chart" }, { label: "Show Profile View" },
+      measure, { label: "Show Chart" }, profile,
     ];
   }
 }
@@ -240,6 +246,8 @@ class TrafficPage extends MfdPage {
 }
 
 // NearestAirports: the airport list, then the selected airport's runways, frequencies and approaches.
+// Pilot's Guide: LD APR (with an approach under the cursor) or the menu's Load Approach opens PROC's SELECT APPROACH on
+// it, at its transitions; ENT on the airport list moves to the next airport.
 class NearestAirportsPage extends MfdPage {
   navMap = "partial" as const;
   private grp: "APT" | "RNWY" | "FREQ" | "APR" = "APT";
@@ -249,16 +257,40 @@ class NearestAirportsPage extends MfdPage {
   private apprs = new ListView(this.p, ["Approach"], 3, "Approach", false, { trough: "ApproachScrollBar", thumb: "ApproachScroll" });
 
   private list() {
-    return nearest(this.s.airports, this.s.lat, this.s.lon, this.s.magVar);
+    // AUX - SYSTEM SETUP's Nearest Airport criteria: runway surface and length.
+    const l = nearest(this.s.airports.filter((a) => airportMatches(a, this.m.ui.setup)), this.s.lat, this.s.lon, this.s.magVar);
+    this.apts.sel = Math.min(this.apts.sel, Math.max(0, l.length - 1)); // the criteria may have shortened the list
+    return l;
   }
 
   private get apt(): Airport | undefined {
     return this.list()[this.apts.sel]?.item;
   }
 
+  constructor(m: Mfd, name: string, screen: SVGGElement, private procs: () => ProceduresPage) {
+    super(m, name, screen);
+  }
+
+  /** LD APR's action: the approach under the cursor, when PROC has its procedure. */
+  private loadApr() {
+    const [a, name] = [this.apt, this.apt?.approaches[this.apprs.sel]];
+    if (!this.crsr || this.grp !== "APR" || !a || !name || !this.s.procedures.some((p) => p.airport === a.id && p.name === name)) return undefined;
+    return () => {
+      const p = this.procs();
+      this.m.open(p);
+      p.loadApproach(a.id, name);
+    };
+  }
+
   keys() {
     const g = (label: string, grp: typeof this.grp) => key(label, () => this.select(grp), this.crsr && this.grp === grp);
-    return this.m.topKeys({ 4: g("APT", "APT"), 5: g("RNWY", "RNWY"), 6: g("FREQ", "FREQ"), 7: g("APR", "APR") });
+    const ld = this.loadApr();
+    return this.m.topKeys({ 4: g("APT", "APT"), 5: g("RNWY", "RNWY"), 6: g("FREQ", "FREQ"), 7: g("APR", "APR"), 8: ld ? key("LD APR", ld) : dimKey("LD APR") });
+  }
+
+  pageMenu(): MenuOption[] {
+    const w = (label: string, grp: typeof this.grp) => ({ label, act: () => this.select(grp) });
+    return [w("Select Airport Window", "APT"), w("Select Runway Window", "RNWY"), w("Select Frequency Window", "FREQ"), w("Select Approach Window", "APR"), { label: "Load Approach", act: this.loadApr() }];
   }
 
   private select(grp: typeof this.grp) {
@@ -285,6 +317,8 @@ class NearestAirportsPage extends MfdPage {
   ent() {
     const f = freqList(this.apt)[this.freqs.sel];
     if (this.crsr && this.grp === "FREQ" && f) this.m.tune(Number(f.Freq));
+    // Pilot's Guide: ENT also moves to the next airport.
+    else if (this.crsr && this.grp === "APT" && this.apts.move(1, this.list().length)) [this.rwy, this.freqs.sel, this.apprs.sel] = [0, 0, 0];
   }
 
   selected() {
@@ -518,16 +552,104 @@ class NavInfoPage extends MapPage {
   }
 }
 
-// AirportInfo: identifier, airport details, runways and frequencies.
+// The code-drawn windows' text: Map Setup's style.
+const PANEL_FONT = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px`;
+const panelText = (t: string, x: number, y: number, anchor: string, fill: string, cur = false) =>
+  `<text ${cur ? "data-cur " : ""}x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${PANEL_FONT}">${esc(t)}</text>`;
+
+/** Puts the cursor's cyan box behind each `data-cur` text in `g`, measured once drawn. */
+function cursorBoxes(g: SVGGElement) {
+  for (const t of g.querySelectorAll<SVGTextElement>("text[data-cur]")) {
+    const b = t.getBBox();
+    const box = document.createElementNS(NS, "rect");
+    for (const [k, v] of Object.entries({ x: b.x - 2, y: b.y - 1, width: b.width + 4, height: b.height + 2, fill: CYAN })) box.setAttribute(k, String(v));
+    t.before(box);
+  }
+}
+
+// WPT - APPROACH INFORMATION's boxes: title, top, rows shown. Fixed, so the sequence box gets what is left.
+const APR_BOXES = { AIRPORT: [77, 2], APPROACHES: [166, 5], TRANSITIONS: [338, 3], MINIMUMS: [458, 1], SEQUENCE: [524, 7] } as const;
+
+/** Draws WPT - APPROACH INFORMATION's window from `AprInfo.view` (our own layout: FG1000 has no such page). */
+function aprPanel(v: ReturnType<AprInfo["view"]>, use: string, name: string): string {
+  const BG = "#1a3030";
+  let out = `<rect x="724.5" y="53.5" width="310" height="689" fill="${BG}" stroke="#ffffff"/>`;
+  const box = (title: keyof typeof APR_BOXES) => {
+    const [y, n] = APR_BOXES[title];
+    out += `<rect x="730.5" y="${y}" width="289" height="${n * 26 + 16}" fill="#000000" stroke="#ffffff"/>` +
+      `<rect x="745.5" y="${y - 10}" width="${title.length * 9 + 12}" height="20" fill="${BG}" stroke="#ffffff"/>` +
+      `<text x="751" y="${y + 5}" fill="#ffffff" style="font-family:'Liberation Sans',sans-serif;font-size:14.5px">${title}</text>`;
+    return (i: number) => y + 30 + i * 26; // the first row clear of the title tab
+  };
+  // A list scrolled to keep the cursor (or the first row) in view.
+  const list = (title: keyof typeof APR_BOXES, rows: AprRow[], fill: (r: AprRow) => string) => {
+    const row = box(title);
+    const n = APR_BOXES[title][1];
+    const at = Math.max(0, rows.findIndex((r) => r.cur));
+    const top = clamp(at - n + 1, 0, Math.max(0, rows.length - n));
+    rows.slice(top, top + n).forEach((r, i) => {
+      out += panelText(r.label, 740, row(i), "start", r.cur ? "#000000" : fill(r), r.cur);
+      if (r.role) out += panelText(r.role, 1010, row(i), "end", r.cur ? "#000000" : "#ffffff");
+    });
+  };
+  const apt = box("AIRPORT");
+  out += panelText(v.apt, 740, apt(0), "start", v.aptCur ? "#000000" : CYAN, v.aptCur) + panelText(use, 1010, apt(0), "end", CYAN) +
+    panelText(name, 740, apt(1) - 2, "start", "#ffffff");
+  list("APPROACHES", v.approaches, (r) => (r.dim ? "#808080" : CYAN));
+  list("TRANSITIONS", v.transitions, () => CYAN);
+  const min = box("MINIMUMS");
+  out += panelText(v.min.mode, 740, min(0), "start", v.min.cur ? "#000000" : CYAN, v.min.cur) +
+    panelText(v.min.alt, 1010, min(0), "end", v.min.altCur ? "#000000" : v.min.mode === "OFF" ? "#808080" : CYAN, v.min.altCur);
+  list("SEQUENCE", v.sequence, () => "#ffffff");
+  return out;
+}
+
+// AirportInfo: identifier, airport details, runways and frequencies. Its softkeys (Pilot's Guide) show the airport's
+// other pages: APR its approaches (WPT - APPROACH INFORMATION, drawn here in place of FG1000's boxes), INFO-1 back.
+// DP, STAR and WX are dim: no departure, arrival or weather data. INFO-2 (the AOPA directory) is not ported.
 class AirportInfoPage extends MapPage {
   private id: string | null = null;
   private grp: "ID" | "RWY" | "FREQ" = "ID";
   private rwy = 0;
   private entry = new IdEntry(this.p, 4);
   private freqs = new ListView(this.p, ["FreqLabel", "Freq"], 7, "Freq", false, { trough: "FreqScrollBar", thumb: "FreqScroll" });
+  private view: "INFO" | "APR" = "INFO";
+  private apr = new AprInfo(new IdEntry(this.p, 4));
+  /** FG1000's boxes, and the approach window drawn in their place. */ private info: SVGGElement;
+  private panel: SVGGElement;
 
   constructor(m: Mfd, screen: SVGGElement) {
     super(m, "AirportInfo", screen, INFO_MAP);
+    const host = this.root!.querySelector('[id="Background"]')!.parentElement!;
+    const map = this.g.parentNode;
+    this.info = document.createElementNS(NS, "g");
+    this.panel = document.createElementNS(NS, "g");
+    for (const c of [...host.children]) if (c !== map) this.info.appendChild(c);
+    host.append(this.info, this.panel);
+  }
+
+  get title() {
+    return this.view === "APR" ? "WPT - APPROACH INFORMATION" : super.title;
+  }
+
+  private ctx() {
+    return { airport: this.apt, procedures: this.s.procedures };
+  }
+
+  private setView(v: "INFO" | "APR") {
+    if (v === this.view) return;
+    [this.view, this.crsr] = [v, false];
+    this.entry.cancel();
+    this.apr.clr();
+    // Pilot's Guide: the approach page opens on the airport page's airport.
+    if (v === "APR") [this.apr.grp, this.apr.apr, this.apr.trans, this.apr.seq] = ["APT", 0, 0, 0];
+  }
+
+  keys() {
+    return this.m.topKeys({
+      4: key("INFO-1", () => this.setView("INFO"), this.view === "INFO"), 5: dimKey("DP"), 6: dimKey("STAR"),
+      7: key("APR", () => this.setView("APR"), this.view === "APR"), 8: dimKey("WX"),
+    });
   }
 
   private get apt(): Airport | undefined {
@@ -547,9 +669,15 @@ class AirportInfoPage extends MapPage {
     super.toggleCrsr();
     this.grp = "ID";
     this.entry.cancel();
+    this.apr.clr();
+    this.apr.grp = "APT";
   }
 
   fms(outer: boolean, d: number) {
+    if (this.view === "APR") {
+      this.apr.fms(this.ctx(), outer, d);
+      return true;
+    }
     if (this.entry.editing || (this.grp === "ID" && !outer)) {
       if (outer) this.entry.outer(d);
       else this.entry.inner(d);
@@ -562,7 +690,11 @@ class AirportInfoPage extends MapPage {
   }
 
   ent() {
-    if (this.entry.editing) {
+    if (this.view === "APR") {
+      if (!this.crsr) return;
+      const v = this.apr.ent(this.ctx());
+      if (v) [this.id, this.rwy, this.freqs.sel] = [v, 0, 0];
+    } else if (this.entry.editing) {
       const v = this.entry.ent();
       if (v) [this.id, this.rwy, this.freqs.sel] = [v, 0, 0];
     } else if (this.crsr && this.grp === "FREQ") {
@@ -573,10 +705,19 @@ class AirportInfoPage extends MapPage {
 
   clr() {
     this.entry.cancel();
+    this.apr.clr();
   }
 
   draw() {
     const a = this.apt;
+    this.info.style.display = this.view === "INFO" ? "inline" : "none";
+    this.panel.style.display = this.view === "APR" ? "inline" : "none";
+    if (this.view === "APR") {
+      this.panel.innerHTML = aprPanel(this.apr.view(this.ctx(), this.crsr), a?.use ?? "", (a?.name ?? "").toUpperCase());
+      cursorBoxes(this.panel);
+      this.drawOwnMap(this.apr.preview(this.ctx()));
+      return;
+    }
     const none = "_______";
     this.entry.draw(a?.id ?? this.id ?? "####", this.crsr && this.grp === "ID", this.m.hl);
     this.p.text("Usage", a ? a.use ?? "" : none);
@@ -1122,6 +1263,12 @@ class ProceduresPage extends MfdPage {
     this.crsr = true;
   }
 
+  /** LD APR: SELECT APPROACH on `name` at `airport`, at its transitions. */
+  loadApproach(airport: string, name: string) {
+    this.flow.loadApproach(airport, name);
+    this.crsr = true;
+  }
+
   keys() {
     return this.m.topKeys();
   }
@@ -1365,10 +1512,7 @@ export class FplToolPage extends MfdPage {
   }
 
   draw() {
-    const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px`;
-    // `cur`: the cursor's cyan box goes behind it, measured once drawn.
-    const text = (t: string, x: number, y: number, anchor: string, fill: string, cur = false) =>
-      `<text ${cur ? "data-cur " : ""}x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style}">${esc(t)}</text>`;
+    const text = panelText;
     const rows = this.tool.rows(this.s);
     let out = `<rect x="724.5" y="53.5" width="310" height="${rows.length * 27 + 90}" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>`;
     rows.forEach((r, i) => {
@@ -1383,12 +1527,147 @@ export class FplToolPage extends MfdPage {
     });
     const y = 100 + rows.length * 27 + 10;
     this.g.innerHTML = out + text("Press the FMS CRSR knob to", 874, y, "middle", "#ffffff") + text("cancel", 874, y + 25, "middle", "#ffffff");
-    for (const t of this.g.querySelectorAll<SVGTextElement>("text[data-cur]")) {
-      const b = t.getBBox();
-      const box = document.createElementNS(NS, "rect");
-      for (const [k, v] of Object.entries({ x: b.x - 2, y: b.y - 1, width: b.width + 4, height: b.height + 2, fill: CYAN })) box.setAttribute(k, String(v));
-      t.before(box);
-    }
+    cursorBoxes(this.g);
+  }
+}
+
+// AUX pages drawn in the approach window's style (FG1000 has none): boxes down two columns of the whole page.
+interface PanelRow { label: string; value?: string; mid?: string; cur?: "label" | "mid" | "value"; dim?: boolean }
+interface PanelBox { title: string; rows: PanelRow[] }
+const PANEL_BG = "#1a3030";
+
+/** `boxes` stacked down a column at x, w wide, from y. */
+function panelColumn(x: number, w: number, y: number, boxes: PanelBox[], rowH = 23): string {
+  let out = "";
+  for (const b of boxes) {
+    out += `<rect x="${x + 0.5}" y="${y + 0.5}" width="${w}" height="${b.rows.length * rowH + 12}" fill="#000000" stroke="#ffffff"/>` +
+      `<rect x="${x + 15.5}" y="${y - 9.5}" width="${b.title.length * 9 + 12}" height="20" fill="${PANEL_BG}" stroke="#ffffff"/>` +
+      `<text x="${x + 21}" y="${y + 5}" fill="#ffffff" style="font-family:'Liberation Sans',sans-serif;font-size:14.5px">${esc(b.title)}</text>`;
+    b.rows.forEach((r, i) => {
+      const ry = y + 28 + i * rowH;
+      const fill = (on: boolean, normal: string) => (on ? "#000000" : r.dim ? "#808080" : normal);
+      out += panelText(r.label, x + 10, ry, "start", fill(r.cur === "label", r.cur === "label" ? CYAN : "#ffffff"), r.cur === "label");
+      if (r.mid !== undefined) out += panelText(r.mid, x + w * 0.62, ry, "end", fill(r.cur === "mid", CYAN), r.cur === "mid");
+      if (r.value !== undefined) out += panelText(r.value, x + w - 10, ry, "end", fill(r.cur === "value", CYAN), r.cur === "value");
+    });
+    y += b.rows.length * rowH + 12 + 30;
+  }
+  return out;
+}
+
+/** A page of its own boxes, with no FG1000 SVG: the AUX pages. */
+class PanelPage extends MfdPage {
+  live = true; // their clocks run
+  protected g: SVGGElement;
+
+  constructor(m: Mfd, name: string, screen: SVGGElement, after: Element) {
+    super(m, name, screen);
+    this.g = document.createElementNS(NS, "g");
+    this.g.id = `Page-${name}`;
+    this.g.style.display = "none";
+    after.after(this.g);
+    this.root = this.g;
+  }
+
+  protected paint(left: PanelBox[], right: PanelBox[]) {
+    this.g.innerHTML = `<rect x="150.5" y="53.5" width="884" height="689" fill="${PANEL_BG}" stroke="#ffffff"/>` +
+      panelColumn(160, 425, 75, left) + panelColumn(600, 425, 75, right);
+    cursorBoxes(this.g);
+  }
+}
+
+// AUX - SYSTEM SETUP (Pilot's Guide): the settings in `aux-pages.ts` work; the boxes this package does not carry out are grey.
+class SystemSetupPage extends PanelPage {
+  private at = 0;
+
+  toggleCrsr() {
+    super.toggleCrsr();
+    this.at = 0;
+  }
+
+  fms(outer: boolean, d: number) {
+    if (outer) this.at = clamp(this.at + (d > 0 ? 1 : -1), 0, SETUP_FIELDS.length - 1);
+    else stepSetup(this.m.ui.setup, this.at, d);
+    return true;
+  }
+
+  draw() {
+    const s = this.m.ui.setup;
+    const now = Date.now();
+    const field = (box: string): PanelRow[] => SETUP_FIELDS.flatMap((f, i) =>
+      f.box === box ? [{ label: f.label, value: setupValue(s, i), cur: this.crsr && i === this.at ? "value" as const : undefined }] : []);
+    const grey = (title: string, rows: [string, string][]): PanelBox => ({ title, rows: rows.map(([label, value]) => ({ label, value, dim: true })) });
+    const date = new Date(now + (s.timeFormat === "UTC" ? 0 : s.offset * 60_000));
+    const dd = `${String(date.getUTCDate()).padStart(2, "0")}-${date.toLocaleString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase()}-${String(date.getUTCFullYear()).slice(2)}`;
+    this.paint([
+      { title: "DATE / TIME", rows: [{ label: "DATE", value: dd }, { label: "TIME", value: clockText(now, s) }, ...field("DATE / TIME")] },
+      grey("DISPLAY UNITS", [["NAV ANGLE", "MAGNETIC(°)"], ["DIS, SPD", "NAUTICAL(NM,KT)"], ["ALT, VS", "FEET(FT,FPM)"], ["TEMP", "CELSIUS(°C)"], ["FUEL", "GALLONS(GL,GL/HR)"], ["POSITION", "HDDD°MM.MM'"]]),
+      grey("BARO TRANSITION ALERT", [["ALTITUDE", "18000FT"], ["LEVEL", "FL180"]]),
+      grey("AIRSPACE ALERTS", [["ALT BUFFER", "200FT"], ["CLASS B/TMA", "ON"], ["CLASS C/TCA", "ON"], ["CLASS D", "ON"], ["RESTRICTED", "ON"], ["MOA (MILITARY)", "ON"], ["OTHER/ADIZ", "ON"]]),
+    ], [
+      grey("ARRIVAL ALERT", [["ALERT", "____"]]),
+      grey("AUDIO ALERT", [["VOICE", "____"]]),
+      grey("FLIGHT DIRECTOR", [["ACTIVE FORMAT", "SINGLE CUE"]]),
+      { title: "MFD DATA BAR FIELDS", rows: field("MFD DATA BAR FIELDS") },
+      { title: "PAGE NAVIGATION", rows: field("PAGE NAVIGATION") },
+      grey("GPS CDI", [["SELECTED", "AUTO"], ["SYSTEM CDI", "____"]]),
+      grey("COM CONFIG", [["CHANNEL SPACING", "25.0 KHZ"]]),
+      { title: "NEAREST AIRPORT", rows: field("NEAREST AIRPORT") },
+    ]);
+  }
+}
+
+// AUX - UTILITY (Pilot's Guide): the generic, flight and departure timers and trip statistics, reset from the PAGE
+// MENU. The scheduler and flight data logger are not ported.
+class UtilityPage extends PanelPage {
+  private at = 0;
+  readonly util = new Utility(Date.now());
+
+  toggleCrsr() {
+    super.toggleCrsr();
+    this.at = 0;
+  }
+
+  fms(outer: boolean, d: number) {
+    if (outer) this.at = clamp(this.at + (d > 0 ? 1 : -1), 0, UTILITY_FIELDS.length - 1);
+    else this.util.field(UTILITY_FIELDS[this.at], d, Date.now());
+    return true;
+  }
+
+  // ENT on the direction or the time goes on to START?; on START?, STOP? or RESET? it carries it out.
+  ent() {
+    if (!this.crsr) return;
+    if (UTILITY_FIELDS[this.at] === "action") this.util.action(Date.now());
+    else if (this.at < 2) this.at = 2;
+  }
+
+  pageMenu(): MenuOption[] {
+    const r = (label: string, what: Parameters<Utility["reset"]>[0]) => ({ label, act: () => this.util.reset(what, Date.now()) });
+    return [
+      r("Reset Flight Timer", "flight"), r("Reset Departure Time", "departure"), r("Reset Trip ODOM/AVG GS", "trip"),
+      r("Reset Odometer", "odom"), r("Reset Maximum Speed", "max"), r("Reset All", "all"),
+    ];
+  }
+
+  draw() {
+    const u = this.util;
+    const now = Date.now();
+    const on = (f: UtilityField) => this.crsr && UTILITY_FIELDS[this.at] === f;
+    const cur = (f: UtilityField, where: "mid" | "value" | "label") => (on(f) ? where : undefined);
+    const flight = u.flight(now);
+    const dep = u.departure(now);
+    this.paint([
+      { title: "TIMERS", rows: [
+        { label: "GENERIC", mid: u.up ? "UP" : "DN", value: hms(u.timer(now)), cur: cur("dir", "mid") ?? cur("time", "value") },
+        { label: u.label(), cur: cur("action", "label") },
+        { label: "FLIGHT", mid: u.flightFrom, value: flight === null ? "__:__:__" : hms(flight), cur: cur("flight", "mid") },
+        { label: "DEPARTURE", mid: u.depFrom, value: dep === null ? "__:__:__" : clockText(dep, this.m.ui.setup), cur: cur("departure", "mid") },
+      ] },
+      { title: "TRIP STATISTICS", rows: [
+        { label: "ODOMETER", value: `${u.odom.toFixed(1)}NM` }, { label: "TRIP ODOM", value: `${u.trip.toFixed(1)}NM` },
+        { label: "TRIP AVG GS", value: `${u.avgGs()}KT` }, { label: "MAXIMUM GS", value: `${Math.round(u.maxGs)}KT` },
+      ] },
+    ], []);
   }
 }
 
@@ -1400,6 +1679,7 @@ export interface Pages {
   pageMenu: PageMenuPage;
   mapSetup: MapSetupPage;
   fplTool: FplToolPage;
+  utility: UtilityPage;
 }
 
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
@@ -1407,11 +1687,13 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
   const roots = [...screen.querySelectorAll<SVGGElement>('[id^="Page-"]')];
   for (const r of roots) r.style.display = "inline";
   const waypointEntry = new WaypointEntryPage(m, screen);
+  const top = roots[roots.length - 1].parentNode as Element;
+  const utility = new UtilityPage(m, "Utility", screen, top);
   const make = (name: string): MfdPage => {
     switch (name) {
       case "NavigationMap": return new NavigationMapPage(m, name, screen, () => mapSetup);
       case "TrafficMap": return new TrafficPage(m, name, screen);
-      case "NearestAirports": return new NearestAirportsPage(m, name, screen);
+      case "NearestAirports": return new NearestAirportsPage(m, name, screen, () => procedures);
       case "NearestVOR": return new NearestNavPage(m, name, screen, "VOR");
       case "NearestNDB": return new NearestNavPage(m, name, screen, "NDB");
       case "NearestIntersections": return new NearestNavPage(m, name, screen, "FIX");
@@ -1420,6 +1702,8 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
       case "NDBInfo": return new NavInfoPage(m, name, screen, "NDB", 3);
       case "IntersectionInfo": return new NavInfoPage(m, name, screen, "FIX", 5);
       case "AirportInfo": return new AirportInfoPage(m, screen);
+      case "Utility": return utility;
+      case "SystemSetup": return new SystemSetupPage(m, name, screen, top);
       case "Checklist": return new ChecklistPage(m, screen);
       case "ActiveFlightPlanNarrow": return new FlightPlanPage(m, screen, waypointEntry, () => fplTool);
     }
@@ -1435,5 +1719,5 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
   const mapSetup = new MapSetupPage(m, screen, roots[roots.length - 1].parentNode as Element);
   const fplTool = new FplToolPage(m, screen, roots[roots.length - 1].parentNode as Element);
   for (const r of roots) r.style.display = "none";
-  return { groups, directTo, procedures, waypointEntry, pageMenu, mapSetup, fplTool };
+  return { groups, directTo, procedures, waypointEntry, pageMenu, mapSetup, fplTool, utility };
 }

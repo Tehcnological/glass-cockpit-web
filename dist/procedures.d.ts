@@ -15,6 +15,7 @@ export interface ProcHost {
 /** Spells an identifier with the FMS knob: the inner turns the character, the outer moves along. */
 export type Speller = {
     editing: boolean;
+    readonly value: string;
     inner(d: number): void;
     outer(d: number): boolean;
     ent(): string | null;
@@ -38,6 +39,9 @@ export declare class ProcFlow {
     constructor(h: ProcHost, entry?: Speller);
     /** Opens on the PROCEDURES menu. SELECT APPROACH opens on the destination: the last airport in the flight plan, else the nearest. */
     open(): void;
+    /** LD APR (Nearest Airports): SELECT APPROACH on `name` at `airport`, at its transitions (LOAD? with only one).
+     * False when there is no procedure data for it. */
+    loadApproach(airport: string, name: string): boolean;
     procs(): Procedure[];
     transitions(): string[];
     private loaded;

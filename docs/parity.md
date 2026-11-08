@@ -82,15 +82,16 @@ Garmin art, screenshots, data or manual text is copied.
 | MAP | Navigation map | Partial: no map setup |
 | MAP | Traffic map | Done (shows what the host passes) |
 | MAP | Stormscope, weather data link, TAWS | No data |
-| WPT | Airport information | Partial: info shown; its sub-pages (runways, frequencies, departure, arrival, approach, weather) missing |
+| WPT | Airport information | Partial: info and APPROACH INFORMATION (APR) done; departure, arrival and weather (DP, STAR, WX) grey with no data; INFO-2 directory missing |
 | WPT | Intersection, NDB, VOR information | Done |
 | WPT | User waypoint information | Missing (no user waypoints) |
-| AUX | Trip planning, utility, GPS status, XM, system status | Missing / No data |
-| AUX | System setup | Missing |
+| AUX | Utility | Partial: generic, flight and departure timers and trip statistics done; scheduler and flight data logger missing |
+| AUX | Trip planning, GPS status, XM, system status | No data |
+| AUX | System setup | Partial: time format and offset, MFD data bar fields, page navigation, nearest airport criteria done; display units, alerts, GPS CDI, COM spacing shown grey |
 | FPL | Active flight plan | Partial: insert, delete, activate leg, PAGE MENU; no VNV, no airways, no stored plans |
 | FPL | Flight plan catalog, stored plans | Missing |
 | LST | Checklists | Done |
-| NRST | Airports | Partial: no RNWY, FREQ, APR, LD APR softkeys |
+| NRST | Airports | Partial: no dashed line to the selected airport on the map |
 | NRST | Intersections, NDB, VOR | Partial: VOR's FREQ key missing |
 | NRST | Frequencies | Done |
 | NRST | User waypoints, airspaces | Missing / No data |
@@ -100,9 +101,9 @@ Garmin art, screenshots, data or manual text is copied.
 | Menu | Trainer keys | Status |
 | --- | --- | --- |
 | Root | ENGINE, MAP, DCLTR, SHW CHRT, CHKLIST | Done (SHW CHRT No data) |
-| MAP | TRAFFIC, PROFILE, TOPO, TERRAIN, AIRWAYS, PRECIP, METAR, LEGEND, BACK | Partial: PROFILE and AIRWAYS missing; the rest No data |
+| MAP | TRAFFIC, PROFILE, TOPO, TERRAIN, AIRWAYS, PRECIP, METAR, LEGEND, BACK | Partial: PROFILE (no terrain) and AIRWAYS (host data) done; the rest No data |
 | ENGINE, LEAN, SYSTEM | CYL SLCT, ASSIST, RST FUEL, GAL REM (+/- 1, 10 GAL) | Partial: keys present; GAL REM adjust not checked |
-| Nearest airports | APT, RNWY, FREQ, APR, LD APR | Missing |
+| Nearest airports | APT, RNWY, FREQ, APR, LD APR | Done |
 | Procedures page | DP, STAR, APR, GO BACK | Missing |
 
 ## Page menus (MENU)
@@ -112,18 +113,18 @@ terrain, charts, Iridium or a database GCW does not carry.
 
 | Page | Options | Status |
 | --- | --- | --- |
-| Navigation map | Map Setup (orientation, auto zoom, track vector, wind vector, nav range ring, fuel range, field of view, topo, airways, land, aviation, traffic, weather groups), Declutter, Measure Bearing/Distance, Show/Hide Profile View, Show Chart | Partial: Map Setup (Map group: orientation, track vector), Declutter, Measure Bearing/Distance (no elevation) |
+| Navigation map | Map Setup (orientation, auto zoom, track vector, wind vector, nav range ring, fuel range, field of view, topo, airways, land, aviation, traffic, weather groups), Declutter, Measure Bearing/Distance, Show/Hide Profile View, Show Chart | Partial: Map Setup (Map group: orientation, track vector), Declutter, Measure Bearing/Distance (no elevation), Show/Hide Profile View |
 | Active flight plan | Activate Leg, Load Waypoint, Store Flight Plan, Invert Flight Plan, Delete Flight Plan, Create ATK Offset Waypoint, Parallel Track, Closest Point of FPL, Collapse/Expand Airways, Hold At Wpt, Hold At Present Position, Remove Departure/Arrival/Approach, Enable/Cancel VNV, VNV Direct-To, Select VNV Profile Window | Partial: Invert, Delete, Remove Approach, Closest Point of FPL, Parallel Track (no overlap cancel, no VNV), Create ATK Offset Waypoint (10 nm / 1 nm knob steps) |
 | Flight plan catalog | Create New, Activate, Invert & Activate, Copy, Edit, Delete, Delete All | Missing (no stored plans) |
 | Direct-to window | Cancel Direct-To NAV, Clear Vertical Constraints | Partial: Cancel Direct-To NAV (no VNV) |
 | Airport information | View Destination Airport, Show Directory/Departure/Arrival/Approach/Weather Page, View NOTAMs, Chart Mode On | Missing |
 | Approach loading (PROC) | Load Approach, Load & Activate Approach | Done through PROC |
 | User waypoint information | Create New User Waypoint, Delete User Waypoint, Rename User Waypoint, Delete All User Waypoints, Waypoint Setup (temporary or normal), Use Present Position | Missing |
-| Nearest airports | Select Airport/Runway/Frequency/Approach Window, Load Approach | Missing (with the RNWY/FREQ/APR softkeys) |
+| Nearest airports | Select Airport/Runway/Frequency/Approach Window, Load Approach | Done |
 | Nearest VOR | Select VOR Window, Select Frequency Window | Missing |
 | Nearest airspaces | Select Alerts Window | Missing / No data |
 | Trip planning | Flight Plan Mode, Waypoints Mode, Auto Mode, Manual Mode | Missing |
-| Utility | Reset Departure Time, Reset Flight Timer | Missing |
+| Utility | Reset Flight Timer, Reset Departure Time, Reset Trip ODOM/AVG GS, Reset Odometer, Reset Maximum Speed, Reset All | Done |
 | AUX GPS status | Set WPT to Present Position (RAIM prediction) | Missing |
 | Weather (XM, FIS-B, Connext), traffic, TAWS, terrain, Stormscope, Iridium phone and text | Product groups, legends, operate/standby/test, inhibit, show flight IDs, call and message actions | No data |
 

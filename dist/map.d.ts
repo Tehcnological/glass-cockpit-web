@@ -20,6 +20,12 @@ export interface LatLon {
     lat: number;
     lon: number;
 }
+/** A low (Victor) or high (jet route) altitude airway through `points` ids, in order. */
+export interface Airway {
+    id: string;
+    type: "LO" | "HI";
+    points: string[];
+}
 /** Class B, C or D airspace: outlines as rings of [lat, lon]. */
 export interface Airspace {
     cls: "B" | "C" | "D";
@@ -48,7 +54,30 @@ export interface MapData {
     /** Index into `route` of the active waypoint; the leg into it is magenta. */ activeLeg: number;
     /** After a Direct-To: where it started; the magenta leg runs from here to the active waypoint. */ directFrom?: LatLon | null;
     /** Map center when not the aircraft (WPT pages center on the waypoint). */ center?: LatLon;
+    /** A procedure previewed on a WPT page: its fixes in order, white, the missed approach dashed. */ preview?: MapPoint[];
+    /** The airways to draw (see `shownAirways`), low first. */ airways?: Airway[];
+    /** Profile View's path: its length and total width, nm, along the track. */ profilePath?: {
+        nm: number;
+        width: number;
+        ticks: number[];
+    };
 }
+/** The airways the AIRWAYS key shows at `range`: 0 none, 1 all, 2 low, 3 high. High ones last, drawn over the low. */
+export declare function shownAirways(all: Airway[], mode: number, range: number): Airway[];
+/** Profile View's scales: half the map range (none under 1 nm), five distance marks, and four altitude steps with the
+ * aircraft at the start of the second. shortcut: our own altitude steps; the Pilot's Guide gives none. */
+export declare function profileView(alt: number, range: number): {
+    nm: number;
+    ticks: {
+        nm: number;
+        label: string;
+    }[];
+    step: number;
+    bottom: number;
+} | null;
+/** The points drawn as symbols: a layer's by its range and declutter level, airway fixes past their range (still
+ * decluttered), and the route's and a previewed procedure's always. A previewed fix already on the map draws once. */
+export declare function symbolPoints(s: MapData, declutter?: number): MapPoint[];
 /** Map window in screen pixels: clip box, aircraft position, and pixels per `range`. */
 export interface MapGeometry {
     x: number;
