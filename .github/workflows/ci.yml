@@ -1,0 +1,55 @@
+name: CI
+
+# No path filters: a required check that never starts leaves its PR stuck waiting. See "CI" in README.md.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A new push to a PR cancels that PR's older run. Main keeps a result for every commit.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22 # instrumentready.com, the consumer, runs on Node 22 or newer
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check and unit tests
+        run: npm test
+
+      # Sites install this commit from GitHub without building, so dist/ and the generated src/svg/ have to match.
+      - name: Committed dist/ and src/svg/ are current
+        run: |
+          rm -rf dist src/svg
+          npm run build
+          git add -N .
+          git diff --exit-code --stat || { echo "::error::dist/ or src/svg/ does not match the source. Run npm run build and commit the result."; exit 1; }
+
+      - name: Installs from git the way a site does
+        run: |
+          cd "$(mktemp -d)"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "git+file://$GITHUB_WORKSPACE#$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
+          node --input-type=module -e "const { GlassPfd, GlassMfd } = await import('glass-cockpit-web'); const { tuneNav } = await import('glass-cockpit-web/radio'); for (const f of [GlassPfd, GlassMfd, tuneNav]) if (typeof f !== 'function') throw new Error('a public export is missing');"
+          test -f node_modules/glass-cockpit-web/vue/Glass.vue
+          test -f node_modules/glass-cockpit-web/vue/Steam.vue
+          test -f node_modules/glass-cockpit-web/vue/KitDemo.vue
+          test -f node_modules/glass-cockpit-web/vue/state.ts
