@@ -93,10 +93,15 @@ export interface PfdState {
      */
     failed: Partial<Record<Failure, boolean>>;
 }
+/** A change `onChange` reports: PFD state, plus the MFD's `directFrom` and `vtf` when the PAGE MENU changes the flight plan. */
+export type PfdChange = Partial<PfdState> & {
+    directFrom?: import("./map.js").LatLon | null;
+    vtf?: boolean;
+};
 export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading";
 export interface PfdOptions extends DisplayOptions {
     /** Called when a bezel input changes the state (heading bug, course, baro, selected altitude, radios, CDI source). */
-    onChange?: (patch: Partial<PfdState>) => void;
+    onChange?: (patch: PfdChange) => void;
     /** IAS box turns red above this. */ vne?: number;
     /** Speed references, switched on and off in TMR/REF. */ vspeeds?: Partial<Record<VSpeed, number>>;
 }

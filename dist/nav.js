@@ -75,7 +75,8 @@ export function vtfPatch(start, legs, here) {
     const i = vtfLeg(legs);
     return { activeLeg: start + i, directFrom: i > 0 ? null : here, vtf: true };
 }
-const isApproach = (r) => typeof r !== "string" && r.approach !== undefined;
+/** A route entry PROC loaded as part of an approach; a waypoint entered by hand is not one. */
+export const isApproach = (r) => typeof r !== "string" && r.approach !== undefined;
 /** The approach loaded in `route`: its fixes, which PROC marks with `approach`, from `start` on. */
 // `pts` is the route from there on, with any waypoints inserted among the fixes, so its indexes are the route's from `start`.
 export function loadedApproach(route) {

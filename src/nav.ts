@@ -130,7 +130,8 @@ export function vtfPatch(start: number, legs: readonly (string | { role?: string
 }
 
 type Route = (string | MapPoint)[];
-const isApproach = (r: string | MapPoint): r is MapPoint => typeof r !== "string" && r.approach !== undefined;
+/** A route entry PROC loaded as part of an approach; a waypoint entered by hand is not one. */
+export const isApproach = (r: string | MapPoint): r is MapPoint => typeof r !== "string" && r.approach !== undefined;
 
 /** The approach loaded in `route`: its fixes, which PROC marks with `approach`, from `start` on. */
 // `pts` is the route from there on, with any waypoints inserted among the fixes, so its indexes are the route's from `start`.

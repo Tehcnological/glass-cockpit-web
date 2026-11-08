@@ -1,6 +1,6 @@
 // PAGE MENU: the MENU key's options for a page, as the v13 trainer lists them. Options this package cannot carry out
 // are dim, as the softkeys are; the cursor skips them. DOM-free, so it can be tested on its own.
-import { loadedApproach } from "./nav.js";
+import { isApproach } from "./nav.js";
 import type { LatLon, MapPoint } from "./map.js";
 
 /** One option: no `act` (or `patch`) means dim. */
@@ -28,12 +28,14 @@ type FplPatch = { route: Route; activeLeg: number; directFrom?: LatLon | null; v
 
 /** The flight plan menu for `route`; `patch` is the change an option makes, absent when it is dim here. */
 export function fplMenu(route: Route, activeLeg: number): { label: string; patch?: FplPatch }[] {
-  const a = loadedApproach(route);
-  const enroute = a ? route.slice(0, a.start) : route;
+  // Waypoints entered by hand among the approach fixes stay; the active one is the first kept from the active leg on.
+  const enroute = route.filter((r) => !isApproach(r));
+  const a = enroute.length < route.length;
+  const kept = route.slice(0, activeLeg).filter((r) => !isApproach(r)).length;
   const patches: Partial<Record<(typeof FPL_OPTIONS)[number], FplPatch>> = {};
   // Inverting drops the approach, as the G1000 does, and flies the first leg.
   if (enroute.length > 1) patches["Invert Flight Plan"] = { route: [...enroute].reverse(), activeLeg: 1, directFrom: null, vtf: false };
   if (route.length) patches["Delete Flight Plan"] = { route: [], activeLeg: 0, directFrom: null, vtf: false };
-  if (a) patches["Remove Approach"] = { route: enroute, activeLeg: Math.min(activeLeg, Math.max(0, enroute.length - 1)), vtf: false };
+  if (a) patches["Remove Approach"] = { route: enroute, activeLeg: Math.min(kept, Math.max(0, enroute.length - 1)), vtf: false };
   return FPL_OPTIONS.map((label) => ({ label, patch: patches[label] }));
 }

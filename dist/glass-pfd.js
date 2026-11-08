@@ -181,7 +181,8 @@ export class GlassPfd {
                     const o = this.pageMenu()[u.cursor];
                     if (o?.patch) {
                         u.window = null;
-                        this.change({ route: o.patch.route, activeLeg: o.patch.activeLeg });
+                        // The whole patch, so a host sharing it with the MFD also clears its direct-to and vector-to-final.
+                        this.change(o.patch);
                     }
                 }
                 if (u.window === "NRST" && this.nearest().length)
@@ -210,7 +211,8 @@ export class GlassPfd {
     }
     /** Apply a change the pilot made and report it. */
     change(patch) {
-        this.set(patch);
+        const { directFrom: _d, vtf: _v, ...own } = patch;
+        this.set(own);
         this.options.onChange?.(patch);
     }
     go(menu) {

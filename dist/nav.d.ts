@@ -91,6 +91,8 @@ export declare function vtfPatch(start: number, legs: readonly (string | {
     vtf: true;
 };
 type Route = (string | MapPoint)[];
+/** A route entry PROC loaded as part of an approach; a waypoint entered by hand is not one. */
+export declare const isApproach: (r: string | MapPoint) => r is MapPoint;
 /** The approach loaded in `route`: its fixes, which PROC marks with `approach`, from `start` on. */
 export declare function loadedApproach(route: Route): {
     start: number;
