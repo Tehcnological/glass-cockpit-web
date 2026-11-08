@@ -186,7 +186,8 @@ interface PanelRow {
     value?: string;
     mid?: string;
     cur?: "label" | "mid" | "value";
-    dim?: boolean;
+    dim?: boolean; /** The value's, cyan by default. */
+    color?: string;
 }
 interface PanelBox {
     title: string;

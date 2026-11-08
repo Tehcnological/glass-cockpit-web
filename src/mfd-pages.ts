@@ -12,7 +12,8 @@ import type { MfdState } from "./glass-mfd.js";
 import { panStart, type Pan } from "./pan.js";
 import { PROC_MENU, ProcFlow } from "./procedures.js";
 import { AprInfo, type AprRow } from "./apr-info.js";
-import { SETUP_FIELDS, UTILITY_FIELDS, Utility, airportMatches, clockText, hms, setupValue, stepSetup, type Setup, type UtilityField } from "./aux-pages.js";
+import { densityAltitude, fuelStats, sunTimes, tripLeg, trueAirspeed } from "./trip-planning.js";
+import { SETUP_FIELDS, UTILITY_FIELDS, Utility, airportMatches, clockText, ete, hms, setupValue, stepSetup, type Setup, type UtilityField } from "./aux-pages.js";
 
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
 export interface Checklist { group: string; name: string; items: { name: string; value: string }[] }
@@ -1552,9 +1553,11 @@ export class FplToolPage extends MfdPage {
 }
 
 // AUX pages drawn in the approach window's style (FG1000 has none): boxes down two columns of the whole page.
-interface PanelRow { label: string; value?: string; mid?: string; cur?: "label" | "mid" | "value"; dim?: boolean }
+interface PanelRow { label: string; value?: string; mid?: string; cur?: "label" | "mid" | "value"; dim?: boolean; /** The value's, cyan by default. */ color?: string }
 interface PanelBox { title: string; rows: PanelRow[] }
 const PANEL_BG = "#1a3030";
+/** A box of what this package does not carry out, grey. */
+const greyBox = (title: string, rows: [string, string][]): PanelBox => ({ title, rows: rows.map(([label, value]) => ({ label, value, dim: true })) });
 
 /** `boxes` stacked down a column at x, w wide, from y. */
 function panelColumn(x: number, w: number, y: number, boxes: PanelBox[], rowH = 23): string {
@@ -1568,7 +1571,7 @@ function panelColumn(x: number, w: number, y: number, boxes: PanelBox[], rowH = 
       const fill = (on: boolean, normal: string) => (on ? "#000000" : r.dim ? "#808080" : normal);
       out += panelText(r.label, x + 10, ry, "start", fill(r.cur === "label", r.cur === "label" ? CYAN : "#ffffff"), r.cur === "label");
       if (r.mid !== undefined) out += panelText(r.mid, x + w * 0.62, ry, "end", fill(r.cur === "mid", CYAN), r.cur === "mid");
-      if (r.value !== undefined) out += panelText(r.value, x + w - 10, ry, "end", fill(r.cur === "value", CYAN), r.cur === "value");
+      if (r.value !== undefined) out += panelText(r.value, x + w - 10, ry, "end", fill(r.cur === "value", r.color ?? CYAN), r.cur === "value");
     });
     y += b.rows.length * rowH + 12 + 30;
   }
@@ -1616,22 +1619,21 @@ class SystemSetupPage extends PanelPage {
     const now = Date.now();
     const field = (box: string): PanelRow[] => SETUP_FIELDS.flatMap((f, i) =>
       f.box === box ? [{ label: f.label, value: setupValue(s, i), cur: this.crsr && i === this.at ? "value" as const : undefined }] : []);
-    const grey = (title: string, rows: [string, string][]): PanelBox => ({ title, rows: rows.map(([label, value]) => ({ label, value, dim: true })) });
     const date = new Date(now + (s.timeFormat === "UTC" ? 0 : s.offset * 60_000));
     const dd = `${String(date.getUTCDate()).padStart(2, "0")}-${date.toLocaleString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase()}-${String(date.getUTCFullYear()).slice(2)}`;
     this.paint([
       { title: "DATE / TIME", rows: [{ label: "DATE", value: dd }, { label: "TIME", value: clockText(now, s) }, ...field("DATE / TIME")] },
-      grey("DISPLAY UNITS", [["NAV ANGLE", "MAGNETIC(°)"], ["DIS, SPD", "NAUTICAL(NM,KT)"], ["ALT, VS", "FEET(FT,FPM)"], ["TEMP", "CELSIUS(°C)"], ["FUEL", "GALLONS(GL,GL/HR)"], ["POSITION", "HDDD°MM.MM'"]]),
-      grey("BARO TRANSITION ALERT", [["ALTITUDE", "18000FT"], ["LEVEL", "FL180"]]),
-      grey("AIRSPACE ALERTS", [["ALT BUFFER", "200FT"], ["CLASS B/TMA", "ON"], ["CLASS C/TCA", "ON"], ["CLASS D", "ON"], ["RESTRICTED", "ON"], ["MOA (MILITARY)", "ON"], ["OTHER/ADIZ", "ON"]]),
+      greyBox("DISPLAY UNITS", [["NAV ANGLE", "MAGNETIC(°)"], ["DIS, SPD", "NAUTICAL(NM,KT)"], ["ALT, VS", "FEET(FT,FPM)"], ["TEMP", "CELSIUS(°C)"], ["FUEL", "GALLONS(GL,GL/HR)"], ["POSITION", "HDDD°MM.MM'"]]),
+      greyBox("BARO TRANSITION ALERT", [["ALTITUDE", "18000FT"], ["LEVEL", "FL180"]]),
+      greyBox("AIRSPACE ALERTS", [["ALT BUFFER", "200FT"], ["CLASS B/TMA", "ON"], ["CLASS C/TCA", "ON"], ["CLASS D", "ON"], ["RESTRICTED", "ON"], ["MOA (MILITARY)", "ON"], ["OTHER/ADIZ", "ON"]]),
     ], [
-      grey("ARRIVAL ALERT", [["ALERT", "____"]]),
-      grey("AUDIO ALERT", [["VOICE", "____"]]),
-      grey("FLIGHT DIRECTOR", [["ACTIVE FORMAT", "SINGLE CUE"]]),
+      greyBox("ARRIVAL ALERT", [["ALERT", "____"]]),
+      greyBox("AUDIO ALERT", [["VOICE", "____"]]),
+      greyBox("FLIGHT DIRECTOR", [["ACTIVE FORMAT", "SINGLE CUE"]]),
       { title: "MFD DATA BAR FIELDS", rows: field("MFD DATA BAR FIELDS") },
       { title: "PAGE NAVIGATION", rows: field("PAGE NAVIGATION") },
-      grey("GPS CDI", [["SELECTED", "AUTO"], ["SYSTEM CDI", "____"]]),
-      grey("COM CONFIG", [["CHANNEL SPACING", "25.0 KHZ"]]),
+      greyBox("GPS CDI", [["SELECTED", "AUTO"], ["SYSTEM CDI", "____"]]),
+      greyBox("COM CONFIG", [["CHANNEL SPACING", "25.0 KHZ"]]),
       { title: "NEAREST AIRPORT", rows: field("NEAREST AIRPORT") },
     ]);
   }
@@ -1691,6 +1693,156 @@ class UtilityPage extends PanelPage {
   }
 }
 
+// AUX - TRIP PLANNING (Pilot's Guide): AUTO takes groundspeed, fuel flow and fuel on board from the aircraft; MANUAL takes
+// them, and the air data density altitude and true airspeed need, from the small FMS knob. The leg is the flight plan's
+// REM or one of its legs. WPTS mode and ESA are not ported.
+const TRIP_INPUTS = [
+  { key: "gs", label: "GS", step: 1, unit: "KT", digits: 0 },
+  { key: "ff", label: "FUEL FLOW", step: 0.1, unit: "GL/HR", digits: 1 },
+  { key: "fuel", label: "FUEL ON BOARD", step: 1, unit: "GL", digits: 1 },
+  { key: "cas", label: "CALIBRATED AS", step: 1, unit: "KT", digits: 0 },
+  { key: "alt", label: "IND ALTITUDE", step: 100, unit: "FT", digits: 0 },
+  { key: "baro", label: "BARO", step: 0.01, unit: "IN", digits: 2 },
+  { key: "tat", label: "TOTAL AIR TEMP", step: 1, unit: "°C", digits: 0 },
+] as const;
+type TripInputs = Record<(typeof TRIP_INPUTS)[number]["key"], number>;
+
+class TripPlanningPage extends PanelPage {
+  private manual: TripInputs | null = null;
+  private leg: number | "REM" = "REM";
+  private at = 0;
+
+  private sensors(): TripInputs {
+    const s = this.m.s;
+    const fuel = s.engine.fuelLeft + s.engine.fuelRight;
+    return { gs: Math.round(s.groundspeed), ff: s.engine.fuelFlow, fuel, cas: Math.round(s.groundspeed), alt: Math.round(s.alt / 100) * 100, baro: s.baro, tat: 15 };
+  }
+
+  toggleCrsr() {
+    super.toggleCrsr();
+    this.at = 0;
+  }
+
+  fms(outer: boolean, d: number) {
+    if (outer) this.at = clamp(this.at + (d > 0 ? 1 : -1), 0, this.manual ? TRIP_INPUTS.length : 0);
+    else if (this.at === 0) {
+      const legs = ["REM" as const, ...this.m.s.route.keys()].filter((l) => l !== 0);
+      this.leg = legs[clamp(legs.indexOf(this.leg) + d, 0, legs.length - 1)];
+    } else if (this.manual) {
+      const f = TRIP_INPUTS[this.at - 1];
+      this.manual[f.key] = Math.max(f.key === "tat" ? -99 : 0, +(this.manual[f.key] + d * f.step).toFixed(f.digits));
+    }
+    return true;
+  }
+
+  keys() {
+    return this.m.topKeys({
+      4: key("AUTO", () => ([this.manual, this.at] = [null, 0]), !this.manual),
+      5: key("MANUAL", () => (this.manual ??= this.sensors()), !!this.manual),
+      7: key("FPL", undefined, true), 8: dimKey("WPTS"),
+    });
+  }
+
+  draw() {
+    const s = this.m.s;
+    const setup = this.m.ui.setup;
+    const now = Date.now();
+    if (this.leg !== "REM" && this.leg >= s.route.length) this.leg = "REM";
+    const inp = this.manual ?? this.sensors();
+    const id = (i: number) => routePoint(s.route[i] ?? "", s.points, s.airports);
+    const to = id(this.leg === "REM" ? s.route.length - 1 : this.leg);
+    const from = this.leg === "REM" || this.leg === s.activeLeg ? "P.POS" : id(this.leg - 1)?.id;
+    const leg = tripLeg(s, this.leg);
+    const hours = leg.dis !== null && inp.gs > 0 ? leg.dis / inp.gs : null;
+    const f = fuelStats(inp.gs, inp.ff, inp.fuel, hours);
+    const sun = to ? sunTimes(to.lat, to.lon, now + (hours ?? 0) * 3_600_000) : { rise: null, set: null };
+    const or = <T,>(v: T | null, fmt: (v: T) => string, none: string) => (v === null ? none : fmt(v));
+    const hm = (h: number) => `${h < 0 ? "-" : ""}${hms(Math.abs(h) * 3600).slice(0, 5)}`;
+    const clock = (ms: number) => clockText(ms, setup, false);
+    const cur = (i: number) => (this.crsr && this.at === i ? ("value" as const) : undefined);
+    // AUTO has no air data: calibrated airspeed and total air temperature are the pilot's to enter.
+    const noAir = !this.manual;
+    this.paint([
+      { title: "FLIGHT PLAN", rows: [
+        { label: "LEG", value: this.leg === "REM" ? "REM" : String(this.leg).padStart(2, "0"), cur: cur(0) },
+        { label: "FROM", value: from ?? "____" }, { label: "TO", value: to?.id ?? "____" },
+      ] },
+      { title: "INPUT DATA", rows: [
+        { label: "DEP TIME", value: clock(now) },
+        ...TRIP_INPUTS.map((t, i): PanelRow => noAir && (t.key === "cas" || t.key === "tat")
+          ? { label: t.label, value: `____${t.unit}`, dim: true }
+          : { label: t.label, value: `${inp[t.key].toFixed(t.digits)}${t.unit}`, cur: cur(i + 1) }),
+      ] },
+    ], [
+      { title: "TRIP STATISTICS", rows: [
+        { label: "DTK", value: or(leg.dtk, deg3, "___°") }, { label: "DIS", value: or(leg.dis, (v) => `${v.toFixed(1)}NM`, "___NM") },
+        { label: "ETE", value: or(hours, (h) => ete(h * 3600), "__:__") }, { label: "ETA", value: or(hours, (h) => clock(now + h * 3_600_000), "__:__") },
+        { label: "ESA", value: "____FT", dim: true },
+        { label: "SUNRISE", value: or(sun.rise, clock, "__:__") }, { label: "SUNSET", value: or(sun.set, clock, "__:__") },
+      ] },
+      { title: "FUEL STATISTICS", rows: [
+        { label: "EFFICIENCY", value: or(f.efficiency, (v) => `${v.toFixed(1)}NM/GL`, "__._NM/GL") },
+        { label: "TOTAL ENDUR", value: or(f.endurance, hm, "__:__") }, { label: "REM FUEL", value: or(f.remFuel, (v) => `${v.toFixed(1)}GL`, "__._GL") },
+        { label: "REM ENDUR", value: or(f.remEndurance, hm, "__:__") }, { label: "FUEL REQ", value: or(f.fuelReq, (v) => `${v.toFixed(1)}GL`, "__._GL") },
+        { label: "TOTAL RANGE", value: or(f.range, (v) => `${Math.round(v)}NM`, "___NM") },
+      ] },
+      { title: "OTHER STATISTICS", rows: [
+        { label: "DENSITY ALT", value: noAir ? "_____FT" : `${Math.round(densityAltitude(inp.alt, inp.baro, inp.tat))}FT`, dim: noAir },
+        { label: "TRUE AIRSPEED", value: noAir ? "___KT" : `${Math.round(trueAirspeed(inp.cas, inp.alt, inp.baro, inp.tat))}KT`, dim: noAir },
+      ] },
+    ]);
+  }
+}
+
+// AUX - GPS STATUS (Pilot's Guide): the position, time, altitude, groundspeed and track the aircraft gives. There are no
+// satellites here, so the sky view and signal bars are left out and the accuracy, RAIM and SBAS boxes are grey.
+class GpsStatusPage extends PanelPage {
+  private rx = 1;
+  private sbas = false;
+
+  keys() {
+    return this.m.topKeys({
+      4: key("GPS1", () => (this.rx = 1), this.rx === 1), 5: key("GPS2", () => (this.rx = 2), this.rx === 2),
+      7: key("RAIM", () => (this.sbas = false), !this.sbas), 8: key("SBAS", () => (this.sbas = true), this.sbas),
+    });
+  }
+
+  draw() {
+    const s = this.m.s;
+    this.paint([
+      { title: `GPS${this.rx} POSITION`, rows: [
+        { label: "SOLUTION", value: "3D NAV" }, { label: "POSITION", value: latLon(s.lat, "N", "S") }, { label: "", value: latLon(s.lon, "E", "W") },
+        { label: "TIME", value: clockText(Date.now(), { timeFormat: "UTC", offset: 0 }) }, { label: "ALTITUDE", value: `${Math.round(s.alt)}FT` },
+        { label: "GS", value: `${Math.round(s.groundspeed)}KT` }, { label: "TRK", value: deg3(s.track) },
+      ] },
+      greyBox("ACCURACY", [["EPU", "__._NM"], ["HDOP", "__._"], ["HFOM", "__._NM"], ["VFOM", "___FT"]]),
+    ], [
+      this.sbas
+        ? greyBox("SBAS SELECTION", [["WAAS", "ON"], ["EGNOS", "OFF"], ["MSAS", "OFF"]])
+        : greyBox("RAIM PREDICTION", [["WAYPOINT", "P.POS"], ["TIME", "__:__"], ["DATE", "__-___-__"], ["AVAILABILITY", "COMPUTE RAIM?"]]),
+    ]);
+  }
+}
+
+// AUX - SYSTEM STATUS (Pilot's Guide): every LRU reports in. There are no serial numbers, versions or databases here, so
+// the airframe and database boxes are grey and ANN TEST is dim.
+const LRUS = ["GDC1", "GEA1", "GIA1", "GIA2", "GMA1", "GMU1", "GRS1", "GTX1", "MFD1", "PFD1"];
+
+class SystemStatusPage extends PanelPage {
+  private db: "MFD1" | "PFD1" = "MFD1";
+
+  keys() {
+    return this.m.topKeys({ 7: key(`${this.db} DB`, () => (this.db = this.db === "MFD1" ? "PFD1" : "MFD1")), 8: dimKey("ANN TEST") });
+  }
+
+  draw() {
+    this.paint([{ title: "LRU INFO", rows: LRUS.map((label) => ({ label, value: "✓", color: "#00ff00" })) }], [
+      greyBox("AIRFRAME", [["AIRFRAME", "____"]]),
+      greyBox(`${this.db} DATABASE`, [["BASEMAP", "____"], ["NAVIGATION", "____"], ["OBSTACLE", "____"], ["TERRAIN", "____"]]),
+    ]);
+  }
+}
+
 export interface Pages {
   groups: MfdPage[][];
   directTo: DirectToPage;
@@ -1724,6 +1876,9 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
       case "AirportInfo": return new AirportInfoPage(m, screen);
       case "Utility": return utility;
       case "SystemSetup": return new SystemSetupPage(m, name, screen, top);
+      case "TripPlanning": return new TripPlanningPage(m, name, screen, top);
+      case "GPSStatus": return new GpsStatusPage(m, name, screen, top);
+      case "SystemStatus": return new SystemStatusPage(m, name, screen, top);
       case "Checklist": return new ChecklistPage(m, screen);
       case "ActiveFlightPlanNarrow": return new FlightPlanPage(m, screen, waypointEntry, () => fplTool);
     }
