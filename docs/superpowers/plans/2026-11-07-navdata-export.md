@@ -177,7 +177,7 @@
 - [ ] **Step 1: Update the pin:** `npm install glass-cockpit-web@github:Tehcnological/glass-cockpit-web`. Expected: `package-lock.json` resolves to the Part A merge commit.
 - [ ] **Step 2: Edit `scripts/nasr.ts`:**
   - Build `const rows: NasrCsv` from the six `csv()` calls (the same sub-archives and file names as today).
-  - Keep the airspace block as it is.
+  - Keep the airspace block as it is, and keep `const round` above it: the airspace block uses it. It is the same as GCW's, so output doesn't change.
   - Replace the mapping code with `const out = buildNasr(cycle, rows, airspace)`.
   - Take `parseCifp` from GCW.
   - Keep the closing log line, reading counts from `out`.

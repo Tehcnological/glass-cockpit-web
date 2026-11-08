@@ -11,6 +11,41 @@ test("buildNasr reproduces today's records for real 2026-10-29 rows", () => {
   assert.deepEqual(buildNasr("2026-10-29", rows, []), expected.nasr);
 });
 
+const copy = (row, patch, drop) => {
+  const r = { ...row, ...patch };
+  if (drop) delete r[drop];
+  return r;
+};
+
+test("an FRQ row without a position makes no station", () => {
+  const rcag = rows.FRQ.find((r) => r.FACILITY_TYPE === "RCAG");
+  const more = { ...rows, FRQ: [...rows.FRQ, copy(rcag, { LAT_DECIMAL: "", LONG_DECIMAL: "", FREQ: "135.99" })] };
+  assert.deepEqual(buildNasr("2026-10-29", more, []).stations, expected.nasr.stations);
+});
+
+test("a navaid with an empty or missing ALT_CODE has no class", () => {
+  const pxr = rows.NAV_BASE.find((r) => r.NAV_ID === "PXR");
+  const more = { ...rows, NAV_BASE: [...rows.NAV_BASE, copy(pxr, { NAV_ID: "ZZY", ALT_CODE: "" }), copy(pxr, { NAV_ID: "ZZZ" }, "ALT_CODE")] };
+  const cls = (id) => buildNasr("2026-10-29", more, []).navaids.find((n) => n[0] === id)[10];
+  assert.equal(cls("ZZY"), "");
+  assert.equal(cls("ZZZ"), "");
+});
+
+test("an airport with no FUEL_TYPES column has no fuel", () => {
+  const p01 = rows.APT_BASE.find((r) => r.ARPT_ID === "P01");
+  const more = { ...rows, APT_BASE: rows.APT_BASE.map((r) => (r === p01 ? copy(r, {}, "FUEL_TYPES") : r)) };
+  assert.equal(buildNasr("2026-10-29", more, []).airports.find((a) => a[0] === "P01")[10], "");
+});
+
+test("a weather station takes the FAA id when there is no ICAO id or no airport", () => {
+  // The fixture has no ASOS/AWOS rows, so make one from a PHX tower row.
+  const asos = copy(rows.FRQ.find((r) => r.FACILITY_TYPE === "ATCT" && r.SERVICED_FACILITY === "PHX"), { FACILITY_TYPE: "ASOS_AWOS", SERVICED_SITE_TYPE: "ASOS", FREQ_USE: "" });
+  const more = { ...rows, FRQ: [...rows.FRQ, copy(asos, { SERVICED_FACILITY: "P01", FREQ: "135.95" }), copy(asos, { SERVICED_FACILITY: "XYZ", FREQ: "135.85" })] };
+  const ids = buildNasr("2026-10-29", more, []).stations.filter((s) => s[0] === "WX").map((s) => s[1]);
+  assert.ok(ids.includes("P01"), ids.join());
+  assert.ok(ids.includes("XYZ"), ids.join());
+});
+
 test("an airport's repeated frequency is listed once", () => {
   const twice = { ...rows, FRQ: [...rows.FRQ, rows.FRQ.find((r) => r.SERVICED_FACILITY === "PHX" && r.FREQ_USE.includes("LCL/"))] };
   const phx = (n) => n.airports.find((a) => a[0] === "PHX")[5];
@@ -109,8 +144,14 @@ test("near keeps navaids and stations to 200 nm and the rest to range", () => {
   assert.equal(out.airspaces[0].cls, "B");
 });
 
-test("main entry and radio do not load navdata", () => {
-  for (const f of ["glass-pfd.js", "radio.js"]) {
-    assert.ok(!readFileSync(new URL(`../dist/${f}`, import.meta.url), "utf8").includes("navdata"), f);
-  }
+test("main entry and radio do not load navdata, directly or through their imports", () => {
+  const seen = new Set();
+  const walk = (url) => {
+    if (seen.has(url.href)) return;
+    seen.add(url.href);
+    for (const [, spec] of readFileSync(url, "utf8").matchAll(/(?:from|import)\s*["'](\.{1,2}\/[^"']+)["']/g)) walk(new URL(spec, url));
+  };
+  for (const f of ["glass-pfd.js", "radio.js"]) walk(new URL(`../dist/${f}`, import.meta.url));
+  assert.ok(seen.size > 5, `only ${seen.size} modules found; the import walk is broken`);
+  assert.ok(![...seen].some((u) => u.endsWith("/navdata.js")), [...seen].join("\n"));
 });
