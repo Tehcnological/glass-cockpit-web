@@ -9,8 +9,8 @@ export type Key = {
 export declare const key: (label: string, act?: () => void, lit?: boolean) => Key;
 export declare const dimKey: (label: string) => Key;
 export declare const BLANK: Key;
-/** DefaultStyle.HIGHLIGHT_COLOR: the cursor box. */
-export declare const CYAN = "#80ffff";
+/** The cursor box and selectable text. v13 trainer: full cyan (FG1000 DefaultStyle.HIGHLIGHT_COLOR is a paler #80ffff). */
+export declare const CYAN = "#00ffff";
 export declare const NS = "http://www.w3.org/2000/svg";
 export declare const esc: (t: string) => string;
 /** The FMS cursor: black text on a cyan box, as FG1000's highlightTextElement. */

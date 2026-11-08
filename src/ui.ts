@@ -8,8 +8,8 @@ export const key = (label: string, act?: () => void, lit = false): Key => ({ lab
 export const dimKey = (label: string): Key => ({ label, dim: true });
 export const BLANK = key("");
 
-/** DefaultStyle.HIGHLIGHT_COLOR: the cursor box. */
-export const CYAN = "#80ffff";
+/** The cursor box and selectable text. v13 trainer: full cyan (FG1000 DefaultStyle.HIGHLIGHT_COLOR is a paler #80ffff). */
+export const CYAN = "#00ffff";
 export const NS = "http://www.w3.org/2000/svg";
 export const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 

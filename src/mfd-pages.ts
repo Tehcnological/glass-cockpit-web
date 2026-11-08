@@ -4,7 +4,8 @@
 import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { approachPatch, asWaypoint, bearingDistance, gpsApproved, latLon, loadedApproach, nearest, planName, routePoint, vtfPatch, type Airport, type Procedure } from "./nav.js";
-import { BLANK, Highlighter, IdEntry, ListView, NS, dimKey, firstRow, key, type Key } from "./ui.js";
+import { BLANK, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, firstRow, key, type Key } from "./ui.js";
+import { firstOption, fplMenu, stepMenu, type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
 
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
@@ -132,6 +133,11 @@ export class MfdPage {
     return null;
   }
 
+  /** The MENU key's PAGE MENU options, or null for a page without one here. */
+  pageMenu(): MenuOption[] | null {
+    return null;
+  }
+
   draw() {}
 }
 
@@ -167,6 +173,14 @@ class NavigationMapPage extends MfdPage {
       10: dimKey("SHW CHRT"),
       11: key("CHKLIST", () => this.m.go("LstPageGroup", "Checklist")),
     });
+  }
+  // v13 trainer's options; only Declutter has something to do here (no map setup, measuring, charts or profile view).
+  pageMenu(): MenuOption[] {
+    const u = this.m.ui;
+    return [
+      { label: "Map Setup" }, { label: "Declutter", act: () => (u.dcltr = (u.dcltr + 1) % 4) },
+      { label: "Measure Bearing/Distance" }, { label: "Show Chart" }, { label: "Show Profile View" },
+    ];
   }
 }
 
@@ -702,6 +716,11 @@ const findPoint = (s: MfdState, id: string): MapPoint | undefined =>
 // shortcut: ENT on a leg activates it (the real unit's MENU > Activate Leg; FG1000's ENT does nothing), and CLR deletes
 // without asking.
 class FlightPlanPage extends MapPage {
+  // PAGE MENU (v13 trainer's options): Invert, Delete and Remove Approach work here; the rest are dim.
+  pageMenu(): MenuOption[] {
+    return fplMenu(this.s.route, this.s.activeLeg).map(({ label, patch }) => ({ label, act: patch && (() => this.m.change(patch)) }));
+  }
+
   private rows = new ListView(this.p, ["Header", "Leg", "DTK", "DIS", "ALT"], 11, "Leg", false, { trough: "ScrollTrough", thumb: "ScrollThumb" });
 
   constructor(m: Mfd, screen: SVGGElement, private entry: WaypointEntryPage) {
@@ -1055,7 +1074,7 @@ class ProceduresPage extends MfdPage {
     const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed`;
     const text = (id: string, x: number, y: number, fill = "#ffffff", size = 19.35, anchor = "start") =>
       `<text id="Procedures${id}" x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style};font-size:${size}px"></text>`;
-    const label = (t: string, y: number, fill = "#80ffff") => `<text x="874" y="${y}" fill="${fill}" text-anchor="middle" style="${style};font-size:19.35px">${t}</text>`;
+    const label = (t: string, y: number, fill = CYAN) => `<text x="874" y="${y}" fill="${fill}" text-anchor="middle" style="${style};font-size:19.35px">${t}</text>`;
     let rows = "";
     for (let i = 0; i < PROC_ROWS; i++) rows += text(`Approach${i}`, 740, 210 + i * 26);
     for (let i = 0; i < PROC_ROWS; i++) rows += text(`Trans${i}`, 740, 420 + i * 26);
@@ -1217,7 +1236,7 @@ class ProceduresPage extends MfdPage {
     this.p.show("Ask", this.view === "ask");
     for (let i = 0; i < MENU.length; i++) {
       // The trainer draws available items cyan and the rest grey.
-      this.p.text(`Menu${i}`, MENU[i], this.enabled(i) ? "#80ffff" : "#808080");
+      this.p.text(`Menu${i}`, MENU[i], this.enabled(i) ? CYAN : "#808080");
       this.m.hl.set(this.p.el(`Menu${i}`), this.view === "menu" && this.crsr && i === this.item);
     }
     this.p.text("Yes", "YES");
@@ -1245,11 +1264,79 @@ class ProceduresPage extends MfdPage {
   }
 }
 
+// MENU: the page's PAGE MENU, a window over the page (v13 trainer). Either FMS knob moves the cursor, skipping dim
+// options; ENT carries out the option; CLR, MENU or pushing the FMS knob closes it.
+const MENU_ROWS = 8;
+export class PageMenuPage extends MfdPage {
+  private options: MenuOption[] = [];
+  private at = 0;
+  private base = "";
+
+  constructor(m: Mfd, screen: SVGGElement, after: Element) {
+    super(m, "PageMenu", screen);
+    const g = document.createElementNS(NS, "g");
+    g.id = "Page-PageMenu";
+    g.style.display = "none";
+    const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px`;
+    const text = (t: string, x: number, y: number, anchor = "start", id = "") =>
+      `<text ${id && `id="PageMenu${id}"`} x="${x}" y="${y}" fill="#ffffff" text-anchor="${anchor}" style="${style}">${t}</text>`;
+    let rows = "";
+    for (let i = 0; i < MENU_ROWS; i++) rows += text("", 744, 150 + i * 27, "start", `Option${i}`);
+    g.innerHTML =
+      `<rect x="724.5" y="53.5" width="310" height="390" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>` +
+      text("PAGE MENU", 874, 82, "middle") + text("OPTIONS", 740, 115) +
+      `<rect x="734.5" y="120.5" width="290" height="${MENU_ROWS * 27 + 12}" style="fill:none;stroke:#808080;stroke-width:1"/>` +
+      text("Press the FMS CRSR knob to", 874, 395, "middle") + text("return to base page", 874, 420, "middle") + rows;
+    after.after(g);
+    this.root = g;
+  }
+
+  get title() {
+    return this.base;
+  }
+
+  /** Shows `options` for the page titled `title`, the cursor on the first available option. */
+  open(options: MenuOption[], title: string) {
+    [this.options, this.base, this.crsr] = [options, title, true];
+    this.at = firstOption(options.map((o) => !!o.act));
+  }
+
+  fms(_outer: boolean, d: number) {
+    this.at = stepMenu(this.options.map((o) => !!o.act), this.at, d);
+    return true;
+  }
+
+  ent() {
+    const act = this.options[this.at]?.act;
+    if (!act) return;
+    this.m.close();
+    act();
+  }
+
+  clr() {
+    this.m.close();
+  }
+
+  toggleCrsr() {
+    this.m.close();
+  }
+
+  draw() {
+    const top = firstRow(this.at, this.options.length, MENU_ROWS);
+    for (let i = 0; i < MENU_ROWS; i++) {
+      const o = this.options[top + i];
+      this.p.text(`Option${i}`, o?.label ?? "", o?.act ? CYAN : "#808080");
+      this.m.hl.set(this.p.el(`Option${i}`), !!o && top + i === this.at);
+    }
+  }
+}
+
 export interface Pages {
   groups: MfdPage[][];
   directTo: DirectToPage;
   procedures: ProceduresPage;
   waypointEntry: WaypointEntryPage;
+  pageMenu: PageMenuPage;
 }
 
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
@@ -1281,6 +1368,7 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
   const groups = PAGE_GROUPS.map((g) => g.pages.map(make));
   const directTo = new DirectToPage(m, screen);
   const procedures = new ProceduresPage(m, screen, roots[roots.length - 1].parentNode as Element);
+  const pageMenu = new PageMenuPage(m, screen, roots[roots.length - 1].parentNode as Element);
   for (const r of roots) r.style.display = "none";
-  return { groups, directTo, procedures, waypointEntry };
+  return { groups, directTo, procedures, waypointEntry, pageMenu };
 }

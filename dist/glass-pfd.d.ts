@@ -134,6 +134,8 @@ export declare class GlassPfd {
     private later;
     private defaults;
     private nearest;
+    /** The flight plan's PAGE MENU options; those without `patch` are dim. */
+    private pageMenu;
     private fms;
     private timerValue;
     private timerField;

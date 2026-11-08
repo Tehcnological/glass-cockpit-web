@@ -62,7 +62,8 @@ export declare class GlassMfd {
     private mapPartial;
     private frame;
     private pages;
-    /** DIRECT TO, PROC or WAYPOINT ENTRY, over the page. */ private overlay;
+    /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ private overlay;
+    /** The page FPL goes back to: group and page names. */ private beforeFpl;
     private timers;
     private hl;
     private ui;

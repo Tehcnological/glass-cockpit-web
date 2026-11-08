@@ -14,7 +14,9 @@ import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type Ma
 import { bearingDistance, bestApproach, latLon, nearest, nrstFreq, planName, routePoint, type Airport } from "./nav.js";
 import { alertsKey, seenAlerts } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
-import { BLANK as blank, CYAN, Highlighter, ListView, NS, dimKey, esc, key as k, screenBox, type Key } from "./ui.js";
+import { BLANK as blank, CYAN, Highlighter, ListView, NS, dimKey, esc, firstRow, key as k, screenBox, type Key } from "./ui.js";
+import { firstOption, fplMenu, stepMenu } from "./page-menu.js";
+import { vsiPointer, vsiText } from "./vsi.js";
 
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
 export type { Checklist } from "./mfd-pages.js";
@@ -110,7 +112,8 @@ const DEFAULTS: PfdState = {
 };
 
 type Menu = "top" | "inset" | "pfd" | "wind" | "synvis" | "hsi" | "altunit" | "xpdr" | "code";
-type Window = "TMR/REF" | "NRST" | "ALERTS" | "DME" | null;
+/** SETUP: the PFD SETUP MENU; MENU: the flight plan's PAGE MENU. */
+type Window = "TMR/REF" | "NRST" | "ALERTS" | "DME" | "SETUP" | "MENU" | null;
 const BRG_SOURCES: BrgSource[] = ["OFF", "NAV1", "NAV2", "GPS", "ADF"];
 const VSPEEDS: VSpeed[] = ["Vglide", "Vr", "Vx", "Vy"];
 const TMR_FIELDS = ["time", "dir", "action", "Vglide", "Vr", "Vx", "Vy", "minimums", "minalt"] as const;
@@ -179,6 +182,12 @@ export class GlassPfd {
     // TMR/REF and ALERTS open where FG1000 puts the NRST window.
     this.winBox = screenBox(screen, this.nrst.el("Group")!);
     this.win = screen.appendChild(document.createElementNS(NS, "g"));
+    // v13 trainer: the VSI scale reads 1 and 2 (thousand fpm) where FG1000's reads 2 and 4 (see vsi.ts).
+    for (const [id, t] of [["text4659", "1"], ["text4659-6", "1"], ["text4659-7", "2"], ["text4659-7-9", "2"]]) {
+      const e = screen.querySelector(`[id="${id}"]`);
+      const label = e?.querySelector("tspan") ?? e;
+      if (label) label.textContent = t;
+    }
     // Minimums bug: the selected altitude bug, in cyan.
     const bug = this.p.el("SelectedALT-bug")!;
     this.minBug = bug.cloneNode(true) as SVGGraphicsElement;
@@ -240,7 +249,24 @@ export class GlassPfd {
       case "FMS_OUTER":
       case "FMS_INNER":
         return this.fms(i.control === "FMS_OUTER", i.value > 0 ? 1 : -1);
+      case "MENU":
+        // v13 trainer: MENU shows the PFD SETUP MENU, or with the flight plan window open its PAGE MENU; MENU again
+        // closes it (the trainer then opens its DEMO MODE page, a simulator setting, not ported).
+        if (u.window === "SETUP" || u.window === "MENU") u.window = null;
+        else if (u.fpl) [u.window, u.cursor] = ["MENU", firstOption(this.pageMenu().map((o) => !!o.patch))];
+        else u.window = "SETUP";
+        return this.set({});
+      case "FMS_CRSR":
+        if (u.window === "SETUP" || u.window === "MENU") u.window = null;
+        return this.set({});
       case "ENT":
+        if (u.window === "MENU") {
+          const o = this.pageMenu()[u.cursor];
+          if (o?.patch) {
+            u.window = null;
+            this.change({ route: o.patch.route, activeLeg: o.patch.activeLeg });
+          }
+        }
         if (u.window === "NRST" && this.nearest().length) u.nrstInfo = !u.nrstInfo;
         if (u.window === "TMR/REF") this.timerAction();
         return this.set({});
@@ -251,6 +277,7 @@ export class GlassPfd {
       case "FPL":
         // PFDInstrumentsController.handleFPL: shows or hides the flight plan window.
         u.fpl = !u.fpl;
+        if (!u.fpl && u.window === "MENU") u.window = null;
         return this.set({});
     }
     const src = this.state.cdiSource;
@@ -381,8 +408,14 @@ export class GlassPfd {
   }
 
   // FMS knob in a window: the outer ring moves the cursor, the inner changes the field (NRST: both scroll the list).
+  /** The flight plan's PAGE MENU options; those without `patch` are dim. */
+  private pageMenu() {
+    return fplMenu(this.state.route, this.state.activeLeg);
+  }
+
   private fms(outer: boolean, d: number) {
     const u = this.ui;
+    if (u.window === "MENU") u.cursor = stepMenu(this.pageMenu().map((o) => !!o.patch), u.cursor, d);
     if (u.window === "NRST" && !u.nrstInfo) u.cursor = clamp(u.cursor + d, 0, Math.max(0, this.nearest().length - 1));
     // shortcut: no HOLD mode; add it when a scenario needs DME hold.
     if (u.window === "DME" && !outer) u.dmeSource = u.dmeSource === "NAV1" ? "NAV2" : "NAV1";
@@ -617,14 +650,14 @@ export class GlassPfd {
   private drawWindow() {
     const u = this.ui;
     const s = this.state;
-    if (u.window !== "TMR/REF" && u.window !== "ALERTS" && u.window !== "DME") {
+    if (u.window === null || u.window === "NRST") {
       this.win.innerHTML = "";
       return;
     }
     const { x, y, width: w, height: h } = this.winBox;
     // A row is a label and value cells, each right-aligned at `right` px from the window's left edge.
-    type Cell = { text: string; field?: string; right: number };
-    const rows: { label: string; cells: Cell[]; title?: boolean }[] = [];
+    type Cell = { text: string; field?: string; right: number; cur?: boolean };
+    const rows: { label: string; cells: Cell[]; title?: boolean; color?: string; cur?: boolean }[] = [];
     const end = w - 14;
     if (u.window === "TMR/REF") {
       // v13 trainer layout: titled REFERENCES, the timer on one row, GLIDE for the glide speed, minimums on one row.
@@ -649,19 +682,32 @@ export class GlassPfd {
       // v13 trainer: DME TUNING, the NAV radio the DME window shows; the small FMS knob switches it.
       rows.push({ label: "DME TUNING", cells: [], title: true });
       rows.push({ label: "DME  MODE", cells: [{ text: u.dmeSource, field: "mode", right: end }] });
+    } else if (u.window === "SETUP") {
+      // v13 trainer: PFD SETUP MENU, the display brightness. shortcut: brightness is not ported, so it stays on AUTO.
+      rows.push({ label: "PFD SETUP MENU", cells: [], title: true });
+      rows.push({ label: "PFD DSPL", cells: [{ text: "AUTO", right: 150, cur: true }, { text: "100.00%", right: end }] });
+      rows.push({ label: "MFD DSPL", cells: [{ text: "AUTO", right: 150 }, { text: "___._%", right: end }] });
+    } else if (u.window === "MENU") {
+      // v13 trainer: the flight plan's PAGE MENU; available options cyan, the rest grey, scrolling with the cursor.
+      const opts = this.pageMenu();
+      const shown = Math.max(1, Math.floor((h - 8) / 22) - 2);
+      const top = firstRow(u.cursor, opts.length, shown);
+      rows.push({ label: "PAGE MENU", cells: [], title: true }, { label: "OPTIONS", cells: [] });
+      opts.slice(top, top + shown).forEach((o, i) => rows.push({ label: o.label, cells: [], color: o.patch ? CYAN : "#808080", cur: top + i === u.cursor }));
     } else {
       for (const a of s.alerts) rows.push({ label: a, cells: [] });
     }
     const line = Math.min(22, (h - 8) / Math.max(rows.length, 1));
     const width = (text: string) => text.length * 10 + 8; // shortcut: estimated text width for the cursor box
     let out = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#000" stroke="#ffffff" stroke-width="2"/>`;
-    rows.forEach(({ label, cells, title }, i) => {
+    rows.forEach(({ label, cells, title, color, cur: on }, i) => {
       const ty = y + 6 + line * (i + 0.8);
+      if (on) out += `<rect x="${x + 6}" y="${ty - line * 0.8}" width="${width(label)}" height="${line}" fill="${CYAN}"/>`;
       out += title
         ? `<text x="${x + w / 2}" y="${ty}" text-anchor="middle" ${FONT} fill="#ffffff">${esc(label)}</text>`
-        : `<text x="${x + 10}" y="${ty}" ${FONT} fill="#ffffff">${esc(label)}</text>`;
+        : `<text x="${x + 10}" y="${ty}" ${FONT} fill="${on ? "#000" : color ?? "#ffffff"}">${esc(label)}</text>`;
       for (const c of cells) {
-        const cur = (u.window === "TMR/REF" && TMR_FIELDS[u.cursor] === c.field) || c.field === "mode";
+        const cur = c.cur ?? ((u.window === "TMR/REF" && TMR_FIELDS[u.cursor] === c.field) || c.field === "mode");
         if (cur) out += `<rect x="${x + c.right - width(c.text) + 4}" y="${ty - line * 0.8}" width="${width(c.text)}" height="${line}" fill="${CYAN}"/>`;
         out += `<text x="${x + c.right}" y="${ty}" text-anchor="end" ${FONT} fill="${cur ? "#000" : CYAN}">${esc(c.text)}</text>`;
       }
@@ -712,8 +758,8 @@ export class GlassPfd {
   }
 
   private updateVSI(vsi: number) {
-    this.p.tf("VSI", { ty: clamp(vsi, -4500, 4500) * -0.03465 });
-    this.p.text("VSIText", String(Math.round(vsi / 10) * 10));
+    this.p.tf("VSI", { ty: vsiPointer(vsi) });
+    this.p.text("VSIText", vsiText(vsi));
   }
 
   private updateALT(alt: number, trend: number, selected: number | null) {

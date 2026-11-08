@@ -99,7 +99,10 @@ With `bezel: true`, the mouse works the controls as FlightGear's FG1000 window d
 | Shift+wheel | Turns the outer ring of a dual knob |
 | Click | Pushes a knob or button |
 | Shift+click | Long press |
-| Click an arrow at a knob's top corner | Turns the knob one detent, left counterclockwise; with Shift, the outer ring of a dual knob. RANGE uses the - and + printed beside it. The small volume knobs have no arrows. |
+| Click an arrow beside a knob | Turns the knob one detent, left counterclockwise. On a dual knob the upper pair turns the outer ring and the lower pair the inner knob. Holding an arrow keeps turning. RANGE uses the - and + printed beside it. |
+| Click the joystick's arrows | Pans the map: up, down, left, right and the four diagonals. Holding keeps panning. |
+
+A fast spin of the wheel turns HDG and CRS 5° a notch; a slow one turns 1°. Every knob pushes, ALT included (its push does nothing).
 
 On both units:
 
@@ -131,7 +134,11 @@ FlightGear draws the map from its own navigation database. Here the map shows on
 
 Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this package follows the trainer, in behavior and labels only; the artwork is still FG1000's.
 
-- **Knob arrows:** as on the trainer, clicking beside a knob turns it. Here small arrows (original, not the trainer's) sit at the top corners of the NAV, HDG, ALT, COM, CRS/BARO and FMS knobs, and RANGE turns on its printed - and +. The joystick's left and right spots start below those marks.
+- **Knob arrows:** as on the trainer, clicking beside a knob turns it, and holding keeps turning. Here small arrows (original, not the trainer's) sit above each knob: two pairs on the dual knobs (NAV, ALT, COM, CRS/BARO, FMS), upper for the outer ring and lower for the inner knob, one pair on HDG, and small ones on the volume knobs. RANGE turns on its printed - and +, and the joystick pans in eight directions. A faint glow shows an arrow under the pointer.
+- **VSI** scale reads 1 and 2 (thousand fpm) and stops at ±2000 fpm (FG1000: ±4000). The readout shows from 100 fpm, rounded to 50 fpm as the NXi G1000 does; the trainer could not be climbed to check.
+- **MENU** on the PFD opens the PFD SETUP MENU (brightness, shown on AUTO; not ported), or with the flight plan window open its PAGE MENU. On the MFD it opens the page's PAGE MENU: on the navigation map, Declutter works; on the flight plan page, Invert Flight Plan, Delete Flight Plan and Remove Approach work. Other options are listed grey, and the other pages have no menu yet. The FMS knob moves the cursor over the options that work, ENT carries one out, and CLR, MENU again or pushing the FMS knob closes it.
+- **FPL and PROC again:** on the MFD, FPL again goes back to the page shown before it, and PROC again closes the PROCEDURES window.
+- **Colors:** the cursor and selectable text are full cyan (FG1000: a paler #80ffff), and the page group window shows the selected page in cyan and the rest in white (FG1000: lilac and grey).
 
 - **Softkey layouts** follow the trainer: DME on the PFD's top row and PFD menu; WX LGND, PRECIP and METAR in the inset menu; DCLTR, SHW CHRT and CHKLIST in the last three MFD slots; BACK in the eleventh slot of the ENGINE, LEAN, SYSTEM and MAP menus; LEAN's CYL SLCT and ASSIST and SYSTEM's RST FUEL and GAL REM where the trainer has them.
 - **Dim keys:** a key whose function is unavailable is grey and does nothing. OBS is dim with no flight plan. Keys for data this package has no source for (weather, topography, terrain, charts, map legend) are always dim. The inset's DCLTR stays working, although the trainer dims it.
@@ -251,6 +258,7 @@ EOF
 - USER and AIRWAY waypoint lists.
 - Synthetic vision, the arc HSI, DME HOLD, selected airspeed, autopilot annunciations and the GPS course-to-intercept diamond.
 - Map terrain and airways.
+- PAGE MENU on pages other than the navigation map and flight plan, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice); the PFD's PROC window.
 
 FG1000 renders in Liberation Sans Narrow, which is not bundled. Without that font installed, some narrow labels fall back to a wider font.
 

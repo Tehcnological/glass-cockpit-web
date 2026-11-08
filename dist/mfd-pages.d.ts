@@ -1,6 +1,7 @@
 import { Page } from "./page.js";
 import { type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { Highlighter, type Key } from "./ui.js";
+import { type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
 export interface Checklist {
@@ -67,6 +68,8 @@ export declare class MfdPage {
     center(): LatLon | null;
     /** The waypoint DIRECT TO starts with from this page (the one under the cursor). */
     selected(): string | null;
+    /** The MENU key's PAGE MENU options, or null for a page without one here. */
+    pageMenu(): MenuOption[] | null;
     draw(): void;
 }
 /** A page with its own map window beside its data. */
@@ -139,11 +142,26 @@ declare class ProceduresPage extends MfdPage {
     private load;
     draw(): void;
 }
+export declare class PageMenuPage extends MfdPage {
+    private options;
+    private at;
+    private base;
+    constructor(m: Mfd, screen: SVGGElement, after: Element);
+    get title(): string;
+    /** Shows `options` for the page titled `title`, the cursor on the first available option. */
+    open(options: MenuOption[], title: string): void;
+    fms(_outer: boolean, d: number): boolean;
+    ent(): void;
+    clr(): void;
+    toggleCrsr(): void;
+    draw(): void;
+}
 export interface Pages {
     groups: MfdPage[][];
     directTo: DirectToPage;
     procedures: ProceduresPage;
     waypointEntry: WaypointEntryPage;
+    pageMenu: PageMenuPage;
 }
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
 export declare function makePages(m: Mfd, screen: SVGGElement): Pages;

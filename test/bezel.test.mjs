@@ -1,7 +1,7 @@
 // Knob math from SurroundController.nas: node --test (after npm run build).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SPOTS, adjust } from "../dist/bezel.js";
+import { SPOTS, adjust, wheelStep } from "../dist/bezel.js";
 
 const k = {
   heading: 359.6, headingBug: 359, course: 0, baro: 29.92, alt: 3040, selectedAlt: null,
@@ -48,18 +48,42 @@ test("CRS push, volume and NAV ID", () => {
   assert.deepEqual(go("NAV_ID"), { navIdent: true });
 });
 
-test("arrows at a knob's top corners turn it one detent each way", () => {
-  const arrows = SPOTS.filter((s) => s.arrow);
-  const turns = (c) => arrows.filter((s) => s.click === c).map((s) => s.value).sort();
-  for (const c of ["NAV_INNER", "HEADING", "ALT_INNER", "COM_INNER", "CRS", "RANGE", "FMS_INNER"]) assert.deepEqual(turns(c), [-1, 1], c);
-  const alt = arrows.find((s) => s.click === "ALT_INNER");
-  assert.equal(alt.shiftClick, "ALT_OUTER"); // shift turns the outer ring
-  assert.equal(alt.wheel, "ALT_INNER"); // the wheel still works over an arrow
-  assert.equal(arrows.find((s) => s.click === "HEADING").shiftClick, "HEADING"); // a single knob has no outer ring
+const turns = (c) => SPOTS.filter((s) => s.arrow && s.click === c).map((s) => s.value).sort();
+
+test("a dual knob has arrows for each ring, a single knob one pair", () => {
+  // v13 trainer: on a dual knob the upper arrows turn the outer ring, the lower ones the inner knob.
+  for (const c of ["NAV_OUTER", "NAV_INNER", "ALT_OUTER", "ALT_INNER", "COM_OUTER", "COM_INNER", "BARO", "CRS", "FMS_OUTER", "FMS_INNER", "HEADING", "NAV_VOL", "COM_VOL", "RANGE"])
+    assert.deepEqual(turns(c), [-1, 1], c);
+  const y = (c) => SPOTS.find((s) => s.arrow && s.click === c).box[1];
+  assert.ok(y("NAV_OUTER") < y("NAV_INNER"));
+  assert.equal(SPOTS.find((s) => s.arrow && s.click === "ALT_INNER").wheel, "ALT_INNER"); // the wheel still works over an arrow
+});
+
+test("the joystick moves in eight directions and every knob pushes", () => {
+  // A diagonal reports a horizontal and a vertical move.
+  const dirs = SPOTS.filter((s) => s.click === "JOYSTICK_HORIZONTAL" || s.click === "JOYSTICK_VERTICAL");
+  const moves = dirs.map((s) => (s.click === "JOYSTICK_HORIZONTAL" ? [s.value, s.also?.value ?? 0] : [0, s.value]));
+  assert.equal(new Set(moves.map(String)).size, 8);
+  for (const c of ["NAV_ID", "NAV_TOGGLE", "HEADING_PRESS", "ALT_PRESS", "COM_VOL_TOGGLE", "COM_TOGGLE", "CRS_CENTER", "JOYSTICK_PRESS", "FMS_CRSR"])
+    assert.ok(SPOTS.some((s) => s.click === c && !s.arrow), c);
 });
 
 test("an arrow covers no other button", () => {
   const overlap = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
-  for (const a of SPOTS.filter((s) => s.arrow))
-    for (const s of SPOTS.filter((s) => !s.arrow && s.wheel !== a.wheel)) assert.ok(!overlap(a.box, s.box), `${a.click} ${a.value} over ${s.click ?? s.wheel}`);
+  const turn = SPOTS.filter((s) => s.arrow);
+  for (const a of turn)
+    for (const s of SPOTS.filter((s) => s !== a && s.wheel !== a.wheel)) assert.ok(!overlap(a.box, s.box), `${a.click} ${a.value} over ${s.click ?? s.wheel}`);
+  for (const a of turn) for (const b of turn) if (a !== b) assert.ok(!overlap(a.box, b.box), `${a.click} ${a.value} over ${b.click} ${b.value}`);
+});
+
+test("HDG and CRS speed up when the wheel spins fast; ALT does not", () => {
+  assert.equal(wheelStep("HEADING", 500), 1);
+  assert.equal(wheelStep("HEADING", 40), 5);
+  assert.equal(wheelStep("CRS", 40), 5);
+  assert.equal(wheelStep("ALT_INNER", 40), 1);
+});
+
+test("a fast spin turns HDG and CRS five degrees a notch", () => {
+  assert.deepEqual(go("HEADING", 5), { headingBug: 4 });
+  assert.deepEqual(go("CRS", -5), { course: 355 });
 });

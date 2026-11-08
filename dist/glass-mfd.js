@@ -34,8 +34,9 @@ const POINTERS = [
 const MAP_FULL = { x: 150, y: 56, w: 874, h: 687, cx: 587, cy: 399.5, px: 344.5 };
 const MAP_PARTIAL = { x: 150, y: 56, w: 574, h: 687, cx: 437, cy: 399.5, px: 344.5 };
 // Surround.showMenu: the selected group and page, and the rest.
-const MENU_SELECTED = "rgb(179,179,255)";
-const MENU_OTHER = "rgb(179,179,179)";
+// v13 trainer: the page group window shows the selected page in cyan and the rest in white (FG1000: lilac and grey).
+const MENU_SELECTED = "#00ffff";
+const MENU_OTHER = "#ffffff";
 export class GlassMfd {
     options;
     svg;
@@ -48,7 +49,8 @@ export class GlassMfd {
     mapPartial;
     frame;
     pages;
-    /** DIRECT TO, PROC or WAYPOINT ENTRY, over the page. */ overlay = null;
+    /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ overlay = null;
+    /** The page FPL goes back to: group and page names. */ beforeFpl = ["MapPageGroup", "NavigationMap"];
     timers = { menu: 0, load: 0 };
     hl = new Highlighter();
     ui = {
@@ -147,8 +149,27 @@ export class GlassMfd {
             case "CLR_HOLD":
                 // MFDPageController.handleClearHold: back to the navigation map.
                 return this.goToPage("MapPageGroup", "NavigationMap");
-            case "FPL":
+            case "FPL": {
+                // v13 trainer: FPL again goes back to the page shown before it ("Press the FPL key to view the previous page").
+                const [gi, pi] = this.ui.shown;
+                const here = [PAGE_GROUPS[gi].group, PAGE_GROUPS[gi].pages[pi]];
+                if (here[1] === "ActiveFlightPlanNarrow")
+                    return this.overlay ? this.goToPage(...here) : this.goToPage(...this.beforeFpl);
+                this.beforeFpl = here;
                 return this.goToPage("FPLPageGroup", "ActiveFlightPlanNarrow");
+            }
+            case "MENU": {
+                // v13 trainer: MENU opens the page's PAGE MENU; MENU again closes it (the trainer then opens its DEMO MODE page,
+                // a simulator setting, not ported).
+                const menu = this.pages.pageMenu;
+                if (this.overlay === menu)
+                    this.closeOverlay();
+                else if (page.pageMenu()) {
+                    menu.open(page.pageMenu(), page.title);
+                    this.openOverlay(menu);
+                }
+                return this.set({});
+            }
             case "DTO": {
                 // The waypoint selected on the page, else the active one.
                 const act = this.state.route[this.state.activeLeg];
@@ -158,6 +179,11 @@ export class GlassMfd {
                 return this.set({});
             }
             case "PROC":
+                // v13 trainer: PROC again closes the window.
+                if (this.overlay === this.pages.procedures) {
+                    this.closeOverlay();
+                    return this.set({});
+                }
                 this.openOverlay(this.pages.procedures);
                 this.pages.procedures.open();
                 return this.set({});
@@ -214,7 +240,7 @@ export class GlassMfd {
             const sel = gi === u.group;
             this.raw.show(g.group, sel);
             this.raw.show(g.label, true);
-            this.color(g.label, sel ? MENU_SELECTED : MENU_OTHER);
+            this.color(g.label, MENU_OTHER);
             if (sel)
                 g.pages.forEach((p, pi) => this.color(p, pi === u.page ? MENU_SELECTED : MENU_OTHER));
         });
@@ -266,7 +292,7 @@ export class GlassMfd {
         this.updateEIS(s.engine);
         // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO and
         // WAYPOINT ENTRY are windows over the page, which stays drawn.
-        const base = page === this.pages.directTo || page === this.pages.waypointEntry ? under : page;
+        const base = page === this.pages.directTo || page === this.pages.waypointEntry || page === this.pages.pageMenu ? under : page;
         const mode = base.navMap;
         this.nav.show("Group", mode !== null);
         this.map.style.display = mode === "full" ? "inline" : "none";

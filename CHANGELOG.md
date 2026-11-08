@@ -12,6 +12,10 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 - PFD: the DME window and DME TUNING. `dmeText` in `glass-cockpit-web/radio`.
 - MFD: PROC opens a PROCEDURES menu (activate vector-to-final, approach, missed approach), asks NOT APPROVED FOR GPS before activating a non-GPS approach, and activates vector-to-final with the VECTORS transition. New MFD state `vtf`, and route points PROC loads carry `approach`; `gpsApproved` and `vtfLeg` exported.
 - Bezel: clicking an arrow at a knob's top corner turns it one detent (Shift: the outer ring), as clicking beside a knob does on the trainer; RANGE turns on its printed - and +. The wheel still works.
+- Bezel: two pairs of arrows on dual knobs (outer and inner), arrows on HDG and the volume knobs, the joystick in eight directions; holding an arrow keeps turning. A fast wheel spin turns HDG and CRS 5°. The ALT knob pushes. Arrows glow under the pointer.
+- PFD: the VSI scale stops at ±2000 fpm, its readout rounded to 50 fpm. MENU opens the PFD SETUP MENU, or the flight plan's PAGE MENU.
+- MFD: MENU opens a PAGE MENU on the navigation map and flight plan pages (Declutter; Invert, Delete, Remove Approach). FPL again goes back to the previous page; PROC again closes PROCEDURES.
+- Colors: the cursor is full cyan, and the page group window shows the selected page in cyan, the rest white, as on the trainer.
 - ALT knob: the selected altitude stays on 100 ft steps, even when the host set an odd value. The demo slider steps 100 ft.
 - `glass-cockpit-web/navdata`: NASR and CIFP transformations (`buildNasr`, `parseCifp`, `near`, `approachName`) moved from instrumentready.com, unchanged output. A separate export; the displays don't load it.
 - Community docs: CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, NOTICE, issue and PR templates. README reorganised.
