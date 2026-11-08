@@ -18,10 +18,16 @@ export function buildDisplay(container: HTMLElement, pages: string[], label: str
   svg.setAttribute("aria-label", label);
   if (bezel) {
     svg.innerHTML = BEZEL;
-    // fascia.svg shades its two side columns unevenly: the left has an extra black overlay and a fainter edge strip, so
-    // it reads darker than the right. Match the left to the right.
-    (svg.querySelector("#rect8520") as SVGElement | null)?.style.setProperty("display", "none");
-    (svg.querySelector("#path12557") as SVGElement | null)?.style.setProperty("opacity", "0.29");
+    // fascia.svg shades its two side columns unevenly (the left has an extra black overlay and a fainter edge strip), so
+    // the left reads darker. Replace the left column's shading with a mirror image of the right's.
+    for (const id of ["rect8520", "path12506", "path12557"]) svg.querySelector<SVGElement>(`#${id}`)?.style.setProperty("display", "none");
+    for (const id of ["path12508", "rect12510", "path12523"]) {
+      const right = svg.querySelector(`#${id}`);
+      const left = right?.cloneNode(true) as SVGElement | undefined;
+      left?.removeAttribute("id");
+      left?.setAttribute("transform", "matrix(-1,0,0,1,1399,0)"); // the columns' edges mirror about x = 699.5
+      if (left) right!.after(left);
+    }
   }
   const screen = svg.appendChild(document.createElementNS(NS, "g"));
   if (bezel) screen.setAttribute("transform", "translate(187 177)");
