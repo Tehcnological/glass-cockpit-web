@@ -14,21 +14,24 @@
 <form id="f"></form>
 <script type="module">
   import { GlassPfd, GlassMfd } from "./dist/glass-pfd.js";
-  import { DisplayBackup } from "./dist/display-backup.js";
-  // DISPLAY BACKUP: both units go reversionary. The MFD's place shows a second PFD, laid over it so the MFD keeps its
-  // pages for when the button is pushed again.
-  let reversionary = false, rev = null;
+  import { DisplayBackup, displayModes } from "./dist/display-backup.js";
+  // DISPLAY BACKUP, or a failed display, puts the MFD's place in reversionary mode: a second PFD, laid over the MFD so it
+  // keeps its pages for when the button is pushed again.
+  let backup = false, rev = null;
   const revBox = Object.assign(document.createElement("div"), { id: "rev" });
-  new DisplayBackup(document.getElementById("backup"), { onChange: (on) => {
-    reversionary = on;
-    if (on && !rev) {
-      document.getElementById("mfd").append(revBox);
-      rev = new GlassPfd(revBox, { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share("rev") });
-      rev.set({ points, airports, procedures, ...plan });
-    }
-    revBox.style.display = on ? "" : "none";
-    update();
-  } });
+  new DisplayBackup(document.getElementById("backup"), { onChange: (on) => { backup = on; update(); } });
+  const revUnit = () => {
+    if (rev) return rev;
+    document.getElementById("mfd").append(revBox);
+    rev = new GlassPfd(revBox, { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share("rev") });
+    rev.set({ points, airports, procedures, ...plan });
+    return rev;
+  };
+  // A failed display goes dark inside its bezel (the screen is buildDisplay's clipped group), and its keys stop working.
+  const dark = (unit, off) => {
+    unit.svg.querySelector(":scope > g[clip-path]").style.visibility = off ? "hidden" : "";
+    unit.svg.style.pointerEvents = off ? "none" : "";
+  };
   // The units share their knobs and flight plan, as a real G1000's do: a change on one is set on the others, and the
   // sliders follow. RANGE and the map stay each unit's own.
   const SHARED = ["headingBug", "course", "baro", "selectedAlt", "radios", "navVolume", "comVolume", "navIdent", "route", "activeLeg", "directFrom", "vtf", "points"];
@@ -69,16 +72,23 @@
   for (const [k, [min, max, v]] of Object.entries(ctl)) {
     f.insertAdjacentHTML("beforeend", `<label>${k}<input type="range" name="${k}" min="${min}" max="${max}" step="${k === "selectedAlt" ? 100 : k === "vsi" ? 50 : max - min > 10 ? 1 : 0.1}" value="${v}"><output>${v}</output></label>`);
   }
-  f.insertAdjacentHTML("beforeend", `<label>message<input type="checkbox" name="alert"></label><label>fail AHRS<input type="checkbox" name="ahrs"></label><label>fail ADC<input type="checkbox" name="adc"></label>`);
+  f.insertAdjacentHTML("beforeend", `<label>message<input type="checkbox" name="alert"></label><label>fail AHRS<input type="checkbox" name="ahrs"></label><label>fail ADC<input type="checkbox" name="adc"></label><label>fail PFD<input type="checkbox" name="pfdFail"></label><label>fail MFD<input type="checkbox" name="mfdFail"></label>`);
   const update = () => {
     const s = Object.fromEntries([...new FormData(f)].map(([k, v]) => [k, Number(v)]));
     f.querySelectorAll("label").forEach((l) => l.querySelector("output") && (l.querySelector("output").value = l.querySelector("input").value));
     const engine = { rpm: s.rpm, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 };
+    const modes = displayModes(backup, !f.pfdFail.checked, !f.mfdFail.checked);
+    const failed = { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked };
     const ps = { ...s, alerts: [...(f.alert.checked ? ["DEMO - A sample message."] : []), ...scheduled],
-      failed: { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked }, cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, turnRate: s.ias > 0 ? (1091 * Math.tan((s.roll * Math.PI) / 180)) / (s.ias + 6) : 0, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 }, engine };
-    pfd.set({ ...ps, reversionary });
-    if (reversionary) rev?.set({ ...ps, reversionary: true }); // hidden otherwise; onChange updates it when shown
-    mfd.set({
+      cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, turnRate: s.ias > 0 ? (1091 * Math.tan((s.roll * Math.PI) / 180)) / (s.ias + 6) : 0, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 }, engine };
+    dark(pfd, modes.pfd.mode === "off");
+    // A unit not shown is not drawn; the next update() draws it when it comes back.
+    if (modes.pfd.mode !== "off") pfd.set({ ...ps, reversionary: modes.pfd.mode === "reversionary", failed: { ...failed, ...modes.pfd.failed } });
+    const revOn = modes.mfd.mode === "reversionary";
+    revBox.style.display = revOn ? "" : "none"; // shown before the second PFD is built: it measures its layout
+    if (revOn) revUnit().set({ ...ps, reversionary: true, failed: { ...failed, ...modes.mfd.failed } });
+    dark(mfd, modes.mfd.mode === "off");
+    if (modes.mfd.mode === "normal") mfd.set({
       heading: s.heading, headingBug: s.headingBug, course: s.course, selectedAlt: s.selectedAlt, alt: s.alt, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
       engine,
     });

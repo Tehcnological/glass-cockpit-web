@@ -1,10 +1,27 @@
 // The red DISPLAY BACKUP button from the GMA 1347 audio panel, on its own: it selects reversionary mode (Pilot's Guide).
 // The rest of the audio panel is audio only, so it is not drawn. A round red button drawn here, not FG1000 art.
+import type { RadioFailure } from "./surround.js";
 
 const NS = "http://www.w3.org/2000/svg";
 
 export interface DisplayBackupOptions {
   /** Called with the new mode when the button is pushed. */ onChange?: (reversionary: boolean) => void;
+}
+
+export interface DisplayMode {
+  mode: "normal" | "reversionary" | "off";
+  /** The COM/NAV fields to flag invalid (the PFD's `failed`). */ failed: Partial<Record<RadioFailure, boolean>>;
+}
+
+/** Each display's mode from DISPLAY BACKUP and which displays have power (Line Maintenance Manual, display failure test):
+ * one that fails sends the other into reversionary mode, with the failed one's COM/NAV fields (NAV/COM 1 for the PFD,
+ * 2 for the MFD) flagged invalid on it. */
+export function displayModes(backup: boolean, pfd: boolean, mfd: boolean): { pfd: DisplayMode; mfd: DisplayMode } {
+  const one = (on: boolean, other: boolean, lost: 1 | 2): DisplayMode =>
+    !on ? { mode: "off", failed: {} }
+    : other ? { mode: backup ? "reversionary" : "normal", failed: {} }
+    : { mode: "reversionary", failed: { [`com${lost}`]: true, [`nav${lost}`]: true } };
+  return { pfd: one(pfd, mfd, 2), mfd: one(mfd, pfd, 1) };
 }
 
 /** A round red push button in `container`; each push toggles reversionary mode. */

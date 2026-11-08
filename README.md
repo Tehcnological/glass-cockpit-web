@@ -76,7 +76,7 @@ Past +30° or -20° pitch, or 65° bank, the PFD declutters as the Pilot's Guide
 
 The airspeed tape's color strip comes from the `speedRanges` option, knots: `{ vso, vs1, vfe, vno, vne }`, white from `vso` to `vfe`, green from `vs1` to `vno`, yellow to `vne`, red above, and red under `vso` for low speed awareness. It defaults to the 172S's (`SPEEDS_172S`: 40, 48, 85, 129, 163). Its `vne` also turns the IAS box red when `vne` is not set.
 
-`reversionary: true` puts the PFD in reversionary mode, as the Pilot's Guide shows it (FG1000 does not wire it): the MFD's engine strip down the left on a black backing, drawn from `engine` (the MFD's `Engine`), OAT under TAS, the inset map in the lower right, and ENGINE on the first softkey (ENGINE, LEAN and SYSTEM, as on the MFD). FG1000's PFD already keeps the strip's width clear of the flight instruments, so they stay where they are. DISPLAY BACKUP puts both displays in reversionary mode, so the host sets it on the PFD and shows a second `GlassPfd` with it in the MFD's place; the demo lays one over the MFD, which keeps its pages for when the button is pushed again. The Vue component does not pass it yet.
+`reversionary: true` puts the PFD in reversionary mode, as the Pilot's Guide shows it (FG1000 does not wire it): the MFD's engine strip down the left on a black backing, drawn from `engine` (the MFD's `Engine`), OAT under TAS, the inset map in the lower right, and ENGINE on the first softkey (ENGINE, LEAN and SYSTEM, as on the MFD). FG1000's PFD already keeps the strip's width clear of the flight instruments, so they stay where they are. DISPLAY BACKUP puts both displays in reversionary mode, so the host sets it on the PFD and shows a second `GlassPfd` with it in the MFD's place; the demo lays one over the MFD, which keeps its pages for when the button is pushed again. A display that fails sends the other into reversionary mode on its own (Line Maintenance Manual): `displayModes(backup, pfdPowered, mfdPowered)` (exported with `DisplayBackup`) gives each display's mode, `normal`, `reversionary` or `off`, and the `failed` radios to cross out on the one left: COM/NAV 2 on the PFD when the MFD fails, COM/NAV 1 on the MFD's place when the PFD fails. The demo's fail PFD and fail MFD boxes show it. `Glass.vue` takes a `reversionary` prop, with `mfd.engine` for the strip.
 
 ### MFD
 
@@ -184,6 +184,7 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
   | AHRS (GRS) | `attitude` | |
   | Air data (GDC) | `airspeed`, `altitude`, `vsi` | The baro box stays |
   | GPS | none | Add a "GPS NAV LOST" message to `alerts` and set `cdiValid: false` on GPS |
+  | GIA 1 or 2, or a display (Line Maintenance Manual) | `com1` and `nav1`, or `com2` and `nav2` | FG1000's red X over the radio's field; `displayModes` sets them for a display |
 
   `heading` flags the heading box (FG1000's flag; the trainer's magnetometer failure was not checked). FG1000's NO GPS POSITION flag is not used on the PFD.
 - **DME:** PFD > DME shows the DME window left of the HSI: the NAV radio, its active frequency and the distance from `bearings` (dashes without one). The top-row DME key opens DME TUNING, where the small FMS knob switches NAV1 and NAV2. No HOLD.
@@ -295,7 +296,7 @@ EOF
 - Map terrain (and Profile View's terrain and winds) and airway labels.
 - The audio panel (the demo has its DISPLAY BACKUP button only), and typing waypoint names on the keyboard.
 - PAGE MENU on pages other than the navigation map, flight plan and DIRECT TO, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice).
-- The autopilot keys the trainer's MFD bezel has (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN), the failed display's red NAV/COM fields in reversionary mode and reversionary mode in the Vue component, the engine strip's LEAN and SYSTEM pages, and the map's range ring and measure bearing/distance in pan mode.
+- The autopilot keys the trainer's MFD bezel has (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN), the engine strip's LEAN and SYSTEM pages and its invalid flags, the MFD's red COM/NAV fields (`failed` is the PFD's), and the map's range ring and measure bearing/distance in pan mode.
 
 FG1000 renders in Liberation Sans Narrow, which is not bundled. Without that font installed, some narrow labels fall back to a wider font.
 

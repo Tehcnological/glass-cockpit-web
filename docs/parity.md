@@ -49,7 +49,7 @@ Garmin art, screenshots, data or manual text is copied.
 | Keyboard typing | Not on the real unit (NXi takes a keypad: letters, digits, BKSP, SPC). Wanted here for waypoint entry | Missing (later) |
 | Audio panel | GMA 1347 between the units: COM/NAV audio keys, MKR, intercom, and the red DISPLAY BACKUP (reversionary) button. The trainer has none; its Options menu toggles reversionary mode. FG1000's GMA1347 has all 21 keys with LEDs, both volume knobs and the red knob; its texture face is 128 x 512 px. FG1000 does not wire reversionary mode | Partial: no panel (audio only); a round red DISPLAY BACKUP button (`display-backup.ts`, in the demo between the units) that puts both units in reversionary mode |
 | Autopilot keys (MFD bezel) | Trainer: GFC 700 keys in the MFD's left column (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN). FG1000's 2D bezel has none; its 3D GDU-1044B texture has their labels, and fgdata has the GFC700 logic | Missing (art direction needed) |
-| Reversionary mode | Trainer and Pilot's Guide: the PFD with the engine strip down the left, OAT under TAS, the inset map lower right; softkeys ENGINE, INSET, PFD, OBS, CDI, DME, XPDR, IDENT, TMR/REF, NRST, ALERTS | Done (`reversionary`; the host shows a PFD in the MFD's place). Missing: the failed display's red NAV/COM fields |
+| Reversionary mode | Trainer and Pilot's Guide: the PFD with the engine strip down the left, OAT under TAS, the inset map lower right; softkeys ENGINE, INSET, PFD, OBS, CDI, DME, XPDR, IDENT, TMR/REF, NRST, ALERTS | Done (`reversionary`; the host shows a PFD in the MFD's place; `Glass.vue` takes it too) |
 
 ## PFD softkeys (trainer layout, followed)
 
@@ -150,8 +150,8 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Behavior | Status |
 | --- | --- |
 | DISPLAY BACKUP: one push puts both displays in reversionary mode (flight instruments and engine strip on each); a second push returns them | Done in the demo (the host shows a second PFD in the MFD's place) |
-| A display that loses power sends the other into reversionary mode on its own; the failed side's COM/NAV fields flag invalid | Missing |
-| A failed sensor or unit red-X's its fields: attitude (AHRS), heading (AHRS or magnetometer), air data (ADC), COM/NAV 1 or 2 (GIA), transponder, engine data, OAT | Partial: `failed` flags attitude, airspeed, altitude, vertical speed and heading; not COM/NAV, transponder, engine or OAT |
+| A display that loses power sends the other into reversionary mode on its own; the failed side's COM/NAV fields flag invalid | Done (`displayModes`; the demo's fail PFD and fail MFD) |
+| A failed sensor or unit red-X's its fields: attitude (AHRS), heading (AHRS or magnetometer), air data (ADC), COM/NAV 1 or 2 (GIA), transponder, engine data, OAT | Partial: `failed` flags attitude, airspeed, altitude, vertical speed, heading and COM/NAV 1 and 2 on the PFD; not transponder, engine or OAT (FG1000 has no art for them) |
 | Start-up: attitude, airspeed and altitude invalid for the first 40 to 60 s while the AHRS aligns | Missing |
 | GFC 700: AFCS and PFT annunciations above the airspeed tape; the autopilot cannot engage until the preflight test passes | Missing (with the autopilot) |
 | AUX SYSTEM STATUS: unit health and software versions on the MFD | Partial: every LRU in; no versions |

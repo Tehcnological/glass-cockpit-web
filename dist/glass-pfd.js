@@ -26,6 +26,7 @@ import { uaIgnores, unusualAttitude } from "./unusual-attitude.js";
 export { unusualAttitude };
 export { GlassMfd } from "./glass-mfd.js";
 export { gpsApproved, vtfLeg } from "./nav.js";
+export { DisplayBackup, displayModes } from "./display-backup.js";
 const DEFAULTS = {
     pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
     baro: 29.92, oat: 15, heading: 0, turnRate: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
@@ -648,6 +649,7 @@ export class GlassPfd {
         this.p.text("SelectedHDG-text", deg3(s.headingBug));
         for (const [f, id] of FAILURES)
             this.p.show(id, !!s.failed[f]);
+        this.surround.setFailed(s.failed);
         this.p.show("DME1", this.ui.dme);
         if (this.ui.dme) {
             const src = this.ui.dmeSource;

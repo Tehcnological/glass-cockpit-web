@@ -71,6 +71,13 @@ export class Surround {
         clearTimeout(this.volumeTimers.Nav);
         clearTimeout(this.volumeTimers.Comm);
     }
+    /** FG1000's red X over each failed COM or NAV field. */
+    setFailed(failed) {
+        for (const n of [1, 2]) {
+            this.p.show(`Nav${n}Failed`, !!failed[`nav${n}`]);
+            this.p.show(`Comm${n}Failed`, !!failed[`com${n}`]);
+        }
+    }
     /** `navSource` is the NAV radio driving the CDI; its active frequency shows green. */
     setRadios(r, navSource) {
         for (const n of [1, 2]) {
