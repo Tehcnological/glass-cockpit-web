@@ -135,7 +135,9 @@ export declare class GlassPfd {
     private fplRows;
     private turnTrend;
     private turnArrow;
-    /** The pitch ladder's window, a clip rectangle kept fixed on the screen. */ private ladderClip;
+    /** The pitch ladder's window shape, and the fixed matrices updateAI uses to keep it still on the screen: from the
+     * horizon's coordinates to the ladder's, and from the screen to the horizon's parent. */
+    private ladder;
     private minBug;
     private inset;
     private insetGeom;

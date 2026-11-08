@@ -7,7 +7,7 @@ import NRST from "./svg/nrst-pfd.js";
 import NRST_INFO from "./svg/nrst-info-pfd.js";
 import FPL from "./svg/fpl-pfd.js";
 import { buildDisplay, type DisplayOptions } from "./display.js";
-import { Page, clamp, deg3, matrixAttr, mod, pad } from "./page.js";
+import { Page, clamp, deg3, matrixAttr, mod, ownMatrix, pad } from "./page.js";
 import { RADIOS, Surround, type Radios } from "./surround.js";
 import { adjust, bezelInput, type Input } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
@@ -151,7 +151,6 @@ const MAGENTA = "#ff00ff";
 export interface SpeedRanges { vso: number; vs1: number; vfe: number; vno: number; vne: number }
 /** Cessna 172S, KIAS. */
 export const SPEEDS_172S: SpeedRanges = { vso: 40, vs1: 48, vfe: 85, vno: 129, vne: 163 };
-const NS_SVG = "http://www.w3.org/2000/svg";
 let ladderCount = 0;
 /** The heading box sits on the turn rate band (Pilot's Guide: the band is directly above the card); FG1000 has it
  * 17.2 px lower, over the band's top. */
@@ -161,15 +160,16 @@ const HDG_LIFT = 17.2;
 const LADDER = { cx: 459, cy: 282.8, r: 152.8, bottom: 400.5 - HDG_LIFT };
 // The turn rate band above the compass card: its center and the radii it spans (FG1000's band art).
 const TURN = { cx: 459.5, cy: 586.5, r0: 145, r1: 170.5 };
+/** A point on the turn rate band, `t` radians right of the lubber line, `r` from the card's center. */
+const turnAt = (t: number, r: number) => `${TURN.cx + r * Math.sin(t)} ${TURN.cy - r * Math.cos(t)}`;
 
 /** The turn rate trend vector for a rate in deg/s: an arc to the heading 6 seconds ahead, clamped to the band, and
  * the arrowhead the Pilot's Guide shows past 4 deg/s, where the prediction is no longer valid. */
 export function turnVector(rate: number): { arc: string; arrow: string } {
   const a = (clamp(rate * 6, -24, 24) * Math.PI) / 180;
   if (Math.abs(a) < 0.005) return { arc: "", arrow: "" };
-  const { cx, cy } = TURN;
   const r = (TURN.r0 + TURN.r1) / 2;
-  const at = (t: number, rr = r) => `${cx + rr * Math.sin(t)} ${cy - rr * Math.cos(t)}`;
+  const at = (t: number, rr = r) => turnAt(t, rr);
   const arrow = Math.abs(rate) > 4;
   const end = arrow ? a - Math.sign(a) * (10 / r) : a; // the arrowhead takes the last 10 px
   return {
@@ -191,7 +191,9 @@ export class GlassPfd {
   private fplRows: ListView;
   private turnTrend: SVGPathElement;
   private turnArrow: SVGPathElement;
-  /** The pitch ladder's window, a clip rectangle kept fixed on the screen. */ private ladderClip: Element;
+  /** The pitch ladder's window shape, and the fixed matrices updateAI uses to keep it still on the screen: from the
+   * horizon's coordinates to the ladder's, and from the screen to the horizon's parent. */
+  private ladder!: { clip: Element; fromHorizon: DOMMatrix; fromScreen: DOMMatrix };
   private minBug: SVGGraphicsElement;
   private inset: SVGGElement;
   private insetGeom: MapGeometry;
@@ -265,7 +267,7 @@ export class GlassPfd {
     const typo = screen.querySelector('[id="tspan6977"]'); // FG1000 spells it ATTIUDE
     if (typo) typo.textContent = "ATTITUDE FAIL";
     for (const [id, r] of Object.entries(CLIPS)) this.p.clip(id, r);
-    this.ladderClip = this.ladderWindow();
+    this.ladderWindow();
     this.p.el("HDG")?.setAttribute("transform", `translate(0 ${-HDG_LIFT})`);
     this.speedStrip(options.speedRanges ?? SPEEDS_172S);
     // Autopilot annunciations start blank, as Surround.new() leaves them.
@@ -275,17 +277,14 @@ export class GlassPfd {
     if (options.bezel) this.unbezel = bezelInput(svg, (i) => this.input(i));
     // FG1000 draws the turn rate scale but never drives it; the trend vector is drawn here.
     const scale = this.p.el("turnrate-indicator")!;
-    this.turnTrend = scale.parentNode!.insertBefore(document.createElementNS("http://www.w3.org/2000/svg", "path"), scale.nextSibling);
+    this.turnTrend = scale.parentNode!.insertBefore(document.createElementNS(NS, "path"), scale.nextSibling);
     for (const [k, v] of Object.entries({ fill: "none", stroke: MAGENTA, "stroke-width": "5" })) this.turnTrend.setAttribute(k, v);
-    this.turnArrow = scale.parentNode!.insertBefore(document.createElementNS(NS_SVG, "path"), this.turnTrend.nextSibling);
+    this.turnArrow = scale.parentNode!.insertBefore(document.createElementNS(NS, "path"), this.turnTrend.nextSibling);
     this.turnArrow.setAttribute("fill", MAGENTA);
     // Pilot's Guide: ticks each side of the lubber line at half-standard and standard rate (9° and 18° in 6 s). FG1000
     // draws the band only.
-    const ticks = [-18, -9, 9, 18].map((deg) => {
-      const a = (deg * Math.PI) / 180;
-      return `M ${TURN.cx + TURN.r0 * Math.sin(a)} ${TURN.cy - TURN.r0 * Math.cos(a)} L ${TURN.cx + TURN.r1 * Math.sin(a)} ${TURN.cy - TURN.r1 * Math.cos(a)}`;
-    });
-    const tickPath = scale.parentNode!.insertBefore(document.createElementNS("http://www.w3.org/2000/svg", "path"), this.turnTrend); // the trend vector over the ticks
+    const ticks = [-18, -9, 9, 18].map((deg) => `M ${turnAt((deg * Math.PI) / 180, TURN.r0)} L ${turnAt((deg * Math.PI) / 180, TURN.r1)}`);
+    const tickPath = scale.parentNode!.insertBefore(document.createElementNS(NS, "path"), this.turnTrend); // the trend vector over the ticks
     for (const [k, v] of Object.entries({ d: ticks.join(" "), stroke: "#ffffff", "stroke-width": "2" })) tickPath.setAttribute(k, v);
     this.set({});
   }
@@ -945,8 +944,10 @@ export class GlassPfd {
     this.p.tf("Horizon", { ty: pitch * 6.849, rot: -roll, center: [459, 282.8 - 6.849 * pitch] });
     this.p.tf("bankPointer", { rot: -roll });
     this.p.tf("SlipSkid", { tx: -20 * slip });
-    // The ladder moves inside the horizon; its window stays put on the screen.
-    this.ladderClip.setAttribute("transform", matrixAttr(this.p.el("PitchScale")!.getCTM()!.inverse().multiply(this.p.screen.getCTM()!)));
+    // The ladder moves inside the horizon; its window stays put on the screen. Only the horizon's own transform changes,
+    // so this reads that attribute rather than the CTM (no layout, and no null while the display is hidden).
+    const { clip, fromHorizon, fromScreen } = this.ladder;
+    clip.setAttribute("transform", matrixAttr(fromHorizon.multiply(ownMatrix(this.p.el("Horizon")!).inverse()).multiply(fromScreen)));
   }
 
   // Pilot's Guide: the color-coded speed range strip on the moving tape; FG1000's tape has none. Drawn along its right
@@ -958,7 +959,7 @@ export class GlassPfd {
     const band = (from: number, to: number, x: number, w: number, fill: string) =>
       `<rect x="${x}" y="${y(to)}" width="${w}" height="${y(from) - y(to)}" fill="${fill}"/>`;
     const [x, w] = [229, 10]; // up to the tape's clip at 239, over the tick ends
-    const g = tape.appendChild(document.createElementNS(NS_SVG, "g"));
+    const g = tape.appendChild(document.createElementNS(NS, "g"));
     g.innerHTML = band(0, v.vso, x, w, "#ff0000") + band(v.vs1, v.vno, x, w, "#00ff00") + band(v.vso, v.vfe, x, w / 2, "#ffffff") +
       band(v.vno, v.vne, x, w, "#ffff00") + band(v.vne, 999, x, w, "#ff0000");
   }
@@ -966,15 +967,16 @@ export class GlassPfd {
   // The pitch ladder shows inside a semicircle just under the roll pointer and slip/skid bar, down to the top of the
   // heading box, cut hard (Chris's call; FG1000 cuts a rectangle from y 70, through the pointer, to 370). Also the extreme pitch chevrons
   // (Pilot's Guide: red, pointing to the horizon, from 50° up and 30° down); FG1000 has none, so their shape and
-  // spacing are ours. Returns the window's rectangle, which updateAI keeps fixed on the screen.
-  private ladderWindow(): Element {
+  // spacing are ours. updateAI keeps the window fixed on the screen.
+  private ladderWindow() {
     const ladder = this.p.el("PitchScale")!;
+    const horizon = this.p.el("Horizon")!;
     const { cx, cy, r, bottom } = LADDER;
     const id = `glass-ladder-${++ladderCount}`;
-    const cp = ladder.parentNode!.appendChild(document.createElementNS(NS_SVG, "clipPath"));
+    const cp = ladder.parentNode!.appendChild(document.createElementNS(NS, "clipPath"));
     cp.id = id;
     cp.setAttribute("clipPathUnits", "userSpaceOnUse");
-    const shape = cp.appendChild(document.createElementNS(NS_SVG, "path"));
+    const shape = cp.appendChild(document.createElementNS(NS, "path"));
     shape.setAttribute("d", `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy} L ${cx + r} ${bottom} L ${cx - r} ${bottom} Z`);
     ladder.setAttribute("clip-path", `url(#${id})`);
     // Chevrons midway between the ladder's lines, in the horizon's coordinates (0° at y 282.8, 6.849 px a degree).
@@ -984,9 +986,14 @@ export class GlassPfd {
       return `<polyline points="${pts}" fill="none" stroke="#ffffff" stroke-width="12" stroke-linejoin="miter"/>` +
         `<polyline points="${pts}" fill="none" stroke="#ff0000" stroke-width="8" stroke-linejoin="miter"/>`;
     };
-    const chevrons = ladder.appendChild(document.createElementNS(NS_SVG, "g"));
+    const chevrons = ladder.appendChild(document.createElementNS(NS, "g"));
     chevrons.innerHTML = [55, 65, 75, -35, -45, -55, -65, -75].map(chevron).join("");
-    return shape;
+    this.ladder = {
+      clip: shape,
+      // getCTM gives a legacy SVGMatrix, whose multiply refuses a DOMMatrix
+      fromHorizon: DOMMatrix.fromMatrix(ladder.getCTM()!.inverse().multiply(horizon.getCTM()!)),
+      fromScreen: DOMMatrix.fromMatrix((horizon.parentNode as SVGGraphicsElement).getCTM()!.inverse().multiply(this.p.screen.getCTM()!)),
+    };
   }
 
   private updateFD({ fd, pitch, roll }: PfdState) {
@@ -1004,7 +1011,7 @@ export class GlassPfd {
     trend = clamp(trend, -30, 30);
     this.p.tf("Airspeed-Trend-Indicator", { sy: trend, ty: -284.5 * (trend - 1) });
     const bg = this.p.el("IAS-bg");
-    const vne = this.options.vne ?? this.options.speedRanges?.vne;
+    const vne = this.options.vne ?? (this.options.speedRanges ?? SPEEDS_172S).vne;
     if (bg) bg.style.fill = vne !== undefined && ias > vne ? "#ff0000" : "#000000";
     for (const v of ["Vx", "Vy", "Vr", "Vglide"] as const) {
       const spd = this.options.vspeeds?.[v];

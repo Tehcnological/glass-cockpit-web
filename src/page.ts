@@ -15,6 +15,13 @@ export const pad = (s: string | number, n: number, c = " ") => String(s).padStar
 export const deg3 = (d: number) => pad(Math.round(mod(d, 360)) % 360, 3, "0") + "°";
 
 export const matrixAttr = (m: DOMMatrix) => `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})`;
+/** An element's own transform attribute as one matrix, read without layout. */
+export function ownMatrix(e: SVGGraphicsElement): DOMMatrix {
+  const list = e.transform.baseVal;
+  let m = new DOMMatrix();
+  for (let i = 0; i < list.numberOfItems; i++) m = m.multiply(list.getItem(i).matrix);
+  return m;
+}
 
 export class Page {
   private cache = new Map<string, SVGGraphicsElement | null>();
