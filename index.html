@@ -5,7 +5,7 @@
 <style>
   body { margin: 0; padding: 16px; background: #17191c; color: #d9dadc; font: 14px system-ui, sans-serif; }
   .units { display: flex; gap: 6px; align-items: flex-end; }
-  #pfd, #mfd { flex: 1407 1 0; } #backup { flex: 100 1 0; }
+  #pfd, #mfd { flex: 1407 1 0; } #backup { flex: 100 1 0; } #mfd { position: relative; } #rev { position: absolute; inset: 0; }
   .units svg { display: block; width: 100%; height: auto; }
   form { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 16px; margin-top: 12px; }
   label { display: grid; grid-template-columns: 90px 1fr 48px; gap: 8px; align-items: center; }
@@ -15,20 +15,34 @@
 <script type="module">
   import { GlassPfd, GlassMfd } from "./dist/glass-pfd.js";
   import { DisplayBackup } from "./dist/display-backup.js";
-  // shortcut: the displays have no reversionary mode yet, so the button only shows its state.
-  new DisplayBackup(document.getElementById("backup"));
-  // The two units share their knobs and flight plan, as a real G1000's do: a change on one is set on the other, and the
+  // DISPLAY BACKUP: both units go reversionary. The MFD's place shows a second PFD, laid over it so the MFD keeps its
+  // pages for when the button is pushed again.
+  let reversionary = false, rev = null;
+  const revBox = Object.assign(document.createElement("div"), { id: "rev" });
+  new DisplayBackup(document.getElementById("backup"), { onChange: (on) => {
+    reversionary = on;
+    if (on && !rev) {
+      document.getElementById("mfd").append(revBox);
+      rev = new GlassPfd(revBox, { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share("rev") });
+      rev.set({ points, airports, procedures, ...plan });
+    }
+    revBox.style.display = on ? "" : "none";
+    update();
+  } });
+  // The units share their knobs and flight plan, as a real G1000's do: a change on one is set on the others, and the
   // sliders follow. RANGE and the map stay each unit's own.
   const SHARED = ["headingBug", "course", "baro", "selectedAlt", "radios", "navVolume", "comVolume", "navIdent", "route", "activeLeg", "directFrom", "vtf", "points"];
-  const share = (to) => (patch) => {
+  const share = (from) => (patch) => {
     for (const [k, v] of Object.entries(patch)) if (f.elements[k]?.type === "range") (f.elements[k].value = v), (f.elements[k].nextElementSibling.value = v);
     const p = Object.fromEntries(Object.entries(patch).filter(([k]) => SHARED.includes(k)));
-    if (Object.keys(p).length) to().set(p);
+    if (!Object.keys(p).length) return;
+    Object.assign(plan, p);
+    for (const [name, unit] of Object.entries({ pfd, mfd, rev })) if (name !== from) unit?.set(p);
   };
-  const pfd = new GlassPfd(document.getElementById("pfd"), { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share(() => mfd) });
+  const pfd = new GlassPfd(document.getElementById("pfd"), { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share("pfd") });
   // Scheduler messages from AUX - UTILITY go to the PFD's ALERTS window.
   const scheduled = [];
-  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true, onChange: share(() => pfd), onScheduler });
+  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true, onChange: share("mfd"), onScheduler });
   // A message posted again (a periodic one) is taken off first, so the PFD counts it unread.
   function onScheduler(m) {
     const i = scheduled.indexOf(m);
@@ -59,11 +73,14 @@
   const update = () => {
     const s = Object.fromEntries([...new FormData(f)].map(([k, v]) => [k, Number(v)]));
     f.querySelectorAll("label").forEach((l) => l.querySelector("output") && (l.querySelector("output").value = l.querySelector("input").value));
-    pfd.set({ ...s, alerts: [...(f.alert.checked ? ["DEMO - A sample message."] : []), ...scheduled],
-      failed: { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked }, cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, turnRate: s.ias > 0 ? (1091 * Math.tan((s.roll * Math.PI) / 180)) / (s.ias + 6) : 0, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 } });
+    const engine = { rpm: s.rpm, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 };
+    const ps = { ...s, alerts: [...(f.alert.checked ? ["DEMO - A sample message."] : []), ...scheduled],
+      failed: { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked }, cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, turnRate: s.ias > 0 ? (1091 * Math.tan((s.roll * Math.PI) / 180)) / (s.ias + 6) : 0, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 }, engine };
+    pfd.set({ ...ps, reversionary });
+    if (reversionary) rev?.set({ ...ps, reversionary: true }); // hidden otherwise; onChange updates it when shown
     mfd.set({
       heading: s.heading, headingBug: s.headingBug, course: s.course, selectedAlt: s.selectedAlt, alt: s.alt, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
-      engine: { rpm: s.rpm, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 },
+      engine,
     });
   };
   f.addEventListener("input", update);
