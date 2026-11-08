@@ -162,10 +162,29 @@ export function bezelInput(svg, onInput) {
         if (control)
             fire(s, control);
     });
+    // Keys go to the display last clicked (it takes focus).
+    svg.setAttribute("tabindex", "0");
+    svg.addEventListener("keydown", (e) => {
+        const i = keyInput(e);
+        if (!i)
+            return;
+        e.preventDefault();
+        onInput(i);
+    });
     return () => {
         stop();
         window.removeEventListener("pointerup", stop);
     };
+}
+/** A key typed on a focused display: a letter or digit (upper case) or Backspace types into the identifier under the
+ * cursor, Enter is ENT and Escape is CLR. Not on the real unit (NXi's keypad works the same way). */
+export function keyInput(e) {
+    if (e.ctrlKey || e.metaKey || e.altKey)
+        return null;
+    if (/^[a-z0-9]$/i.test(e.key))
+        return { control: "CHAR", value: e.key.toUpperCase().charCodeAt(0) };
+    const k = { Backspace: { control: "CHAR", value: 8 }, Enter: { control: "ENT", value: 1 }, Escape: { control: "CLR", value: 1 } };
+    return k[e.key] ?? null;
 }
 // NAV and COM bands in whole MHz (Constants.nas). Frequencies are worked in kHz to keep them exact.
 const NAV = [108, 117];

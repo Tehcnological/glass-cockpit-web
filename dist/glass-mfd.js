@@ -16,7 +16,7 @@ import { panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panT
 import { AIRWAY_RANGE, drawMap, mapGroup, mapUp, profileView, rangeLabel, shownAirways, stepRange } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
-import { BLANK, Highlighter, NS, dimKey, key } from "./ui.js";
+import { BLANK, Highlighter, IdEntry, NS, dimKey, key } from "./ui.js";
 import { dataBar, setupDefaults } from "./aux-pages.js";
 import { PAGE_GROUPS, makePages } from "./mfd-pages.js";
 /** The pan info bar's text size, px. */
@@ -165,6 +165,18 @@ export class GlassMfd {
                 if (this.overlay)
                     return;
                 return this.pageMenu(i.control === "FMS_OUTER", i.value);
+            case "CHAR":
+                // A typed key: one clockwise turn of the small knob, which the identifier under the cursor takes as the key.
+                if (!page.crsr || !page.typing())
+                    return;
+                IdEntry.typed = String.fromCharCode(i.value);
+                try {
+                    page.fms(false, 1);
+                }
+                finally {
+                    IdEntry.typed = null; // never left for a later turn of the knob
+                }
+                return this.set({});
             case "FMS_CRSR":
                 page.toggleCrsr();
                 return this.set({});

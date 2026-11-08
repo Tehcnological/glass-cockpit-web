@@ -26,6 +26,8 @@ export declare class AprInfo {
     /** The selected approach from the selected transition on, to preview on the map. */
     preview(c: AprCtx): MapPoint[];
     private order;
+    /** Whether the small knob would spell the airport (keyboard typing goes there). */
+    typing(): boolean;
     fms(c: AprCtx, outer: boolean, d: number): void;
     /** ENT moves on to the next box; returns an airport identifier just spelled, for the page to show. */
     ent(c: AprCtx): string | null;

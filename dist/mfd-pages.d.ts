@@ -68,6 +68,8 @@ export declare class MfdPage {
     keys(): Key[];
     /** The FMS knob with the cursor on; false leaves the turn to the page menu. */
     fms(_outer: boolean, _d: number): boolean;
+    /** Whether the small FMS knob, turned clockwise now, would spell an identifier (keyboard typing goes there). */
+    typing(): boolean;
     toggleCrsr(): void;
     ent(): void;
     clr(): void;
@@ -102,6 +104,7 @@ declare class WaypointEntryPage extends MapPage {
     keys(): Key[];
     toggleCrsr(): void;
     fms(outer: boolean, d: number): boolean;
+    typing(): boolean;
     ent(): void;
     clr(): void;
     private load;
@@ -120,6 +123,7 @@ declare class DirectToPage extends MapPage {
     toggleCrsr(): void;
     pageMenu(): MenuOption[];
     fms(outer: boolean, d: number): boolean;
+    typing(): boolean;
     private pick;
     ent(): void;
     clr(): void;
@@ -135,6 +139,7 @@ declare class ProceduresPage extends MfdPage {
     loadApproach(airport: string, name: string): void;
     keys(): Key[];
     toggleCrsr(): void;
+    typing(): boolean;
     fms(outer: boolean, d: number): boolean;
     ent(): void;
     clr(): void;
@@ -176,6 +181,7 @@ export declare class FplToolPage extends MfdPage {
     private g;
     constructor(m: Mfd, screen: SVGGElement, after: Element);
     open(name: FplToolName, sel: number): this;
+    typing(): boolean;
     fms(outer: boolean, d: number): boolean;
     ent(): void;
     clr(): void;

@@ -54,6 +54,9 @@ export declare class IdEntry {
     private p;
     private size;
     private name;
+    /** A key typed on the computer keyboard (a letter, a digit, or "" for Backspace), taken by the next inner turn in
+     * place of turning: it goes in at the cursor, which moves on. Not on the real unit; NXi takes its keypad this way. */
+    static typed: string | null;
     private chars;
     private pos;
     constructor(p: Page, size: number, name?: string);
