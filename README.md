@@ -27,11 +27,13 @@ For training and simulation only. Not for navigation or flight use.
 
 ## Install
 
-The package is installed from GitHub, not npm:
+The package is installed from GitHub, not npm. Pin a commit, so package.json names it and `npm update` can't move it:
 
 ```sh
-npm install github:Tehcnological/glass-cockpit-web
+npm install github:Tehcnological/glass-cockpit-web#<commit>
 ```
+
+To update, run the same command with the new commit.
 
 | Import | What it is |
 | --- | --- |
