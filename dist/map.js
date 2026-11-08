@@ -134,6 +134,10 @@ export function drawMap(g, s, m, declutter = 0) {
         const [[x1, y1], [x2, y2]] = [xy(s.directFrom), xy(route[0])];
         out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ff00ff" stroke-width="2"/>`;
     }
+    if (s.nearestLine) {
+        const [[x1, y1], [x2, y2]] = [xy(s), xy(s.nearestLine)];
+        out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ffffff" stroke-width="2" stroke-dasharray="8 6"/>`;
+    }
     for (const p of symbolPoints(s, declutter)) {
         const [x, y] = xy(p);
         if (x < m.x - 150 || x > m.x + m.w + 150 || y < m.y - 150 || y > m.y + m.h + 150)

@@ -102,6 +102,10 @@ export class MfdPage {
         return null;
     }
     /** The MENU key's PAGE MENU options, or null for a page without one here. */
+    /** Where the navigation map draws the nearest airport line, if this page has one. */
+    nearestLine() {
+        return null;
+    }
     pageMenu() {
         return null;
     }
@@ -270,6 +274,10 @@ class NearestAirportsPage extends MfdPage {
     }
     selected() {
         return this.crsr ? this.apt?.id ?? null : null;
+    }
+    // Pilot's Guide: the map draws a dashed white line from the aircraft to the selected airport.
+    nearestLine() {
+        return this.apt ?? null;
     }
     draw() {
         const list = this.list();

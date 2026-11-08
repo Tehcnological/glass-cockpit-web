@@ -56,6 +56,7 @@ export interface MapData {
     /** Map center when not the aircraft (WPT pages center on the waypoint). */ center?: LatLon;
     /** A procedure previewed on a WPT page: its fixes in order, white, the missed approach dashed. */ preview?: MapPoint[];
     /** The airways to draw (see `shownAirways`), low first. */ airways?: Airway[];
+    /** NRST - NEAREST AIRPORTS' selected airport: a dashed white line runs to it from the aircraft. */ nearestLine?: LatLon;
     /** Profile View's path: its length and total width, nm, along the track. */ profilePath?: {
         nm: number;
         width: number;

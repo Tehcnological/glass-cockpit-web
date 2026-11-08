@@ -413,7 +413,7 @@ export class GlassMfd {
       const center = pan?.center ?? base.center() ?? undefined;
       const prof = profile && profileView(s.alt, s.range);
       const profilePath = prof ? { nm: prof.nm, width: PROFILE_WIDTH, ticks: prof.nm >= 4 ? prof.ticks.map((t) => t.nm) : [] } : undefined;
-      drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center, up: pan?.up, trackVector: mode === "full" ? this.ui.trackVector : 0, airways: this.airways(), profilePath }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
+      drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center, up: pan?.up, trackVector: mode === "full" ? this.ui.trackVector : 0, airways: this.airways(), profilePath, nearestLine: base.nearestLine() ?? undefined }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
     }
     this.drawProfile(profile);
     this.drawPan(mode === "full");

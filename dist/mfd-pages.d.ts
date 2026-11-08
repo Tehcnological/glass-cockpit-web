@@ -76,6 +76,8 @@ export declare class MfdPage {
     /** The waypoint DIRECT TO starts with from this page (the one under the cursor). */
     selected(): string | null;
     /** The MENU key's PAGE MENU options, or null for a page without one here. */
+    /** Where the navigation map draws the nearest airport line, if this page has one. */
+    nearestLine(): LatLon | null;
     pageMenu(): MenuOption[] | null;
     draw(): void;
 }
