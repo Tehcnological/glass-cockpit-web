@@ -7,7 +7,7 @@ import NRST from "./svg/nrst-pfd.js";
 import NRST_INFO from "./svg/nrst-info-pfd.js";
 import FPL from "./svg/fpl-pfd.js";
 import { buildDisplay } from "./display.js";
-import { Page, clamp, deg3, mod, pad } from "./page.js";
+import { Page, clamp, deg3, matrixAttr, mod, pad } from "./page.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
@@ -43,15 +43,24 @@ const FAILURES = [["attitude", "NoAttitude"], ["airspeed", "NoASI"], ["altitude"
 const HIDDEN = ["L_NoGPS", "GSPD", "PFD-Multilines", "Annunciation", "SelectedALT-meters", "SelectedSPD-bug", "SelectedSPD-bg", "SelectedSPD-text", "SelectedSPD-symbol"];
 // Tape clipping, as "rect(top, right, bottom, left)" in screen coordinates.
 const CLIPS = {
-    PitchScale: [130, 664, 370, 256], // stops above the roll pointer and slip/skid bar (FG1000: 70, through them)
     SpeedLint1: [252, 226, 318, 204],
     SpeedTape: [115, 239, 455, 156],
     LintAlt: [115, 808, 455, 704],
     AltLint00011: [252, 804, 318, 771],
 };
 const MAGENTA = "#ff00ff";
-// The turn rate band's arc: its center, and the radii its ticks span (clear of the heading box).
-const TURN = { cx: 459.5, cy: 586.5, r0: 136, r1: 152 };
+/** Cessna 172S, KIAS. */
+export const SPEEDS_172S = { vso: 40, vs1: 48, vfe: 85, vno: 129, vne: 163 };
+const NS_SVG = "http://www.w3.org/2000/svg";
+let ladderCount = 0;
+/** The heading box sits on the turn rate band (Pilot's Guide: the band is directly above the card); FG1000 has it
+ * 17.2 px lower, over the band's top. */
+const HDG_LIFT = 17.2;
+/** The pitch ladder's window on the screen: a semicircle about the aircraft symbol (459, 282.8) inside the roll pointer
+ * and slip/skid bar, then straight down to the heading box's top. */
+const LADDER = { cx: 459, cy: 282.8, r: 152.8, bottom: 400.5 - HDG_LIFT };
+// The turn rate band above the compass card: its center and the radii it spans (FG1000's band art).
+const TURN = { cx: 459.5, cy: 586.5, r0: 145, r1: 170.5 };
 const INSET_PAN_FONT = 12;
 const GREEN = "#00ff00";
 export class GlassPfd {
@@ -65,6 +74,7 @@ export class GlassPfd {
     fpl;
     fplRows;
     turnTrend;
+    /** The pitch ladder's window, a clip rectangle kept fixed on the screen. */ ladderClip;
     minBug;
     inset;
     insetGeom;
@@ -142,6 +152,9 @@ export class GlassPfd {
             typo.textContent = "ATTITUDE FAIL";
         for (const [id, r] of Object.entries(CLIPS))
             this.p.clip(id, r);
+        this.ladderClip = this.ladderWindow();
+        this.p.el("HDG")?.setAttribute("transform", `translate(0 ${-HDG_LIFT})`);
+        this.speedStrip(options.speedRanges ?? SPEEDS_172S);
         // Autopilot annunciations start blank, as Surround.new() leaves them.
         for (const id of ["APLateralArmed", "APLateralActive", "APVerticalArmed", "APVerticalActive", "APVerticalReference", "APStatus"]) {
             this.surround.p.text(`Header${id}`, "");
@@ -159,7 +172,7 @@ export class GlassPfd {
             const a = (deg * Math.PI) / 180;
             return `M ${TURN.cx + TURN.r0 * Math.sin(a)} ${TURN.cy - TURN.r0 * Math.cos(a)} L ${TURN.cx + TURN.r1 * Math.sin(a)} ${TURN.cy - TURN.r1 * Math.cos(a)}`;
         });
-        const tickPath = scale.parentNode.insertBefore(document.createElementNS("http://www.w3.org/2000/svg", "path"), this.turnTrend.nextSibling);
+        const tickPath = scale.parentNode.insertBefore(document.createElementNS("http://www.w3.org/2000/svg", "path"), this.turnTrend); // the trend vector over the ticks
         for (const [k, v] of Object.entries({ d: ticks.join(" "), stroke: "#ffffff", "stroke-width": "2" }))
             tickPath.setAttribute(k, v);
         this.set({});
@@ -873,6 +886,46 @@ export class GlassPfd {
         this.p.tf("Horizon", { ty: pitch * 6.849, rot: -roll, center: [459, 282.8 - 6.849 * pitch] });
         this.p.tf("bankPointer", { rot: -roll });
         this.p.tf("SlipSkid", { tx: -20 * slip });
+        // The ladder moves inside the horizon; its window stays put on the screen.
+        this.ladderClip.setAttribute("transform", matrixAttr(this.p.el("PitchScale").getCTM().inverse().multiply(this.p.screen.getCTM())));
+    }
+    // Pilot's Guide: the color-coded speed range strip on the moving tape; FG1000's tape has none. Drawn along its right
+    // edge; where the flap range overlaps the normal range, white takes the inner half (as the arcs nest on a round gauge).
+    speedStrip(v) {
+        const tape = this.p.el("SpeedTape");
+        if (!tape)
+            return;
+        const y = (kt) => 284.5 - 5.711 * kt; // the tape's 0 kt line, 5.711 px a knot
+        const band = (from, to, x, w, fill) => `<rect x="${x}" y="${y(to)}" width="${w}" height="${y(from) - y(to)}" fill="${fill}"/>`;
+        const [x, w] = [229, 10]; // up to the tape's clip at 239, over the tick ends
+        const g = tape.appendChild(document.createElementNS(NS_SVG, "g"));
+        g.innerHTML = band(0, v.vso, x, w, "#ff0000") + band(v.vs1, v.vno, x, w, "#00ff00") + band(v.vso, v.vfe, x, w / 2, "#ffffff") +
+            band(v.vno, v.vne, x, w, "#ffff00") + band(v.vne, 999, x, w, "#ff0000");
+    }
+    // The pitch ladder shows inside a semicircle just under the roll pointer and slip/skid bar, down to the top of the
+    // heading box, cut hard (Chris's call; FG1000 cuts a rectangle from y 70, through the pointer, to 370). Also the extreme pitch chevrons
+    // (Pilot's Guide: red, pointing to the horizon, from 50° up and 30° down); FG1000 has none, so their shape and
+    // spacing are ours. Returns the window's rectangle, which updateAI keeps fixed on the screen.
+    ladderWindow() {
+        const ladder = this.p.el("PitchScale");
+        const { cx, cy, r, bottom } = LADDER;
+        const id = `glass-ladder-${++ladderCount}`;
+        const cp = ladder.parentNode.appendChild(document.createElementNS(NS_SVG, "clipPath"));
+        cp.id = id;
+        cp.setAttribute("clipPathUnits", "userSpaceOnUse");
+        const shape = cp.appendChild(document.createElementNS(NS_SVG, "path"));
+        shape.setAttribute("d", `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy} L ${cx + r} ${bottom} L ${cx - r} ${bottom} Z`);
+        ladder.setAttribute("clip-path", `url(#${id})`);
+        // Chevrons midway between the ladder's lines, in the horizon's coordinates (0° at y 282.8, 6.849 px a degree).
+        const chevron = (deg) => {
+            const [y, d] = [282.8 - 6.849 * deg, deg > 0 ? 1 : -1];
+            const pts = `${459 - 34},${y - 16 * d} ${459},${y + 16 * d} ${459 + 34},${y - 16 * d}`;
+            return `<polyline points="${pts}" fill="none" stroke="#ffffff" stroke-width="12" stroke-linejoin="miter"/>` +
+                `<polyline points="${pts}" fill="none" stroke="#ff0000" stroke-width="8" stroke-linejoin="miter"/>`;
+        };
+        const chevrons = ladder.appendChild(document.createElementNS(NS_SVG, "g"));
+        chevrons.innerHTML = [55, 65, 75, -35, -45, -55, -65, -75].map(chevron).join("");
+        return shape;
     }
     updateFD({ fd, pitch, roll }) {
         // Command bars disappear beyond -20/+30 pitch or 65 bank.
@@ -889,8 +942,9 @@ export class GlassPfd {
         trend = clamp(trend, -30, 30);
         this.p.tf("Airspeed-Trend-Indicator", { sy: trend, ty: -284.5 * (trend - 1) });
         const bg = this.p.el("IAS-bg");
+        const vne = this.options.vne ?? this.options.speedRanges?.vne;
         if (bg)
-            bg.style.fill = this.options.vne !== undefined && ias > this.options.vne ? "#ff0000" : "#000000";
+            bg.style.fill = vne !== undefined && ias > vne ? "#ff0000" : "#000000";
         for (const v of ["Vx", "Vy", "Vr", "Vglide"]) {
             const spd = this.options.vspeeds?.[v];
             const show = spd !== undefined && on[v] && Math.abs(spd - ias) < 30;
