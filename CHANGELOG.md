@@ -4,6 +4,7 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 
 ## Unreleased
 
+- Navdata: `buildNasr` builds V, T, J and Q airways from NASR's `AWY_SEG_ALT.csv` (optional in `NasrCsv`; `Nasr` gains `airways`), and `near` returns `airways` for the MFD, the segments within range with every point they use in `points`.
 - MFD: the map's AIRWAYS key draws airways from new state `airways` (low grey, high green, with their range limits), and PROFILE or the PAGE MENU shows Profile View: altitude and distance scales, the aircraft, and its path on the map, with no terrain (Pilot's Guide). `shownAirways` and `profileView` in `map.ts`; `MapData` gains `airways` and `profilePath`.
 - MFD: AUX - SYSTEM SETUP (time format and offset, MFD data bar fields, page navigation, nearest airport criteria) and AUX - UTILITY (timers, trip statistics, PAGE MENU resets), from the Pilot's Guide. The AUX group gains SYSTEM SETUP after GPS STATUS. `aux-pages.ts` holds their logic; `ete` moved there and is still exported from `glass-mfd`.
 - MFD: WPT - APPROACH INFORMATION from the airport page's APR softkey: approaches, transitions, BARO minimums and the fix sequence, previewed on the map (Pilot's Guide). The airport page gains INFO-1, APR and grey DP, STAR and WX. `approachPoints` in `nav.ts`, the page's logic in `apr-info.ts`; `MapData` gains `preview`.

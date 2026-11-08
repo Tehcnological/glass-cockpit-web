@@ -52,6 +52,42 @@ test("an airport's repeated frequency is listed once", () => {
   assert.deepEqual(phx(buildNasr("2026-10-29", twice, [])), phx(expected.nasr));
 });
 
+const awy = fixture("awy-rows.json");
+const withAwy = (seg = awy.AWY_SEG_ALT) => ({
+  ...rows, NAV_BASE: [...rows.NAV_BASE, ...awy.NAV_BASE], FIX_BASE: [...rows.FIX_BASE, ...awy.FIX_BASE], AWY_SEG_ALT: seg,
+});
+
+test("buildNasr builds airways from real 2026-10-29 AWY_SEG_ALT rows as AWY_BASE strings them", () => {
+  assert.deepEqual(buildNasr("2026-10-29", withAwy(), []).airways, fixture("awy-expected.json").airways);
+});
+
+test("an airway breaks at a gap and at a point with no record; other routes are left out; Alaska ids stay apart", () => {
+  const seg = awy.AWY_SEG_ALT.map((r) =>
+    r.AWY_ID === "J212" && r.FROM_POINT === "CULTS" ? copy(r, { AWY_SEG_GAP_FLAG: "Y" })
+      : r.AWY_ID === "T310" && r.FROM_POINT === "MESCA" ? copy(r, { FROM_PT_TYPE: "DME" })
+        : r);
+  const v461 = seg.filter((r) => r.AWY_ID === "V461");
+  seg.push(...v461.map((r) => copy(r, { AWY_ID: "TK502" })), ...v461.map((r) => copy(r, { AWY_LOCATION: "A" })));
+  assert.deepEqual(buildNasr("2026-10-29", withAwy(seg), []).airways, [
+    ["J212", "HI", ["TFD", "BXK", "CULTS"]], ["J212", "HI", ["HRRBR", "CURIV", "DECAS", "PSP"]],
+    ["Q180", "HI", ["BXK", "SATRN", "WOBUG", "DMN", "EWM"]],
+    ["T310", "LO", ["TUS", "OBISE", "SULLI"]], ["T310", "LO", ["HOOVE", "NOCHI", "SSO", "SVC", "KEAPS", "TCS"]],
+    ["V461", "LO", ["GBN", "BXK"]], ["V461", "LO", ["GBN", "BXK"]],
+  ]);
+});
+
+test("near returns the airway segments within range, whole, with every point they use", () => {
+  const out = near(buildNasr("2026-10-29", withAwy(), []), { cycle: "2026-10-29", procedures: [] }, 33.4, -111.9, 40);
+  // TFD-BXK and BXK-SATRN pass within 40 nm; SATRN-WOBUG starts at SATRN, 35 nm out. BXK-CULTS and V461 do not.
+  assert.deepEqual(out.airways, [
+    { id: "J212", type: "HI", points: ["TFD", "BXK"] }, { id: "Q180", type: "HI", points: ["BXK", "SATRN", "WOBUG"] },
+  ]);
+  const ids = out.points.map((p) => p.id);
+  for (const a of out.airways) for (const id of a.points) assert.ok(ids.includes(id), id);
+  assert.equal(out.points.find((p) => p.id === "WOBUG").type, "FIX"); // beyond the 40 nm fix cut
+  assert.equal(new Set(ids).size, ids.length);
+});
+
 // KPHX ILS RWY 08 from CIFP 2611, with its fixes.
 const CIFP = `
 SUSAEAENRT   ALLIS K20    C   L N33265718W112373164                       E0098     NAR           ALLIS                    275972605
@@ -142,6 +178,7 @@ test("near keeps navaids and stations to 200 nm and the rest to range", () => {
   assert.equal(out.stations.length, 1);
   assert.equal(out.airspaces.length, 1);
   assert.equal(out.airspaces[0].cls, "B");
+  assert.deepEqual(out.airways, []); // a record built before airways has none
 });
 
 test("main entry and radio do not load navdata, directly or through their imports", () => {

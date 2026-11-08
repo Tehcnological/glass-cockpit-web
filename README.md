@@ -132,7 +132,7 @@ Every PFD softkey that is not dim works:
 
 FlightGear draws the map from its own navigation database. Here the map shows only the points passed in, with FG1000's symbols for airports, VORs, NDBs, fixes and flight plan waypoints, each layer at FG1000's default ranges: airports and VORs up to 150 nm, NDBs and fixes up to 15 nm, flight plan points always.
 
-`airways` are drawn with the AIRWAYS key (Pilot's Guide): AIRWY ON all, AIRWY LO the low ones in grey, AIRWY HI the high ones in green, over the low. Low airways show at map ranges up to 200 nm, high up to 300; their fixes show at any range while they do. A fix missing from `points` breaks the airway there. Airway names are not labeled, and the Map Setup Airways group is not ported. `glass-cockpit-web/navdata` does not build airways yet.
+`airways` are drawn with the AIRWAYS key (Pilot's Guide): AIRWY ON all, AIRWY LO the low ones in grey, AIRWY HI the high ones in green, over the low. Low airways show at map ranges up to 200 nm, high up to 300; their fixes show at any range while they do. A fix missing from `points` breaks the airway there. Airway names are not labeled, and the Map Setup Airways group is not ported. `glass-cockpit-web/navdata` builds them from NASR (see [Navdata](#navdata)).
 
 **Profile View** (Pilot's Guide; FG1000 has none), from the PROFILE key or the PAGE MENU's Show/Hide Profile View: a window along the bottom of the navigation map with an altitude scale, the aircraft at `alt`, and a distance scale half the map range (PROFILE NOT AVAILABLE under 1 nm); the range box moves above it. A white box on the map marks the path it looks along: the track, 4 nm wide (the en route width; the MFD does not know the flight phase). There is no terrain or obstacle data, so it shows no terrain; its altitude steps and layout are this package's own.
 
@@ -180,10 +180,12 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
 
 | Function | Takes | Returns |
 | --- | --- | --- |
-| `buildNasr(cycle, csv, airspace)` | The NASR CSV rows by file (`NAV_BASE`, `FIX_BASE`, `APT_BASE`, `APT_RWY`, `FRQ`, `ILS_BASE`), as objects of column name to value; Class B, C and D airspace records the host built | `Nasr`: navaids, fixes, public-use airports, ARTCC/FSS/weather frequencies, airspace |
+| `buildNasr(cycle, csv, airspace)` | The NASR CSV rows by file (`NAV_BASE`, `FIX_BASE`, `APT_BASE`, `APT_RWY`, `FRQ`, `ILS_BASE`, and optionally `AWY_SEG_ALT` from the AWY zip), as objects of column name to value; Class B, C and D airspace records the host built | `Nasr`: navaids, fixes, public-use airports, ARTCC/FSS/weather frequencies, airspace, airways |
 | `parseCifp(text)` | The CIFP file `FAACIFP18` (ARINC 424) as text | `Cifp["procedures"]`: approaches with transitions, legs, altitudes and fix roles |
-| `near(nasr, cifp, lat, lon, range)` | The two above, a position and a range in nm | `{ points, airspaces, airports, stations, procedures }` for `set()`. VORs, NDBs and stations reach 200 nm, as the NRST pages do |
+| `near(nasr, cifp, lat, lon, range)` | The two above, a position and a range in nm | `{ points, airspaces, airports, stations, procedures, airways }` for `set()`. VORs, NDBs and stations reach 200 nm, as the NRST pages do. Airways come as their segments within range, whole, and their points beyond range join `points` |
 | `approachName(id)` | A CIFP approach id such as `R08-Y` | The chart name, `RNAV (GPS) Y RWY 08` |
+
+Airways are the Victor and T routes (`LO`) and the jet and Q routes (`HI`), as AIM 5-3-4 splits them; colored, oceanic and helicopter routes are left out. An airway breaks where NASR marks a gap and where a point has no navaid or fix record (border points, DME and TACAN points, navaids out of service), so every point `near` returns on one is in `points`.
 
 ```js
 import { near } from "glass-cockpit-web/navdata";
