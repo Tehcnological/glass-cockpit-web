@@ -149,7 +149,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 
 | Behavior | Status |
 | --- | --- |
-| DISPLAY BACKUP: one push puts both displays in reversionary mode (flight instruments and engine strip on each); a second push returns them | Partial: the demo's button is there; reversionary mode is missing |
+| DISPLAY BACKUP: one push puts both displays in reversionary mode (flight instruments and engine strip on each); a second push returns them | Done in the demo (the host shows a second PFD in the MFD's place) |
 | A display that loses power sends the other into reversionary mode on its own; the failed side's COM/NAV fields flag invalid | Missing |
 | A failed sensor or unit red-X's its fields: attitude (AHRS), heading (AHRS or magnetometer), air data (ADC), COM/NAV 1 or 2 (GIA), transponder, engine data, OAT | Partial: `failed` flags attitude, airspeed, altitude, vertical speed and heading; not COM/NAV, transponder, engine or OAT |
 | Start-up: attitude, airspeed and altitude invalid for the first 40 to 60 s while the AHRS aligns | Missing |
@@ -172,4 +172,4 @@ airport sub-pages, the AUX pages, the SUSP key and hold entry. Read the Pilot's 
    status). Done. Left: WPT airport INFO-2, user waypoint pages, the flight plan catalog, the procedures page softkeys.
 4. **Flows:** SUSP and missed approach sequencing, arrivals and departures, holds, duplicate waypoints, airways in the
    flight plan.
-5. **Later, by request:** keyboard typing, the audio panel, reversionary mode and the autopilot.
+5. **Later, by request:** keyboard typing, the audio panel, the failed display's NAV/COM flags and the autopilot.
