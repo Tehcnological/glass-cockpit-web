@@ -49,6 +49,8 @@ export declare class FplTool {
     rows(s: ToolState): ToolRow[];
     /** The FMS knob: the small one picks a value (spells, on Closest Point), the large one moves (ATK: by 10 nm). */
     fms(_s: ToolState, outer: boolean, d: number): void;
+    /** CLR: cancels an identifier being spelled; otherwise true, the window closes. */
+    clr(): boolean;
     ent(s: ToolState): ToolEnt;
 }
 export {};

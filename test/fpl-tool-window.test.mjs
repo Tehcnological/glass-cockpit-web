@@ -78,3 +78,33 @@ test("which tools the menu offers", () => {
   assert.ok(toolEnabled("Create ATK Offset Waypoint", s, 1));
   assert.ok(!toolEnabled("Parallel Track", { ...s, route: ["A"] }, null));
 });
+
+// Review fixes.
+test("ATK offset after the FROM waypoint, behind the aircraft, does not become the active waypoint", () => {
+  const t = tool();
+  t.open("Create ATK Offset Waypoint", s, 1); // B, the active leg's start; the aircraft is 30 nm past it
+  assert.equal(t.ent(s).patch.activeLeg, 3, "+1 nm after B is behind: C stays active, now at index 3");
+  const ahead = { ...s, lon: 1.01 }; // 0.6 nm past B
+  t.open("Create ATK Offset Waypoint", ahead, 1);
+  t.fms(ahead, false, 1); // +2
+  assert.equal(t.ent(ahead).patch.activeLeg, 2, "+2 nm after B is ahead: it is the active waypoint");
+});
+
+test("closest point: a second lookup names a new user waypoint, and respelling clears the old result", () => {
+  const t = tool();
+  const once = { ...s, points: [...s.points, { id: "91", type: "WPT", lat: 0, lon: 1.5 }] };
+  t.open("Closest Point Of FPL", once);
+  t.fms(once, false, -1);
+  assert.equal(t.ent(once).patch.points.at(-1).id, "92");
+  t.fms(once, false, -1);
+  assert.equal(t.rows(once).find((r) => r.label === "BRG").value, "___°");
+});
+
+test("CLR while spelling cancels the entry; CLR again closes", () => {
+  const t = tool();
+  t.open("Closest Point Of FPL", s);
+  t.fms(s, false, 1);
+  assert.equal(t.clr(), false);
+  assert.equal(t.rows(s)[1].value, "_____");
+  assert.equal(t.clr(), true);
+});

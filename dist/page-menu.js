@@ -1,6 +1,6 @@
 // PAGE MENU: the MENU key's options for a page, as the v13 trainer lists them. Options this package cannot carry out
 // are dim, as the softkeys are; the cursor skips them. DOM-free, so it can be tested on its own.
-import { isApproach } from "./nav.js";
+import { cancelParallel, isApproach } from "./nav.js";
 /** The next option the cursor can stop on in direction `d`, or `at` at either end. */
 export function stepMenu(enabled, at, d) {
     for (let i = at + d; i >= 0 && i < enabled.length; i += d)
@@ -20,7 +20,8 @@ export const FPL_OPTIONS = [
 /** The flight plan menu for `route`; `patch` is the change an option makes, absent when it is dim here. */
 export function fplMenu(route, activeLeg) {
     // Waypoints entered by hand among the approach fixes stay; the active one is the first kept from the active leg on.
-    const enroute = route.filter((r) => !isApproach(r));
+    // Both edits cancel Parallel Track (Pilot's Guide), so they start from the plan's own points.
+    const enroute = cancelParallel(route).filter((r) => !isApproach(r));
     const a = enroute.length < route.length;
     const kept = route.slice(0, activeLeg).filter((r) => !isApproach(r)).length;
     const patches = {};

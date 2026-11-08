@@ -31,18 +31,20 @@ const NM_PER_DEG = 60;
 export function mapUp(s) {
     if (s.up !== undefined)
         return s.up;
+    // Heading, track and desired track are magnetic; the map is drawn to true north.
+    const v = s.magVar ?? 0;
     if (s.orientation === "HDG UP")
-        return s.heading;
+        return s.heading + v;
     if (s.orientation === "TRK UP")
-        return s.track ?? s.heading;
+        return (s.track ?? s.heading) + v;
     if (s.orientation === "DTK UP")
-        return s.dtk ?? s.track ?? s.heading;
+        return (s.dtk ?? s.track ?? s.heading) + v;
     return 0;
 }
 /** Where the track vector ends: the aircraft's position after `secs` along its track at its groundspeed. */
 export function trackVectorEnd(s, secs) {
     const nm = (s.groundspeed * secs) / 3600;
-    const r = (s.track * Math.PI) / 180;
+    const r = ((s.track + (s.magVar ?? 0)) * Math.PI) / 180; // the track is magnetic
     return { lat: s.lat + (nm * Math.cos(r)) / NM_PER_DEG, lon: s.lon + (nm * Math.sin(r)) / (NM_PER_DEG * Math.cos((s.lat * Math.PI) / 180)) };
 }
 /** A group in screen coordinates, clipped to the map window, inserted before `before` (in whatever group holds it). */

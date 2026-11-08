@@ -271,6 +271,8 @@ export class GlassPfd {
                     this.proc.clr();
                 else if (u.window === "MENU" && u.menuOf === "DTO")
                     u.window = "DTO";
+                else if (u.window === "TOOL")
+                    u.window = this.tool.clr() ? null : u.window;
                 else if (u.window)
                     u.window = null;
                 return this.set({});

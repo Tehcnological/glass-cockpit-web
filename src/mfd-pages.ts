@@ -1355,9 +1355,9 @@ export class FplToolPage extends MfdPage {
     if (r.close) this.m.close();
   }
 
-  // Pilot's Guide: the FMS knob or CLR cancels.
+  // Pilot's Guide: the FMS knob or CLR cancels (CLR first cancels an identifier being spelled).
   clr() {
-    this.m.close();
+    if (this.tool.clr()) this.m.close();
   }
 
   toggleCrsr() {

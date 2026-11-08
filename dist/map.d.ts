@@ -32,6 +32,7 @@ export type Orientation = (typeof ORIENTATIONS)[number];
 export declare const TRACK_VECTOR: number[];
 export interface MapData {
     /** Magnetic heading, degrees. */ heading: number;
+    /** Magnetic variation, degrees east positive: heading, track and desired track plus this are true. */ magVar?: number;
     /** Aircraft position, decimal degrees. */ lat: number;
     lon: number;
     /** Map range, nm from the aircraft to the edge of the map's short side. */ range: number;
@@ -64,11 +65,12 @@ export declare function stepRange(r: number, dir: number): number;
 export declare const rangeLabel: (r: number) => string;
 export declare const DCLTR: string[];
 /** The map's rotation, degrees: pan mode's held rotation, else the orientation's. DTK UP with no desired track turns to the track. */
-export declare function mapUp(s: Pick<MapData, "orientation" | "heading" | "up" | "track" | "dtk">): number;
+export declare function mapUp(s: Pick<MapData, "orientation" | "heading" | "up" | "track" | "dtk" | "magVar">): number;
 /** Where the track vector ends: the aircraft's position after `secs` along its track at its groundspeed. */
 export declare function trackVectorEnd(s: LatLon & {
     track: number;
     groundspeed: number;
+    magVar?: number;
 }, secs: number): LatLon;
 /** A group in screen coordinates, clipped to the map window, inserted before `before` (in whatever group holds it). */
 export declare function mapGroup(screen: SVGGElement, before: Element, m: MapGeometry): SVGGElement;

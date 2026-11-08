@@ -33,6 +33,7 @@ export const TRACK_VECTOR = [0, 30, 60, 120, 300, 600, 1200];
 
 export interface MapData {
   /** Magnetic heading, degrees. */ heading: number;
+  /** Magnetic variation, degrees east positive: heading, track and desired track plus this are true. */ magVar?: number;
   /** Aircraft position, decimal degrees. */ lat: number;
   lon: number;
   /** Map range, nm from the aircraft to the edge of the map's short side. */ range: number;
@@ -81,18 +82,20 @@ const NS = "http://www.w3.org/2000/svg";
 const NM_PER_DEG = 60;
 
 /** The map's rotation, degrees: pan mode's held rotation, else the orientation's. DTK UP with no desired track turns to the track. */
-export function mapUp(s: Pick<MapData, "orientation" | "heading" | "up" | "track" | "dtk">): number {
+export function mapUp(s: Pick<MapData, "orientation" | "heading" | "up" | "track" | "dtk" | "magVar">): number {
   if (s.up !== undefined) return s.up;
-  if (s.orientation === "HDG UP") return s.heading;
-  if (s.orientation === "TRK UP") return s.track ?? s.heading;
-  if (s.orientation === "DTK UP") return s.dtk ?? s.track ?? s.heading;
+  // Heading, track and desired track are magnetic; the map is drawn to true north.
+  const v = s.magVar ?? 0;
+  if (s.orientation === "HDG UP") return s.heading + v;
+  if (s.orientation === "TRK UP") return (s.track ?? s.heading) + v;
+  if (s.orientation === "DTK UP") return (s.dtk ?? s.track ?? s.heading) + v;
   return 0;
 }
 
 /** Where the track vector ends: the aircraft's position after `secs` along its track at its groundspeed. */
-export function trackVectorEnd(s: LatLon & { track: number; groundspeed: number }, secs: number): LatLon {
+export function trackVectorEnd(s: LatLon & { track: number; groundspeed: number; magVar?: number }, secs: number): LatLon {
   const nm = (s.groundspeed * secs) / 3600;
-  const r = (s.track * Math.PI) / 180;
+  const r = ((s.track + (s.magVar ?? 0)) * Math.PI) / 180; // the track is magnetic
   return { lat: s.lat + (nm * Math.cos(r)) / NM_PER_DEG, lon: s.lon + (nm * Math.sin(r)) / (NM_PER_DEG * Math.cos((s.lat * Math.PI) / 180)) };
 }
 

@@ -12,7 +12,7 @@ const near = (a, b, tol = 1e-6) => Math.abs(a - b) < tol;
 test("closest point of the plan to a reference waypoint, and a user waypoint there named from it", () => {
   const ref = pt("REF", 0.3, 1.5); // 18 nm north of the B-C leg
   const c = closestPointOfFpl(s, ref);
-  assert.equal(c.at, 2, "inserted between B and C");
+  assert.ok(near(c.point.lon, 1.5), "on the B-C leg");
   assert.ok(near(c.point.lat, 0) && near(c.point.lon, 1.5));
   assert.equal(c.point.type, "WPT");
   assert.match(c.point.id, /^REF\d$/);
@@ -94,4 +94,20 @@ test("direct-to and loading an approach cancel parallel track", async () => {
   const p = { ...s, route };
   assert.deepEqual(directToPatch(p, C), { route: s.route, activeLeg: 2, directFrom: { lat: 0, lon: 0.5 }, vtf: false });
   assert.deepEqual(approachPatch(route, [pt("IF", 2, 2, { approach: "X" })], "load", s).route.slice(0, 4), s.route);
+});
+
+test("the same along track offset twice is refused: its name would repeat", () => {
+  const { point, at } = atkOffset(s, 2, -10);
+  const route = [...s.route];
+  route.splice(at, 0, point);
+  assert.equal(atkOffset({ ...s, route }, 3, -10), null);
+});
+
+test("inverting the plan or removing the approach cancels parallel track", async () => {
+  const { fplMenu } = await import("../dist/page-menu.js");
+  const ap = pt("IF", 2, 2, { approach: "X" });
+  const route = [...parallelTrack({ ...s, activeLeg: 2 }, "R", 6), ap];
+  const m = fplMenu(route, 2);
+  assert.deepEqual(m.find((o) => o.label === "Invert Flight Plan").patch.route, ["D", "C", "B", "A"]);
+  assert.deepEqual(m.find((o) => o.label === "Remove Approach").patch.route, s.route);
 });

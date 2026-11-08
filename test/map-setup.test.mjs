@@ -20,3 +20,9 @@ test("the track vector reaches where the aircraft will be after the look-ahead t
   const end = trackVectorEnd({ lat: 0, lon: 0, track: 90, groundspeed: 120 }, 60); // 2 nm east
   assert.ok(Math.abs(end.lon - 2 / 60) < 1e-9 && Math.abs(end.lat) < 1e-9);
 });
+
+test("track, desired track and heading are magnetic: the map turns to them plus the variation", () => {
+  assert.deepEqual(ORIENTATIONS.slice(1).map((orientation) => mapUp({ ...s, magVar: 10, orientation })), [50, 60, 40]);
+  const end = trackVectorEnd({ lat: 0, lon: 0, track: 80, groundspeed: 120, magVar: 10 }, 60);
+  assert.ok(Math.abs(end.lon - 2 / 60) < 1e-9 && Math.abs(end.lat) < 1e-9);
+});

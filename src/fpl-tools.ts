@@ -1,7 +1,7 @@
 // The windows the flight plan PAGE MENU opens for Closest Point of FPL, Parallel Track and Create ATK Offset Waypoint,
 // shared by the MFD page and the PFD window, from the Pilot's Guide's steps (FG1000 has none). Window titles and
 // field names are drawn here, not the trainer's. DOM-free, so it can be tested on its own.
-import { atkOffset, cancelParallel, closestPointOfFpl, findPoint, isParallel, parallelTrack, routePoint, vtfEdit } from "./nav.js";
+import { atkOffset, bearingDistance, cancelParallel, closestPointOfFpl, findPoint, isParallel, parallelTrack, routePoint, vtfEdit } from "./nav.js";
 import type { Airport } from "./nav.js";
 import { deg3 } from "./page.js";
 import type { IdEntry } from "./ui.js";
@@ -78,7 +78,10 @@ export class FplTool {
   fms(_s: ToolState, outer: boolean, d: number) {
     if (this.name === "Closest Point Of FPL") {
       if (outer) this.entry.outer(d);
-      else this.entry.inner(d);
+      else {
+        this.entry.inner(d);
+        this.found = null; // a new identifier: the old result no longer applies
+      }
     } else if (this.name === "Create ATK Offset Waypoint") {
       // Steps over 0: +1 and -1 are one click apart.
       const k = (this.offset > 0 ? this.offset - 1 : this.offset) + d * (outer ? 10 : 1);
@@ -86,6 +89,13 @@ export class FplTool {
     } else if (outer) this.row = Math.max(0, Math.min(2, this.row + d));
     else if (this.row === 0) this.side = this.side === "L" ? "R" : "L";
     else if (this.row === 1) this.nm = Math.max(1, Math.min(99, this.nm + d));
+  }
+
+  /** CLR: cancels an identifier being spelled; otherwise true, the window closes. */
+  clr(): boolean {
+    if (!this.entry.editing) return true;
+    this.entry.cancel();
+    return false;
   }
 
   ent(s: ToolState): ToolEnt {
@@ -104,8 +114,14 @@ export class FplTool {
       const r = atkOffset({ ...s, route }, this.sel, this.offset);
       if (!r) return { close: false };
       route.splice(r.at, 0, r.point);
-      // One inserted before the active waypoint lies on the active leg, so it becomes the active waypoint.
-      return { patch: { route, activeLeg: r.at < s.activeLeg ? s.activeLeg + 1 : s.activeLeg, ...vtfEdit(s.vtf, r.at, s.activeLeg) }, close: true };
+      // One inserted on the active leg is the active waypoint only if it is still ahead of the aircraft.
+      let activeLeg = r.at < s.activeLeg ? s.activeLeg + 1 : s.activeLeg;
+      const to = routePoint(route[r.at + 1] ?? "", s.points, s.airports);
+      if (r.at === s.activeLeg && to) {
+        const ahead = bearingDistance(r.point.lat, r.point.lon, to.lat, to.lon).dist < bearingDistance(s.lat, s.lon, to.lat, to.lon).dist;
+        if (!ahead) activeLeg++;
+      }
+      return { patch: { route, activeLeg, ...vtfEdit(s.vtf, r.at, s.activeLeg) }, close: true };
     }
     if (this.row < 2) {
       this.row++;

@@ -187,13 +187,9 @@ export function directToPatch(s: Plan & LatLon, p: MapPoint) {
 export function cancelDirectTo(s: Plan & LatLon & { activeLeg: number; directFrom: LatLon | null; vtf?: boolean }) {
   if (!s.directFrom || s.vtf) return null;
   const pts = s.route.map((r) => routePoint(r, s.points, s.airports));
-  const k = Math.cos((s.lat * Math.PI) / 180);
   // Distance from the aircraft to each leg, flat-earth nm: close enough to pick a leg.
-  const off = (a: LatLon, b: LatLon) => {
-    const [bx, by, px, py] = [(b.lon - a.lon) * k, b.lat - a.lat, (s.lon - a.lon) * k, s.lat - a.lat];
-    const t = Math.max(0, Math.min(1, (px * bx + py * by) / (bx * bx + by * by || 1)));
-    return Math.hypot(px - t * bx, py - t * by);
-  };
+  const { to } = local(s);
+  const off = (a: LatLon, b: LatLon) => onLeg(to(a), to(b)).d;
   let [leg, best] = [-1, Infinity];
   for (let i = 1; i < pts.length; i++) {
     const [a, b] = [pts[i - 1], pts[i]];
@@ -223,41 +219,47 @@ function local(o: LatLon) {
   };
 }
 
-/** A user waypoint name from `id` not already in `route`: `id` and a digit. */
+/** The point of leg a-b closest to the frame's origin, and its distance (a `local` frame). */
+function onLeg([ax, ay]: [number, number], [bx, by]: [number, number]) {
+  const [dx, dy] = [bx - ax, by - ay];
+  const t = Math.max(0, Math.min(1, (-ax * dx - ay * dy) / (dx * dx + dy * dy || 1)));
+  const xy: [number, number] = [ax + t * dx, ay + t * dy];
+  return { xy, d: Math.hypot(...xy) };
+}
+
+const ids = (route: Route) => new Set(route.map((r) => (typeof r === "string" ? r : r.id)));
+
+/** A user waypoint name from `id` not already among `taken`: `id` and a digit. */
 // shortcut: the Pilot's Guide only says the name comes from the reference's; upgrade if the trainer shows its scheme.
-function userName(id: string, route: Route): string {
-  const ids = new Set(route.map((r) => (typeof r === "string" ? r : r.id)));
-  for (let n = 1; ; n++) if (!ids.has(`${id.slice(0, 5)}${n}`)) return `${id.slice(0, 5)}${n}`;
+function userName(id: string, taken: Route): string {
+  const used = ids(taken);
+  for (let n = 1; ; n++) if (!used.has(`${id.slice(0, 5)}${n}`)) return `${id.slice(0, 5)}${n}`;
 }
 
 /**
  * Closest Point of FPL (Pilot's Guide): the point on the plan nearest the reference waypoint `ref`, as a user waypoint
- * to insert at `at`, with the true bearing and distance to it from `ref`. Null with no leg.
+ * named apart from the plan's and `points`, with the true bearing and distance to it from `ref`. Null with no leg.
  */
 export function closestPointOfFpl(s: Plan, ref: MapPoint) {
   const pts = s.route.map((r) => routePoint(r, s.points, s.airports));
   const { to, from } = local(ref);
-  let best: { at: number; d: number; xy: [number, number] } | null = null;
+  let best: { d: number; xy: [number, number] } | null = null;
   for (let i = 1; i < pts.length; i++) {
     const [a, b] = [pts[i - 1], pts[i]];
-    if (!a || !b) continue;
-    const [[ax, ay], [bx, by]] = [to(a), to(b)];
-    const [dx, dy] = [bx - ax, by - ay];
-    const t = Math.max(0, Math.min(1, (-ax * dx - ay * dy) / (dx * dx + dy * dy || 1)));
-    const xy: [number, number] = [ax + t * dx, ay + t * dy];
-    const d = Math.hypot(...xy);
-    if (!best || d < best.d) best = { at: i, d, xy };
+    const c = a && b && onLeg(to(a), to(b));
+    if (c && (!best || c.d < best.d)) best = c;
   }
   if (!best) return null;
   const p = from(best.xy);
-  const point: MapPoint = { id: userName(ref.id, s.route), type: "WPT", lat: p.lat, lon: p.lon };
-  return { at: best.at, point, ...(({ brg, dist }) => ({ brg, dist }))(bearingDistance(ref.lat, ref.lon, p.lat, p.lon)) };
+  const point: MapPoint = { id: userName(ref.id, [...s.route, ...s.points]), type: "WPT", lat: p.lat, lon: p.lon };
+  return { point, ...bearingDistance(ref.lat, ref.lon, p.lat, p.lon) };
 }
 
 /**
  * Create ATK Offset Waypoint (Pilot's Guide): a waypoint `nm` (1 to 999, negative before) along the plan from the one at
  * `at`, to insert at the returned `at`. Null where the Pilot's Guide forbids it: past the leg's length (on the active
- * waypoint, the distance to go), with no leg that side, or at or after the final approach fix.
+ * waypoint, the distance to go), with no leg that side, or at or after the final approach fix; and where one with
+ * the same name is already in the plan.
  */
 export function atkOffset(s: Plan & LatLon & { activeLeg: number }, at: number, nm: number) {
   const faf = s.route.findIndex((r) => isApproach(r) && r.role === "FAF");
@@ -272,7 +274,8 @@ export function atkOffset(s: Plan & LatLon & { activeLeg: number }, at: number, 
   if (Math.abs(nm) >= len) return null;
   const p = from([(x * Math.abs(nm)) / len, (y * Math.abs(nm)) / len]);
   const point: MapPoint = { id: `${w.id.slice(0, 5)}${nm < 0 ? "-" : "+"}${Math.abs(nm)}`, type: "WPT", lat: p.lat, lon: p.lon };
-  return { at: nm < 0 ? at : at + 1, point };
+  // The same offset again would repeat the name (and the place): refused.
+  return ids(s.route).has(point.id) ? null : { at: nm < 0 ? at : at + 1, point };
 }
 
 export const isParallel = (r: string | MapPoint): r is MapPoint => typeof r !== "string" && r.parallel !== undefined;

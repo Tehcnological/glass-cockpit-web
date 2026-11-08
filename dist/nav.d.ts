@@ -170,18 +170,18 @@ export declare function vtfEdit(vtf: boolean, at: number, activeLeg: number): {
 };
 /**
  * Closest Point of FPL (Pilot's Guide): the point on the plan nearest the reference waypoint `ref`, as a user waypoint
- * to insert at `at`, with the true bearing and distance to it from `ref`. Null with no leg.
+ * named apart from the plan's and `points`, with the true bearing and distance to it from `ref`. Null with no leg.
  */
 export declare function closestPointOfFpl(s: Plan, ref: MapPoint): {
     brg: number;
     dist: number;
-    at: number;
     point: MapPoint;
 } | null;
 /**
  * Create ATK Offset Waypoint (Pilot's Guide): a waypoint `nm` (1 to 999, negative before) along the plan from the one at
  * `at`, to insert at the returned `at`. Null where the Pilot's Guide forbids it: past the leg's length (on the active
- * waypoint, the distance to go), with no leg that side, or at or after the final approach fix.
+ * waypoint, the distance to go), with no leg that side, or at or after the final approach fix; and where one with
+ * the same name is already in the plan.
  */
 export declare function atkOffset(s: Plan & LatLon & {
     activeLeg: number;
