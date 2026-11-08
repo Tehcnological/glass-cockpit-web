@@ -29,7 +29,10 @@ export class Page {
             this.cache.set(name, this.screen.querySelector(`[id="${this.prefix}${name}"]`));
         return this.cache.get(name);
     }
+    /** Names `show` keeps hidden whatever it is asked, while set. */
+    hidden = new Set();
     show(name, on) {
+        on &&= !this.hidden.has(name);
         const e = this.el(name);
         if (e)
             e.style.display = on ? "inline" : "none";

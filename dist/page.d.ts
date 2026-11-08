@@ -22,6 +22,8 @@ export declare class Page {
     /** `screen` is the group holding the 1024 x 768 display; ids are looked up inside it. */
     constructor(screen: SVGGElement, prefix: string);
     el(name: string): SVGGraphicsElement | null;
+    /** Names `show` keeps hidden whatever it is asked, while set. */
+    hidden: ReadonlySet<string>;
     show(name: string, on: boolean): void;
     text(name: string, value: string, color?: string): void;
     fill(name: string, color: string): void;

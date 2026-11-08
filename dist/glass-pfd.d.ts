@@ -2,6 +2,8 @@ import { type DisplayOptions } from "./display.js";
 import { type Radios } from "./surround.js";
 import { type Airspace, type LatLon, type MapPoint } from "./map.js";
 import { type Airport, type Procedure } from "./nav.js";
+import { unusualAttitude } from "./unusual-attitude.js";
+export { unusualAttitude };
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
 export type { Checklist } from "./mfd-pages.js";
 export type { MapPoint, Airspace, LatLon } from "./map.js";
@@ -127,6 +129,7 @@ export declare class GlassPfd {
     private options;
     readonly svg: SVGSVGElement;
     private state;
+    /** In an unusual attitude as of the last set(). */ private ua;
     private p;
     private surround;
     /** Removes the bezel's window listener. */ private unbezel;
