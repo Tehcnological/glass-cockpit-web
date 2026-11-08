@@ -2,7 +2,7 @@
 // draws into its FG1000 SVG (src/fg1000/<page>.svg, prefix <page>) and takes the FMS knob, CRSR, ENT and CLR while its
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
-import { mapGroup, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
+import { ORIENTATIONS, TRACK_VECTOR, mapGroup, mapUp, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { asWaypoint, bearingDistance, cancelDirectTo, directToPatch, findPoint, latLon, nearest, planName, routePoint, vtfEdit, type Airport, type Procedure } from "./nav.js";
 import { BLANK, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, firstRow, key, type Key } from "./ui.js";
 import { firstOption, fplMenu, stepMenu, type MenuOption } from "./page-menu.js";
@@ -20,6 +20,7 @@ export interface MfdUi {
   menuVisible: boolean;
   /** The shared softkey menu showing: "top" (the page's own), "engine", "lean", "system" or "map". */ menu: string;
   /** Declutter level, 0 to 3. */ dcltr: number;
+  /** MAP SETUP's track vector look-ahead, seconds; 0 is off. */ trackVector: number;
   /** Airways key state, 0 to 3. */ airways: number;
   /** MAP menu toggles. */ layers: Record<string, boolean>;
   /** Waypoints entered in DIRECT TO and WAYPOINT ENTRY, latest first: their RECENT list. */ recent: string[];
@@ -61,6 +62,7 @@ const TITLES: Record<string, string> = {
   NearestVOR: "NRST - NEAREST VOR", NearestUserWaypoints: "NRST - NEAREST USER WPTS", NearestFrequencies: "NRST - NEAREST FREQUENCIES",
   NearestAirspaces: "NRST - NEAREST AIRSPACES", DirectTo: "DIRECT TO", Procedures: "PROC - PROCEDURES",
   WaypointEntry: "FPL - ACTIVE FLIGHT PLAN", // a window over the flight plan page, which keeps its title
+  MapSetup: "MAP - NAVIGATION MAP", // likewise over the navigation map
 };
 
 // The map windows of pages with their own map (their <page>NavMap-bg, in screen pixels); FG1000 keeps the full map's
@@ -177,16 +179,20 @@ class NavigationMapPage extends MfdPage {
       11: key("CHKLIST", () => this.m.go("LstPageGroup", "Checklist")),
     });
   }
-  // v13 trainer's options; Declutter and Measure Bearing/Distance work here (no map setup, charts or profile view).
+  constructor(m: Mfd, name: string, screen: SVGGElement, private setup: () => MapSetupPage) {
+    super(m, name, screen);
+  }
+
+  // v13 trainer's options; Map Setup, Declutter and Measure Bearing/Distance work here (no charts or profile view).
   pageMenu(): MenuOption[] {
     const u = this.m.ui;
     const s = this.s;
     // Pilot's Guide: the measure pointer starts on the aircraft; while measuring the option reads Stop Measuring.
     const measure: MenuOption = u.pan?.from
       ? { label: "Stop Measuring", act: () => (u.pan = null) }
-      : { label: "Measure Bearing/Distance", act: () => (u.pan = { ...panStart(s, s.orientation === "HDG UP" ? s.heading : 0), from: { lat: s.lat, lon: s.lon } }) };
+      : { label: "Measure Bearing/Distance", act: () => (u.pan = { ...panStart(s, mapUp(s)), from: { lat: s.lat, lon: s.lon } }) };
     return [
-      { label: "Map Setup" }, { label: "Declutter", act: () => (u.dcltr = (u.dcltr + 1) % 4) },
+      { label: "Map Setup", act: () => this.m.open(this.setup().open()) }, { label: "Declutter", act: () => (u.dcltr = (u.dcltr + 1) % 4) },
       measure, { label: "Show Chart" }, { label: "Show Profile View" },
     ];
   }
@@ -1239,12 +1245,81 @@ export class PageMenuPage extends MfdPage {
   }
 }
 
+// MAP SETUP (Pilot's Guide), the navigation map's settings: a window like the PAGE MENU, with its Map group only.
+// ORIENTATION and TRACK VECTOR work; the rest are grey (no terrain, wind, fuel or synthetic vision data here). The outer
+// FMS knob moves the cursor, the inner changes the setting; CLR, MENU or pushing the FMS knob closes it.
+// shortcut: a setting changes as the knob turns (the real unit takes it on ENT), and TRACK VECTOR's on/off and
+// look-ahead time are one field.
+const SETUP_ROWS = ["ORIENTATION", "AUTO ZOOM", "LAND DATA", "TRACK VECTOR", "WIND VECTOR", "NAV RANGE RING", "TOPO DATA", "FUEL RNG (RSV)", "FIELD OF VIEW"];
+const SETUP_ON = [0, 3];
+export class MapSetupPage extends MfdPage {
+  private at = 0;
+
+  constructor(m: Mfd, screen: SVGGElement, after: Element) {
+    super(m, "MapSetup", screen);
+    const g = document.createElementNS(NS, "g");
+    g.id = "Page-MapSetup";
+    g.style.display = "none";
+    const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px`;
+    const text = (t: string, x: number, y: number, anchor = "start", id = "", fill = "#ffffff") =>
+      `<text ${id && `id="MapSetup${id}"`} x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style}">${t}</text>`;
+    let rows = "";
+    SETUP_ROWS.forEach((label, i) => {
+      rows += text(label, 744, 150 + i * 27, "start", "", SETUP_ON.includes(i) ? "#ffffff" : "#808080") + text("", 1014, 150 + i * 27, "end", `Value${i}`, CYAN);
+    });
+    g.innerHTML =
+      `<rect x="724.5" y="53.5" width="310" height="390" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>` +
+      text("MAP SETUP", 874, 82, "middle") + text("GROUP", 740, 115) + text("Map", 1014, 115, "end", "", CYAN) +
+      `<rect x="734.5" y="120.5" width="290" height="${SETUP_ROWS.length * 27 + 12}" style="fill:none;stroke:#808080;stroke-width:1"/>` +
+      text("Press the FMS CRSR knob to", 874, 395, "middle") + text("return to base page", 874, 420, "middle") + rows;
+    after.after(g);
+    this.root = g;
+  }
+
+  open() {
+    [this.at, this.crsr] = [SETUP_ON[0], true];
+    return this;
+  }
+
+  fms(outer: boolean, d: number) {
+    if (outer) this.at = SETUP_ON[Math.max(0, Math.min(SETUP_ON.length - 1, SETUP_ON.indexOf(this.at) + d))];
+    else if (this.at === 0) {
+      const i = ORIENTATIONS.indexOf(this.s.orientation);
+      this.m.change({ orientation: ORIENTATIONS[clamp(i + d, 0, ORIENTATIONS.length - 1)] });
+    } else {
+      const u = this.m.ui;
+      u.trackVector = TRACK_VECTOR[clamp(TRACK_VECTOR.indexOf(u.trackVector) + d, 0, TRACK_VECTOR.length - 1)];
+    }
+    return true;
+  }
+
+  ent() {}
+
+  clr() {
+    this.m.close();
+  }
+
+  toggleCrsr() {
+    this.m.close();
+  }
+
+  draw() {
+    const t = this.m.ui.trackVector;
+    const values: Record<number, string> = { 0: this.s.orientation, 3: t === 0 ? "Off" : t < 120 ? `On ${t} sec` : `On ${t / 60} min` };
+    SETUP_ROWS.forEach((_, i) => {
+      this.p.text(`Value${i}`, values[i] ?? "");
+      this.m.hl.set(this.p.el(`Value${i}`), i === this.at);
+    });
+  }
+}
+
 export interface Pages {
   groups: MfdPage[][];
   directTo: DirectToPage;
   procedures: ProceduresPage;
   waypointEntry: WaypointEntryPage;
   pageMenu: PageMenuPage;
+  mapSetup: MapSetupPage;
 }
 
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
@@ -1254,7 +1329,7 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
   const waypointEntry = new WaypointEntryPage(m, screen);
   const make = (name: string): MfdPage => {
     switch (name) {
-      case "NavigationMap": return new NavigationMapPage(m, name, screen);
+      case "NavigationMap": return new NavigationMapPage(m, name, screen, () => mapSetup);
       case "TrafficMap": return new TrafficPage(m, name, screen);
       case "NearestAirports": return new NearestAirportsPage(m, name, screen);
       case "NearestVOR": return new NearestNavPage(m, name, screen, "VOR");
@@ -1277,6 +1352,7 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
   const directTo = new DirectToPage(m, screen);
   const procedures = new ProceduresPage(m, screen, roots[roots.length - 1].parentNode as Element);
   const pageMenu = new PageMenuPage(m, screen, roots[roots.length - 1].parentNode as Element);
+  const mapSetup = new MapSetupPage(m, screen, roots[roots.length - 1].parentNode as Element);
   for (const r of roots) r.style.display = "none";
-  return { groups, directTo, procedures, waypointEntry, pageMenu };
+  return { groups, directTo, procedures, waypointEntry, pageMenu, mapSetup };
 }

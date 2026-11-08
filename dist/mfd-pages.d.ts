@@ -20,6 +20,7 @@ export interface MfdUi {
     menuVisible: boolean;
     /** The shared softkey menu showing: "top" (the page's own), "engine", "lean", "system" or "map". */ menu: string;
     /** Declutter level, 0 to 3. */ dcltr: number;
+    /** MAP SETUP's track vector look-ahead, seconds; 0 is off. */ trackVector: number;
     /** Airways key state, 0 to 3. */ airways: number;
     /** MAP menu toggles. */ layers: Record<string, boolean>;
     /** Waypoints entered in DIRECT TO and WAYPOINT ENTRY, latest first: their RECENT list. */ recent: string[];
@@ -146,12 +147,23 @@ export declare class PageMenuPage extends MfdPage {
     toggleCrsr(): void;
     draw(): void;
 }
+export declare class MapSetupPage extends MfdPage {
+    private at;
+    constructor(m: Mfd, screen: SVGGElement, after: Element);
+    open(): this;
+    fms(outer: boolean, d: number): boolean;
+    ent(): void;
+    clr(): void;
+    toggleCrsr(): void;
+    draw(): void;
+}
 export interface Pages {
     groups: MfdPage[][];
     directTo: DirectToPage;
     procedures: ProceduresPage;
     waypointEntry: WaypointEntryPage;
     pageMenu: PageMenuPage;
+    mapSetup: MapSetupPage;
 }
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
 export declare function makePages(m: Mfd, screen: SVGGElement): Pages;

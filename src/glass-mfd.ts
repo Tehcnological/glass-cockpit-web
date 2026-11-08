@@ -12,7 +12,7 @@ import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay, type DisplayOptions } from "./display.js";
 import { Page, clamp, deg3, mod } from "./page.js";
 import { panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget, type PanView } from "./pan.js";
-import { drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
+import { drawMap, mapGroup, mapUp, rangeLabel, stepRange, type Airspace, type LatLon, type MapGeometry, type MapPoint, type Orientation } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import type { CdiSource } from "./glass-pfd.js";
 import { adjust, bezelInput, type Input, type Knobs } from "./bezel.js";
@@ -46,7 +46,7 @@ export interface MfdState extends Knobs {
   lon: number;
   /** Magnetic variation, degrees east positive: bearings on the pages are magnetic. */ magVar: number;
   /** Map range, nm from the aircraft to the edge of the map's short side. */ range: number;
-  orientation: "NORTH UP" | "HDG UP";
+  /** NORTH UP, TRK UP, DTK UP or HDG UP; MAP SETUP changes it and reports it. */ orientation: Orientation;
   /** Map symbols, and the VORs, NDBs and fixes the NRST and WPT pages list (`name`, `freq` and the rest fill in their details). */
   points: MapPoint[];
   airspaces: Airspace[];
@@ -112,7 +112,7 @@ export class GlassMfd {
   private timers = { menu: 0, load: 0 };
   private hl = new Highlighter();
   private ui: MfdUi = {
-    group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, airways: 0,
+    group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, trackVector: 0, airways: 0,
     layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false }, recent: [], pan: null,
   };
 
@@ -374,7 +374,7 @@ export class GlassMfd {
     this.updateEIS(s.engine);
     // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO and
     // WAYPOINT ENTRY are windows over the page, which stays drawn.
-    const base = page === this.pages.directTo || page === this.pages.waypointEntry || page === this.pages.pageMenu ? under : page;
+    const base = page === this.pages.directTo || page === this.pages.waypointEntry || page === this.pages.pageMenu || page === this.pages.mapSetup ? under : page;
     const mode = base.navMap;
     this.nav.show("Group", mode !== null);
     this.map.style.display = mode === "full" ? "inline" : "none";
@@ -385,7 +385,7 @@ export class GlassMfd {
       this.nav.text("OrientationDisplay", s.orientation);
       const pan = mode === "full" ? this.ui.pan : null;
       const center = pan?.center ?? base.center() ?? undefined;
-      drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center, up: pan?.up }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
+      drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center, up: pan?.up, trackVector: mode === "full" ? this.ui.trackVector : 0 }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
     }
     this.drawPan(mode === "full");
     this.frame.textContent = base.frame();
@@ -395,7 +395,7 @@ export class GlassMfd {
 
   private panView(): PanView {
     const s = this.state;
-    const up = this.ui.pan?.up ?? (s.orientation === "HDG UP" ? s.heading : 0);
+    const up = this.ui.pan?.up ?? mapUp(s);
     return { w: MAP_FULL.w, h: MAP_FULL.h, scale: MAP_FULL.px / s.range, up, lat: s.lat, bar: PAN_FONT * 2.7 };
   }
 

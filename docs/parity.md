@@ -112,7 +112,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 
 | Page | Options | Status |
 | --- | --- | --- |
-| Navigation map | Map Setup (orientation, auto zoom, track vector, wind vector, nav range ring, fuel range, field of view, topo, airways, land, aviation, traffic, weather groups), Declutter, Measure Bearing/Distance, Show/Hide Profile View, Show Chart | Partial: Declutter, Measure Bearing/Distance (no elevation) |
+| Navigation map | Map Setup (orientation, auto zoom, track vector, wind vector, nav range ring, fuel range, field of view, topo, airways, land, aviation, traffic, weather groups), Declutter, Measure Bearing/Distance, Show/Hide Profile View, Show Chart | Partial: Map Setup (Map group: orientation, track vector), Declutter, Measure Bearing/Distance (no elevation) |
 | Active flight plan | Activate Leg, Load Waypoint, Store Flight Plan, Invert Flight Plan, Delete Flight Plan, Create ATK Offset Waypoint, Parallel Track, Closest Point of FPL, Collapse/Expand Airways, Hold At Wpt, Hold At Present Position, Remove Departure/Arrival/Approach, Enable/Cancel VNV, VNV Direct-To, Select VNV Profile Window | Partial: Invert, Delete, Remove Approach |
 | Flight plan catalog | Create New, Activate, Invert & Activate, Copy, Edit, Delete, Delete All | Missing (no stored plans) |
 | Direct-to window | Cancel Direct-To NAV, Clear Vertical Constraints | Partial: Cancel Direct-To NAV (no VNV) |

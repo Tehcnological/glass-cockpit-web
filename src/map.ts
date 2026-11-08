@@ -23,13 +23,24 @@ export interface LatLon { lat: number; lon: number }
 /** Class B, C or D airspace: outlines as rings of [lat, lon]. */
 export interface Airspace { cls: "B" | "C" | "D"; rings: [number, number][][] }
 
+/** Map orientations, as MAP SETUP offers them (Pilot's Guide); FG1000 has north up and heading up. */
+export const ORIENTATIONS = ["NORTH UP", "TRK UP", "DTK UP", "HDG UP"] as const;
+export type Orientation = (typeof ORIENTATIONS)[number];
+
+/** MAP SETUP's track vector look-ahead times, seconds; 0 is off (Pilot's Guide: 30 s to 20 min, 60 s the default). */
+export const TRACK_VECTOR = [0, 30, 60, 120, 300, 600, 1200];
+
 export interface MapData {
   /** Magnetic heading, degrees. */ heading: number;
   /** Aircraft position, decimal degrees. */ lat: number;
   lon: number;
   /** Map range, nm from the aircraft to the edge of the map's short side. */ range: number;
-  orientation: "NORTH UP" | "HDG UP";
+  orientation: Orientation;
   /** The map's rotation, degrees, in place of the orientation's: pan mode holds it still. */ up?: number;
+  /** For TRK UP, DTK UP and the track vector: ground track and desired track, degrees, and groundspeed, knots. */ track?: number;
+  dtk?: number | null;
+  groundspeed?: number;
+  /** Track vector look-ahead, seconds; 0 or absent draws none. */ trackVector?: number;
   points: MapPoint[];
   airspaces: Airspace[];
   /** Flight plan in order: ids of `points`, or points of its own (approach fixes). */ route: (string | MapPoint)[];
@@ -68,6 +79,22 @@ const AIRSPACE: Record<Airspace["cls"], string> = {
 const NS = "http://www.w3.org/2000/svg";
 const NM_PER_DEG = 60;
 
+/** The map's rotation, degrees: pan mode's held rotation, else the orientation's. DTK UP with no desired track turns to the track. */
+export function mapUp(s: Pick<MapData, "orientation" | "heading" | "up" | "track" | "dtk">): number {
+  if (s.up !== undefined) return s.up;
+  if (s.orientation === "HDG UP") return s.heading;
+  if (s.orientation === "TRK UP") return s.track ?? s.heading;
+  if (s.orientation === "DTK UP") return s.dtk ?? s.track ?? s.heading;
+  return 0;
+}
+
+/** Where the track vector ends: the aircraft's position after `secs` along its track at its groundspeed. */
+export function trackVectorEnd(s: LatLon & { track: number; groundspeed: number }, secs: number): LatLon {
+  const nm = (s.groundspeed * secs) / 3600;
+  const r = (s.track * Math.PI) / 180;
+  return { lat: s.lat + (nm * Math.cos(r)) / NM_PER_DEG, lon: s.lon + (nm * Math.sin(r)) / (NM_PER_DEG * Math.cos((s.lat * Math.PI) / 180)) };
+}
+
 /** A group in screen coordinates, clipped to the map window, inserted before `before` (in whatever group holds it). */
 export function mapGroup(screen: SVGGElement, before: Element, m: MapGeometry): SVGGElement {
   const parent = before.parentNode as SVGGElement;
@@ -81,7 +108,7 @@ export function mapGroup(screen: SVGGElement, before: Element, m: MapGeometry): 
 
 /** Draws the map into `g`, which must be in screen coordinates (see `mapGroup`). */
 export function drawMap(g: SVGGElement, s: MapData, m: MapGeometry, declutter = 0): void {
-  const up = s.up ?? (s.orientation === "HDG UP" ? s.heading : 0);
+  const up = mapUp(s);
   const scale = m.px / s.range;
 const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer] && declutter <= DECLUTTER[layer];
   const cos = Math.cos((s.lat * Math.PI) / 180);
@@ -118,6 +145,12 @@ const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer]
     if (x < m.x - 150 || x > m.x + m.w + 150 || y < m.y - 150 || y > m.y + m.h + 150) continue;
     const active = route[s.activeLeg]?.id === p.id;
     out += `<g transform="translate(${x} ${y})">${SYMBOLS[p.type](p.id, active)}</g>`;
+  }
+  // Track vector: a light blue line to where the aircraft will be (Pilot's Guide). shortcut: always straight; the real
+  // one bends through up to 90 degrees of a turn at 30 and 60 s. Bend it when the MFD gets a turn rate.
+  if (s.trackVector && s.groundspeed && s.track !== undefined) {
+    const [[x1, y1], [x2, y2]] = [xy(s), xy(trackVectorEnd({ lat: s.lat, lon: s.lon, track: s.track, groundspeed: s.groundspeed }, s.trackVector))];
+    out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#00ffff" stroke-width="2"/>`;
   }
   // APS_FG1000: the ownship icon at 30%, pointing along the heading relative to the map.
   const [ax, ay] = xy(s);

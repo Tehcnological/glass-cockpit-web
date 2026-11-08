@@ -4,6 +4,7 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 
 ## Unreleased
 
+- MFD: MAP SETUP from the navigation map's PAGE MENU: ORIENTATION and TRACK VECTOR (Pilot's Guide). `orientation` gains TRK UP and DTK UP. The demo's heading-up checkbox is gone; MAP SETUP sets it.
 - MFD: the navigation map's Measure Bearing/Distance (Pilot's Guide), built on pan mode.
 - Demo: a round red DISPLAY BACKUP button between the units (`display-backup.ts`); the displays have no reversionary mode yet.
 - PFD and MFD: MENU in DIRECT TO offers Cancel Direct-To NAV, which resumes the flight plan on the closest leg (Pilot's Guide). PFD state gains `vtf`, which dims it during vector-to-final.

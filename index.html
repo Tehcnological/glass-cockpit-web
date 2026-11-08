@@ -46,7 +46,7 @@
   for (const [k, [min, max, v]] of Object.entries(ctl)) {
     f.insertAdjacentHTML("beforeend", `<label>${k}<input type="range" name="${k}" min="${min}" max="${max}" step="${k === "selectedAlt" ? 100 : k === "vsi" ? 50 : max - min > 10 ? 1 : 0.1}" value="${v}"><output>${v}</output></label>`);
   }
-  f.insertAdjacentHTML("beforeend", `<label>hdg up<input type="checkbox" name="hdgUp"></label><label>message<input type="checkbox" name="alert"></label><label>fail AHRS<input type="checkbox" name="ahrs"></label><label>fail ADC<input type="checkbox" name="adc"></label>`);
+  f.insertAdjacentHTML("beforeend", `<label>message<input type="checkbox" name="alert"></label><label>fail AHRS<input type="checkbox" name="ahrs"></label><label>fail ADC<input type="checkbox" name="adc"></label>`);
   const update = () => {
     const s = Object.fromEntries([...new FormData(f)].map(([k, v]) => [k, Number(v)]));
     f.querySelectorAll("label").forEach((l) => l.querySelector("output") && (l.querySelector("output").value = l.querySelector("input").value));
@@ -54,7 +54,6 @@
       failed: { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked }, cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 } });
     mfd.set({
       heading: s.heading, headingBug: s.headingBug, course: s.course, selectedAlt: s.selectedAlt, alt: s.alt, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
-      orientation: f.hdgUp.checked ? "HDG UP" : "NORTH UP",
       engine: { rpm: s.rpm, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 },
     });
   };

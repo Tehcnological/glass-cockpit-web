@@ -1,5 +1,5 @@
 import { type DisplayOptions } from "./display.js";
-import { type Airspace, type LatLon, type MapPoint } from "./map.js";
+import { type Airspace, type LatLon, type MapPoint, type Orientation } from "./map.js";
 import type { CdiSource } from "./glass-pfd.js";
 import { type Knobs } from "./bezel.js";
 import type { Airport, Procedure, Station } from "./nav.js";
@@ -26,7 +26,7 @@ export interface MfdState extends Knobs {
     lon: number;
     /** Magnetic variation, degrees east positive: bearings on the pages are magnetic. */ magVar: number;
     /** Map range, nm from the aircraft to the edge of the map's short side. */ range: number;
-    orientation: "NORTH UP" | "HDG UP";
+    /** NORTH UP, TRK UP, DTK UP or HDG UP; MAP SETUP changes it and reports it. */ orientation: Orientation;
     /** Map symbols, and the VORs, NDBs and fixes the NRST and WPT pages list (`name`, `freq` and the rest fill in their details). */
     points: MapPoint[];
     airspaces: Airspace[];
