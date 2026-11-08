@@ -20,6 +20,14 @@ test("heading, course, baro, altitude", () => {
   assert.deepEqual(go("ALT_OUTER", -1), { selectedAlt: 2000 });
 });
 
+test("selected altitude stays on 100 ft steps", () => {
+  const off = (control, value, selectedAlt) => adjust({ control, value }, { ...k, selectedAlt }, sel);
+  assert.deepEqual(off("ALT_INNER", 1, 4037), { selectedAlt: 4100 });
+  assert.deepEqual(off("ALT_INNER", -1, 4037), { selectedAlt: 3900 });
+  assert.deepEqual(off("ALT_OUTER", 1, 4050), { selectedAlt: 5100 });
+  assert.deepEqual(off("ALT_INNER", -1, 30), { selectedAlt: 0 });
+});
+
 test("frequencies wrap within their band", () => {
   assert.equal(go("NAV_OUTER").radios.nav1.standby, 108.95);
   assert.equal(go("NAV_INNER").radios.nav1.standby, 117);

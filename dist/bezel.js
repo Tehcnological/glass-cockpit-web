@@ -92,7 +92,8 @@ export function adjust({ control, value }, k, sel, toStation) {
         case "BARO": return { baro: Math.round(k.baro * 100 + d) / 100 };
         case "ALT_INNER":
         case "ALT_OUTER": {
-            const from = k.selectedAlt ?? Math.round(k.alt / 100) * 100; // the real unit always has one; start at the altitude
+            // The real unit always has one (start at the altitude) and keeps it on 100 ft steps, whatever the host set.
+            const from = Math.round((k.selectedAlt ?? k.alt) / 100) * 100;
             return { selectedAlt: Math.max(0, from + d * (control === "ALT_INNER" ? 100 : 1000)) };
         }
     }
