@@ -5,11 +5,11 @@ import { clipRect } from "./page.js";
 export const ORIENTATIONS = ["NORTH UP", "TRK UP", "DTK UP", "HDG UP"];
 /** MAP SETUP's track vector look-ahead times, seconds; 0 is off (Pilot's Guide: 30 s to 20 min, 60 s the default). */
 export const TRACK_VECTOR = [0, 30, 60, 120, 300, 600, 1200];
-// Pilot's Guide, Table 5-4: the map range at or under which each airway type shows.
-const AIRWAY_RANGE = { LO: 200, HI: 300 };
+// Pilot's Guide, Table 5-4: the map range at or under which each airway type shows by default; MAP SETUP changes it.
+export const AIRWAY_RANGE = { LO: 200, HI: 300 };
 /** The airways the AIRWAYS key shows at `range`: 0 none, 1 all, 2 low, 3 high. High ones last, drawn over the low. */
-export function shownAirways(all, mode, range) {
-    const want = (a) => (mode === 1 || (mode === 2 && a.type === "LO") || (mode === 3 && a.type === "HI")) && range <= AIRWAY_RANGE[a.type];
+export function shownAirways(all, mode, range, limits = AIRWAY_RANGE) {
+    const want = (a) => (mode === 1 || (mode === 2 && a.type === "LO") || (mode === 3 && a.type === "HI")) && range <= limits[a.type];
     return [...all.filter((a) => a.type === "LO"), ...all.filter((a) => a.type === "HI")].filter(want);
 }
 /** Profile View's scales: half the map range (none under 1 nm), five distance marks, and four altitude steps with the

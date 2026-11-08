@@ -12,7 +12,7 @@ import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay, type DisplayOptions } from "./display.js";
 import { Page, clamp, mod } from "./page.js";
 import { panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget, type PanView } from "./pan.js";
-import { drawMap, mapGroup, mapUp, profileView, rangeLabel, shownAirways, stepRange, type Airspace, type Airway, type LatLon, type MapGeometry, type MapPoint, type Orientation } from "./map.js";
+import { AIRWAY_RANGE, drawMap, mapGroup, mapUp, profileView, rangeLabel, shownAirways, stepRange, type Airspace, type Airway, type LatLon, type MapGeometry, type MapPoint, type Orientation } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import type { CdiSource } from "./glass-pfd.js";
 import { adjust, bezelInput, type Input, type Knobs } from "./bezel.js";
@@ -121,7 +121,7 @@ export class GlassMfd {
   /** Once a second: the Utility page's trip statistics, and the AUX pages' clocks. */ private clock: ReturnType<typeof setInterval>;
   private hl = new Highlighter();
   private ui: MfdUi = {
-    group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, trackVector: 0, airways: 0,
+    group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, trackVector: 0, airways: 0, airwayRange: { ...AIRWAY_RANGE },
     layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false }, recent: [], pan: null, setup: setupDefaults(),
   };
 
@@ -491,7 +491,7 @@ export class GlassMfd {
 
   /** The airways the AIRWAYS key shows at this range. */
   private airways() {
-    return shownAirways(this.state.airways, this.ui.airways, this.state.range);
+    return shownAirways(this.state.airways, this.ui.airways, this.state.range, this.ui.airwayRange);
   }
 
   // Profile View (Pilot's Guide; FG1000 has none): a window under the navigation map with an altitude scale, the

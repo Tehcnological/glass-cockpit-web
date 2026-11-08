@@ -2,7 +2,8 @@
 // draws into its FG1000 SVG (src/fg1000/<page>.svg, prefix <page>) and takes the FMS knob, CRSR, ENT and CLR while its
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
-import { ORIENTATIONS, TRACK_VECTOR, mapGroup, mapUp, rangeLabel } from "./map.js";
+import { mapGroup, mapUp, rangeLabel } from "./map.js";
+import { SETUP_GROUPS } from "./map-setup.js";
 import { bearingDistance, cancelDirectTo, cancelParallel, directToPatch, findPoint, isParallel, latLon, nearest, planEntry, planName, routePoint, vtfEdit } from "./nav.js";
 import { FPL_TOOLS, FplTool, toolEnabled } from "./fpl-tools.js";
 import { BLANK, CYAN, IdEntry, ListView, NS, dimKey, esc, firstRow, key } from "./ui.js";
@@ -1336,15 +1337,14 @@ export class PageMenuPage extends MfdPage {
         }
     }
 }
-// MAP SETUP (Pilot's Guide), the navigation map's settings: a window like the PAGE MENU, with its Map group only.
-// ORIENTATION and TRACK VECTOR work; the rest are grey (no terrain, wind, fuel or synthetic vision data here). The outer
-// FMS knob moves the cursor, the inner changes the setting; CLR, MENU or pushing the FMS knob closes it.
-// shortcut: a setting changes as the knob turns (the real unit takes it on ENT), and TRACK VECTOR's on/off and
-// look-ahead time are one field.
-const SETUP_ROWS = ["ORIENTATION", "AUTO ZOOM", "LAND DATA", "TRACK VECTOR", "WIND VECTOR", "NAV RANGE RING", "TOPO DATA", "FUEL RNG (RSV)", "FIELD OF VIEW"];
-const SETUP_ON = [0, 3];
+// MAP SETUP (Pilot's Guide), the navigation map's settings: a window like the PAGE MENU, opening with the cursor on its
+// GROUP (Map, Airways, Profile; see map-setup.ts). The small FMS knob changes the group or the setting under the cursor,
+// the large knob moves the cursor; settings this package can't carry out are grey. CLR, MENU or pushing the FMS knob
+// closes it. shortcut: a setting changes as the knob turns (the real unit takes it on ENT).
+const SETUP_ROWS = Math.max(...SETUP_GROUPS.map((g) => g.rows.length));
 export class MapSetupPage extends MfdPage {
-    at = 0;
+    group = 0;
+    /** The row under the cursor, -1 for GROUP. */ at = -1;
     constructor(m, screen, after) {
         super(m, "MapSetup", screen);
         const g = document.createElementNS(NS, "g");
@@ -1353,31 +1353,37 @@ export class MapSetupPage extends MfdPage {
         const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px`;
         const text = (t, x, y, anchor = "start", id = "", fill = "#ffffff") => `<text ${id && `id="MapSetup${id}"`} x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style}">${t}</text>`;
         let rows = "";
-        SETUP_ROWS.forEach((label, i) => {
-            rows += text(label, 744, 150 + i * 27, "start", "", SETUP_ON.includes(i) ? "#ffffff" : "#808080") + text("", 1014, 150 + i * 27, "end", `Value${i}`, CYAN);
-        });
+        for (let i = 0; i < SETUP_ROWS; i++)
+            rows += text("", 744, 150 + i * 27, "start", `Label${i}`) + text("", 1014, 150 + i * 27, "end", `Value${i}`, CYAN);
         g.innerHTML =
             `<rect x="724.5" y="53.5" width="310" height="390" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>` +
-                text("MAP SETUP", 874, 82, "middle") + text("GROUP", 740, 115) + text("Map", 1014, 115, "end", "", CYAN) +
-                `<rect x="734.5" y="120.5" width="290" height="${SETUP_ROWS.length * 27 + 12}" style="fill:none;stroke:#808080;stroke-width:1"/>` +
+                text("MAP SETUP", 874, 82, "middle") + text("GROUP", 740, 115) + text("", 1014, 115, "end", "Group", CYAN) +
+                `<rect x="734.5" y="120.5" width="290" height="${SETUP_ROWS * 27 + 12}" style="fill:none;stroke:#808080;stroke-width:1"/>` +
                 text("Press the FMS CRSR knob to", 874, 395, "middle") + text("return to base page", 874, 420, "middle") + rows;
         after.after(g);
         this.root = g;
     }
     open() {
-        [this.at, this.crsr] = [SETUP_ON[0], true];
+        [this.at, this.crsr] = [-1, true];
         return this;
     }
+    settings() {
+        const u = this.m.ui;
+        return { orientation: this.s.orientation, trackVector: u.trackVector, airways: u.airways, airwayRange: u.airwayRange };
+    }
     fms(outer, d) {
-        if (outer)
-            this.at = SETUP_ON[Math.max(0, Math.min(SETUP_ON.length - 1, SETUP_ON.indexOf(this.at) + d))];
-        else if (this.at === 0) {
-            const i = ORIENTATIONS.indexOf(this.s.orientation);
-            this.m.change({ orientation: ORIENTATIONS[clamp(i + d, 0, ORIENTATIONS.length - 1)] });
+        const rows = SETUP_GROUPS[this.group].rows;
+        if (outer) {
+            const stops = [-1, ...rows.flatMap((r, i) => (r.step ? [i] : []))];
+            this.at = stops[clamp(stops.indexOf(this.at) + d, 0, stops.length - 1)];
         }
+        else if (this.at === -1)
+            this.group = clamp(this.group + d, 0, SETUP_GROUPS.length - 1);
         else {
-            const u = this.m.ui;
-            u.trackVector = TRACK_VECTOR[clamp(TRACK_VECTOR.indexOf(u.trackVector) + d, 0, TRACK_VECTOR.length - 1)];
+            const { orientation, ...rest } = rows[this.at].step(this.settings(), d);
+            if (orientation)
+                this.m.change({ orientation });
+            Object.assign(this.m.ui, rest);
         }
         return true;
     }
@@ -1389,12 +1395,16 @@ export class MapSetupPage extends MfdPage {
         this.m.close();
     }
     draw() {
-        const t = this.m.ui.trackVector;
-        const values = { 0: this.s.orientation, 3: t === 0 ? "Off" : t < 120 ? `On ${t} sec` : `On ${t / 60} min` };
-        SETUP_ROWS.forEach((_, i) => {
-            this.p.text(`Value${i}`, values[i] ?? "");
+        const g = SETUP_GROUPS[this.group];
+        const s = this.settings();
+        this.p.text("Group", g.name);
+        this.m.hl.set(this.p.el("Group"), this.at === -1);
+        for (let i = 0; i < SETUP_ROWS; i++) {
+            const r = g.rows[i];
+            this.p.text(`Label${i}`, r?.label ?? "", r?.step ? "#ffffff" : "#808080");
+            this.p.text(`Value${i}`, r?.step ? r.value(s) : "");
             this.m.hl.set(this.p.el(`Value${i}`), i === this.at);
-        });
+        }
     }
 }
 /** The window Closest Point of FPL, Parallel Track and Create ATK Offset Waypoint open over the flight plan, in

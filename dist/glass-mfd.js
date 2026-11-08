@@ -12,7 +12,7 @@ import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay } from "./display.js";
 import { Page, clamp, mod } from "./page.js";
 import { panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget } from "./pan.js";
-import { drawMap, mapGroup, mapUp, profileView, rangeLabel, shownAirways, stepRange } from "./map.js";
+import { AIRWAY_RANGE, drawMap, mapGroup, mapUp, profileView, rangeLabel, shownAirways, stepRange } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
 import { BLANK, Highlighter, NS, dimKey, key } from "./ui.js";
@@ -67,7 +67,7 @@ export class GlassMfd {
     /** Once a second: the Utility page's trip statistics, and the AUX pages' clocks. */ clock;
     hl = new Highlighter();
     ui = {
-        group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, trackVector: 0, airways: 0,
+        group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, trackVector: 0, airways: 0, airwayRange: { ...AIRWAY_RANGE },
         layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false }, recent: [], pan: null, setup: setupDefaults(),
     };
     /** The container must be visible: layout is measured once here. */
@@ -438,7 +438,7 @@ export class GlassMfd {
     }
     /** The airways the AIRWAYS key shows at this range. */
     airways() {
-        return shownAirways(this.state.airways, this.ui.airways, this.state.range);
+        return shownAirways(this.state.airways, this.ui.airways, this.state.range, this.ui.airwayRange);
     }
     // Profile View (Pilot's Guide; FG1000 has none): a window under the navigation map with an altitude scale, the
     // aircraft at its altitude, and the distance scale, half the map range. shortcut: no terrain or obstacle data, so

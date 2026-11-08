@@ -24,6 +24,7 @@ export interface MfdUi {
     /** Declutter level, 0 to 3. */ dcltr: number;
     /** MAP SETUP's track vector look-ahead, seconds; 0 is off. */ trackVector: number;
     /** Airways key state, 0 to 3. */ airways: number;
+    /** MAP SETUP's airway ranges: the largest map range, nm, each type shows at. */ airwayRange: Record<"LO" | "HI", number>;
     /** MAP menu toggles. */ layers: Record<string, boolean>;
     /** Waypoints entered in DIRECT TO and WAYPOINT ENTRY, latest first: their RECENT list. */ recent: string[];
     /** Pan mode on the navigation map (joystick push), or null. */ pan: Pan | null;
@@ -156,9 +157,11 @@ export declare class PageMenuPage extends MfdPage {
     draw(): void;
 }
 export declare class MapSetupPage extends MfdPage {
-    private at;
+    private group;
+    /** The row under the cursor, -1 for GROUP. */ private at;
     constructor(m: Mfd, screen: SVGGElement, after: Element);
     open(): this;
+    private settings;
     fms(outer: boolean, d: number): boolean;
     ent(): void;
     clr(): void;
