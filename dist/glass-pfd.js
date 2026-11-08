@@ -102,8 +102,10 @@ export class GlassPfd {
         const frame = screenBox(screen, this.p.el("PFD-Map-bg"));
         const half = Math.min(frame.width, frame.height) / 2;
         this.insetGeom = { x: frame.x, y: frame.y, w: frame.width, h: frame.height, cx: frame.x + frame.width / 2, cy: frame.y + frame.height / 2, px: half };
-        this.inset = mapGroup(screen, this.p.el("PFD-Map-Display").nextElementSibling, this.insetGeom); // over the frame's black fill
-        this.panLayer = mapGroup(screen, this.p.el("PFD-Map-Display").nextElementSibling, this.insetGeom);
+        // Both go over the frame's black fill, before the same node, so the pan layer lands above the map.
+        const above = this.p.el("PFD-Map-Display").nextElementSibling;
+        this.inset = mapGroup(screen, above, this.insetGeom);
+        this.panLayer = mapGroup(screen, above, this.insetGeom);
         // TMR/REF and ALERTS open where FG1000 puts the NRST window.
         this.winBox = screenBox(screen, this.nrst.el("Group"));
         this.win = screen.appendChild(document.createElementNS(NS, "g"));
