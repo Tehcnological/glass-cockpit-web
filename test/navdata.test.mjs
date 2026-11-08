@@ -57,8 +57,20 @@ const withAwy = (seg = awy.AWY_SEG_ALT) => ({
   ...rows, NAV_BASE: [...rows.NAV_BASE, ...awy.NAV_BASE], FIX_BASE: [...rows.FIX_BASE, ...awy.FIX_BASE], AWY_SEG_ALT: seg,
 });
 
+const idsOf = (airways) => airways.map(([id, type, points]) => [id, type, points.map((p) => p[0])]);
+
 test("buildNasr builds airways from real 2026-10-29 AWY_SEG_ALT rows as AWY_BASE strings them", () => {
-  assert.deepEqual(buildNasr("2026-10-29", withAwy(), []).airways, fixture("awy-expected.json").airways);
+  assert.deepEqual(idsOf(buildNasr("2026-10-29", withAwy(), []).airways), fixture("awy-expected.json").airways);
+});
+
+test("buildNasr orders an airway's rows by POINT_SEQ, whatever order they come in", () => {
+  assert.deepEqual(buildNasr("2026-10-29", withAwy([...awy.AWY_SEG_ALT].reverse()), []).airways, buildNasr("2026-10-29", withAwy(), []).airways);
+});
+
+test("buildNasr keeps each airway point's type, so a fix sharing a VOR's id is not taken for it", () => {
+  const fix = copy(awy.FIX_BASE[0], { FIX_ID: "BXK" });
+  const q180 = buildNasr("2026-10-29", { ...withAwy(), FIX_BASE: [...withAwy().FIX_BASE, fix] }).airways.find((a) => a[0] === "Q180");
+  assert.deepEqual(q180[2], [["BXK", "VOR"], ["SATRN", "FIX"], ["WOBUG", "FIX"], ["DMN", "VOR"], ["EWM", "VOR"]]);
 });
 
 test("an airway breaks at a gap and at a point with no record; other routes are left out; Alaska ids stay apart", () => {
@@ -68,7 +80,7 @@ test("an airway breaks at a gap and at a point with no record; other routes are 
         : r);
   const v461 = seg.filter((r) => r.AWY_ID === "V461");
   seg.push(...v461.map((r) => copy(r, { AWY_ID: "TK502" })), ...v461.map((r) => copy(r, { AWY_LOCATION: "A" })));
-  assert.deepEqual(buildNasr("2026-10-29", withAwy(seg), []).airways, [
+  assert.deepEqual(idsOf(buildNasr("2026-10-29", withAwy(seg), []).airways), [
     ["J212", "HI", ["TFD", "BXK", "CULTS"]], ["J212", "HI", ["HRRBR", "CURIV", "DECAS", "PSP"]],
     ["Q180", "HI", ["BXK", "SATRN", "WOBUG", "DMN", "EWM"]],
     ["T310", "LO", ["TUS", "OBISE", "SULLI"]], ["T310", "LO", ["HOOVE", "NOCHI", "SSO", "SVC", "KEAPS", "TCS"]],
@@ -86,6 +98,43 @@ test("near returns the airway segments within range, whole, with every point the
   for (const a of out.airways) for (const id of a.points) assert.ok(ids.includes(id), id);
   assert.equal(out.points.find((p) => p.id === "WOBUG").type, "FIX"); // beyond the 40 nm fix cut
   assert.equal(new Set(ids).size, ids.length);
+});
+
+const record = (o) => ({ cycle: "2026-10-29", navaids: [], fixes: [], airports: [], stations: [], airspace: [], ...o });
+const noCifp = { cycle: "2026-10-29", procedures: [] };
+const last = (out, id) => out.points.filter((p) => p.id === id).at(-1); // the map takes an id's last point
+
+test("near resolves an airway point by its type: an NDB, not the fix sharing its id", () => {
+  const nasr = record({
+    navaids: [["ABC", "NDB", 37, -112, 350, "ABC", "NDB", "", "AZ", 10, ""]],
+    fixes: [["P2", 36.9, -112, "AZ"], ["ABC", 33.45, -111.9, "AZ"]],
+    airways: [["V1", "LO", [["P2", "FIX"], ["ABC", "NDB"]]]],
+  });
+  assert.deepEqual(near(nasr, noCifp, 33.4, -111.9, 10).airways, []); // the NDB is 215 nm north
+  const out = near(nasr, noCifp, 36.95, -112, 10);
+  assert.deepEqual(out.airways, [{ id: "V1", type: "LO", points: ["P2", "ABC"] }]);
+  assert.equal(last(out, "ABC").type, "NDB");
+});
+
+test("near adds an airway point beyond range even when an airport in range has its id", () => {
+  const nasr = record({
+    airports: [["WOB", "", "TEST", 33.4, -111.9, [], 1000, [], "", "AZ", ""]],
+    fixes: [["P1", 33.41, -111.9, "AZ"], ["WOB", 33.9, -111.9, "AZ"]],
+    airways: [["V1", "LO", [["P1", "FIX"], ["WOB", "FIX"]]]],
+  });
+  const out = near(nasr, noCifp, 33.4, -111.9, 10);
+  assert.deepEqual(out.airways, [{ id: "V1", type: "LO", points: ["P1", "WOB"] }]);
+  assert.equal(last(out, "WOB").type, "FIX");
+});
+
+test("near measures across 180 degrees longitude, and keeps an Alaska airway apart from one sharing its id", () => {
+  const nasr = record({
+    fixes: [["A", 52, 179.5, "AK"], ["B", 52, -179.5, "AK"], ["C", 52, 179.95, "AK"], ["D", 33.4, -111.9, "AZ"], ["E", 33.5, -111.9, "AZ"]],
+    airways: [["V1", "LO", [["A", "FIX"], ["B", "FIX"]]], ["V1", "LO", [["D", "FIX"], ["E", "FIX"]]]],
+  });
+  const out = near(nasr, noCifp, 52, -179.95, 10);
+  assert.deepEqual(out.airways, [{ id: "V1", type: "LO", points: ["A", "B"] }]);
+  assert.deepEqual(out.points.map((p) => p.id).sort(), ["A", "B", "C"]); // C is 4 nm west, across the line
 });
 
 // KPHX ILS RWY 08 from CIFP 2611, with its fixes.

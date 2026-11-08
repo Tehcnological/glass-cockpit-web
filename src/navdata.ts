@@ -15,8 +15,8 @@ export interface Nasr {
     /** feet */ elev: number, /** longest first */ runways: NasrRunway[], city: string, state: string, fuel: string][];
   stations: [type: Station["type"], id: string, name: string, lat: number, lon: number, freq: string][];
   airspace: [cls: "B" | "C" | "D", name: string, floor: number | "SFC", ceiling: number, rings: [lat: number, lon: number][][]][];
-  /** Points are ids in `navaids` or `fixes`, in order. Missing from records built before airways were. */
-  airways?: [id: Airway["id"], type: Airway["type"], points: string[]][];
+  /** Points in order, by id and which list has them. Missing from records built before airways were. */
+  airways?: [id: Airway["id"], type: Airway["type"], points: [id: string, type: "VOR" | "NDB" | "FIX"][]][];
 }
 
 export type CifpLeg = [fix: string, lat: number, lon: number, type: string, alt: string | null, role: ProcLeg["role"] | null];
@@ -25,18 +25,41 @@ export interface Cifp {
   procedures: [airport: string, name: string, transitions: Record<string, CifpLeg[]>, legs: CifpLeg[]][];
 }
 
+/** Degrees east from lon1 to lon2, the short way, so the Aleutians measure right across 180. */
+const dLon = (lon1: number, lon2: number) => ((((lon2 - lon1) % 360) + 540) % 360) - 180;
+
 /** Distance in nm, flat-earth: fine for picking what is on a map a few hundred nm across. */
 function nm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const x = (lon2 - lon1) * Math.cos(((lat1 + lat2) / 2) * (Math.PI / 180));
+  const x = dLon(lon1, lon2) * Math.cos(((lat1 + lat2) / 2) * (Math.PI / 180));
   return Math.hypot(x, lat2 - lat1) * 60;
 }
 
 /** Distance in nm from a position to the segment a-b, flat-earth as `nm`. */
 function toSegment(lat: number, lon: number, a: MapPoint, b: MapPoint): number {
   const k = Math.cos(lat * (Math.PI / 180));
-  const [ax, ay, dx, dy] = [(a.lon - lon) * k, a.lat - lat, (b.lon - a.lon) * k, b.lat - a.lat];
+  const [ax, ay, dx, dy] = [dLon(lon, a.lon) * k, a.lat - lat, dLon(a.lon, b.lon) * k, b.lat - a.lat];
   const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / (dx * dx + dy * dy || 1)));
   return Math.hypot(ax + t * dx, ay + t * dy) * 60;
+}
+
+const navPoint = ([id, type, la, lo, freq, name, kind, city, state, magVar, cls]: Nasr["navaids"][number]): MapPoint => ({
+  id, type, lat: la, lon: lo, name, kind, city, region: state, magVar, cls, freq: type === "VOR" ? freq.toFixed(2) : String(freq),
+});
+const fixPoint = ([id, la, lo, state]: Nasr["fixes"][number]): MapPoint => ({ id, type: "FIX", lat: la, lon: lo, region: state });
+
+// Every navaid and fix by "type id", built once per record: near() runs as the aircraft moves.
+const byKey = new WeakMap<Nasr, Map<string, MapPoint>>();
+function pointsOf(data: Nasr): Map<string, MapPoint> {
+  let at = byKey.get(data);
+  if (!at) {
+    // shortcut: two navaids of one type sharing an id (distant two-letter NDBs) resolve to the first; none is on a V, T,
+    // J or Q route in cycle 2026-10-29. Resolve by state if one ever is.
+    at = new Map();
+    for (const n of data.navaids) if (!at.has(`${n[1]} ${n[0]}`)) at.set(`${n[1]} ${n[0]}`, navPoint(n));
+    for (const f of data.fixes) if (!at.has(`FIX ${f[0]}`)) at.set(`FIX ${f[0]}`, fixPoint(f));
+    byKey.set(data, at);
+  }
+  return at;
 }
 
 /**
@@ -60,10 +83,6 @@ export function near(data: Nasr, cifp: Cifp, lat: number, lon: number, range: nu
     freqs: freqs.map(([use, freq]) => ({ use, freq })),
     approaches: procedures.filter((p) => p.airport === (icao || id)).map((p) => p.name),
   }));
-  const navPoint = ([id, type, la, lo, freq, name, kind, city, state, magVar, cls]: Nasr["navaids"][number]): MapPoint => ({
-    id, type, lat: la, lon: lo, name, kind, city, region: state, magVar, cls, freq: type === "VOR" ? freq.toFixed(2) : String(freq),
-  });
-  const fixPoint = ([id, la, lo, state]: Nasr["fixes"][number]): MapPoint => ({ id, type: "FIX", lat: la, lon: lo, region: state });
   const points: MapPoint[] = [
     ...airports.map((a): MapPoint => ({ id: a.id, type: "APT", lat: a.lat, lon: a.lon, name: a.name })),
     // The NRST pages list VORs and NDBs out to 200 nm.
@@ -72,27 +91,28 @@ export function near(data: Nasr, cifp: Cifp, lat: number, lon: number, range: nu
   ];
   const airways: Airway[] = [];
   if (data.airways?.length) {
-    // shortcut: an id names one point, the VOR where a VOR and an NDB share it (MAZ, ZFP, a mile apart); no two-letter
-    // NDB id shared by distant NDBs is on a V, T, J or Q route in cycle 2026-10-29. Resolve by state if one ever is.
-    const at = new Map(data.fixes.map((f) => [f[0], fixPoint(f)]));
-    for (const n of data.navaids) if (n[1] === "VOR" || !at.has(n[0])) at.set(n[0], navPoint(n));
-    for (const [id, type, ids] of data.airways) {
-      let run: string[] = [];
-      for (let i = 1; i <= ids.length; i++) { // the pass past the end closes the last run
-        const [p, q] = [at.get(ids[i - 1]), at.get(ids[i])];
+    const at = pointsOf(data);
+    const used: MapPoint[] = [];
+    for (const [id, type, pts] of data.airways) {
+      const ps = pts.map(([pid, t]) => at.get(`${t} ${pid}`));
+      let run: MapPoint[] = [];
+      for (let i = 1; i <= ps.length; i++) { // the pass past the end closes the last run
+        const [p, q] = [ps[i - 1], ps[i]];
         if (p && q && toSegment(lat, lon, p, q) <= range) {
-          if (!run.length) run.push(p.id);
-          run.push(q.id);
+          if (!run.length) run.push(p);
+          run.push(q);
         } else if (run.length) {
-          airways.push({ id, type, points: run });
+          airways.push({ id, type, points: run.map((r) => r.id) });
+          used.push(...run);
           run = [];
         }
       }
     }
-    const have = new Set(points.map((p) => p.id));
-    for (const id of airways.flatMap((a) => a.points)) {
-      if (!have.has(id)) points.push(at.get(id)!);
-      have.add(id);
+    // Added after the rest even when another point has the id (an airport, say), as the map takes an id's last point.
+    const have = new Set(points.map((p) => `${p.type} ${p.id}`));
+    for (const p of used) {
+      if (!have.has(`${p.type} ${p.id}`)) points.push(p);
+      have.add(`${p.type} ${p.id}`);
     }
   }
   const airspaces: Airspace[] = data.airspace
@@ -281,26 +301,28 @@ export function buildNasr(cycle: string, csv: NasrCsv, airspace: Nasr["airspace"
   }
 
   // Airways: Victor and T routes low, jet and Q routes high (AIM 5-3-4); colored, oceanic and helicopter (TK) routes are
-  // left out. Rows come ordered by AWY_ID, AWY_LOCATION, POINT_SEQ (FAA AWY layout). An airway breaks where NASR marks a
+  // left out. Rows are taken by AWY_ID, AWY_LOCATION, POINT_SEQ, the FAA's order, whatever order they come in. An airway breaks where NASR marks a
   // gap and where it names a point with no navaid or fix record here (border points, DME and TACAN points).
   const navKeys = new Set(navaids.map((n) => `${n[0]} ${n[1]}`));
   const fixIds = new Set(fixes.map((f) => f[0]));
   const FIX_TYPES = new Set(["CN", "MR", "MW", "NRS", "RADAR", "RP", "VFR", "WP"]); // FROM_PT_TYPE's fix types; the rest are navaids
   const airways: NonNullable<Nasr["airways"]> = [];
-  let run: string[] = [];
+  let run: [string, "VOR" | "NDB" | "FIX"][] = [];
   let [id, loc] = ["", ""]; // the airway `run` is on; Alaska and the contiguous U.S. reuse ids
   const close = () => {
     if (run.length > 1) airways.push([id, "VT".includes(id[0]) ? "LO" : "HI", run]);
     run = [];
   };
-  for (const r of csv.AWY_SEG_ALT ?? []) {
-    if (!/^[VTJQ]\d+$/.test(r.AWY_ID)) continue;
+  const seq = (csv.AWY_SEG_ALT ?? []).filter((r) => /^[VTJQ]\d+$/.test(r.AWY_ID)).sort((a, b) =>
+    a.AWY_ID.localeCompare(b.AWY_ID) || a.AWY_LOCATION.localeCompare(b.AWY_LOCATION) || Number(a.POINT_SEQ) - Number(b.POINT_SEQ));
+  for (const r of seq) {
     if (r.AWY_ID !== id || r.AWY_LOCATION !== loc) {
       close();
       [id, loc] = [r.AWY_ID, r.AWY_LOCATION];
     }
     const t = r.FROM_PT_TYPE.trim();
-    if (FIX_TYPES.has(t) ? fixIds.has(r.FROM_POINT) : navKeys.has(`${r.FROM_POINT} ${NAV_TYPES[t]}`)) run.push(r.FROM_POINT);
+    const type = FIX_TYPES.has(t) ? "FIX" : NAV_TYPES[t];
+    if (type === "FIX" ? fixIds.has(r.FROM_POINT) : navKeys.has(`${r.FROM_POINT} ${type}`)) run.push([r.FROM_POINT, type]);
     else close();
     if (r.AWY_SEG_GAP_FLAG === "Y") close();
   }

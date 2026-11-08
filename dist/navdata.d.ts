@@ -32,8 +32,8 @@ export interface Nasr {
     ][];
     stations: [type: Station["type"], id: string, name: string, lat: number, lon: number, freq: string][];
     airspace: [cls: "B" | "C" | "D", name: string, floor: number | "SFC", ceiling: number, rings: [lat: number, lon: number][][]][];
-    /** Points are ids in `navaids` or `fixes`, in order. Missing from records built before airways were. */
-    airways?: [id: Airway["id"], type: Airway["type"], points: string[]][];
+    /** Points in order, by id and which list has them. Missing from records built before airways were. */
+    airways?: [id: Airway["id"], type: Airway["type"], points: [id: string, type: "VOR" | "NDB" | "FIX"][]][];
 }
 export type CifpLeg = [fix: string, lat: number, lon: number, type: string, alt: string | null, role: ProcLeg["role"] | null];
 export interface Cifp {

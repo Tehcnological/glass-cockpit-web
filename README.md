@@ -190,7 +190,7 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
 | `near(nasr, cifp, lat, lon, range)` | The two above, a position and a range in nm | `{ points, airspaces, airports, stations, procedures, airways }` for `set()`. VORs, NDBs and stations reach 200 nm, as the NRST pages do. Airways come as their segments within range, whole, and their points beyond range join `points` |
 | `approachName(id)` | A CIFP approach id such as `R08-Y` | The chart name, `RNAV (GPS) Y RWY 08` |
 
-Airways are the Victor and T routes (`LO`) and the jet and Q routes (`HI`), as AIM 5-3-4 splits them; colored, oceanic and helicopter routes are left out. An airway breaks where NASR marks a gap and where a point has no navaid or fix record (border points, DME and TACAN points, navaids out of service), so every point `near` returns on one is in `points`.
+Airways are the Victor and T routes (`LO`) and the jet and Q routes (`HI`), as AIM 5-3-4 splits them; colored, oceanic and helicopter routes are left out. An airway breaks where NASR marks a gap and where a point has no navaid or fix record (border points, DME and TACAN points, navaids out of service), so every point `near` returns on one is in `points`. The record keeps each point's type (VOR, NDB or fix), so a fix and a navaid sharing an id are told apart; where another point in `points` has an airway point's id, the airway's comes last, the one the map uses. Rows may come in any order. Distances are measured the short way across 180 degrees longitude.
 
 ```js
 import { near } from "glass-cockpit-web/navdata";
