@@ -157,7 +157,7 @@ export class GlassPfd {
     synvis: { PATHWAY: false, "SYN TERR": false, "HRZN HDG": false, APTSIGNS: false } as Record<string, boolean>,
     wind: 0, meters: false, hpa: false, xpdrEdit: null as string | null, fpl: false,
     timer: { up: true, running: false, base: 0, since: 0 },
-    /** How many of `alerts` the ALERTS window has shown. */ alertsSeen: 0,
+    /** The messages the ALERTS window has shown. */ alertsSeen: [] as string[],
     /** PFD > DME shows the DME window; DME TUNING picks its NAV radio. */ dme: false, dmeSource: "NAV1" as "NAV1" | "NAV2",
   };
 
@@ -280,9 +280,9 @@ export class GlassPfd {
   private menu(): Key[] {
     const u = this.ui;
     const s = this.state;
-    // Messages are read while the window shows them; fewer messages than were read leaves none unread.
-    if (u.window === "ALERTS" || u.alertsSeen > s.alerts.length) u.alertsSeen = s.alerts.length;
-    const a = alertsKey(s.alerts.length, u.alertsSeen);
+    // Messages are read while the window shows them.
+    if (u.window === "ALERTS") u.alertsSeen = [...s.alerts];
+    const a = alertsKey(s.alerts, u.alertsSeen);
     // shortcut: the trainer flashes ADVISORY; it is lit steadily here, flash once there is a blink timer.
     const alerts = k(a.label, () => this.openWindow("ALERTS"), u.window === "ALERTS" || a.unread);
     const back = (to: Menu) => k("BACK", () => this.go(to));
@@ -290,10 +290,10 @@ export class GlassPfd {
     switch (u.menu) {
       case "top": {
         const cdi: CdiSource[] = ["GPS", "NAV1", "NAV2"];
-        // v13 trainer: OBS is dim with no flight plan (FG1000 always offers it).
+        // v13 trainer: OBS is dim with no flight plan (FG1000 always offers it); while on, it stays so it can be turned off.
         return [
           blank, k("INSET", () => { u.inset = true; this.go("inset"); }), blank, k("PFD", () => this.go("pfd")),
-          s.route.length ? k("OBS", () => this.change({ obs: !s.obs }), s.obs) : dimKey("OBS"),
+          s.route.length || s.obs ? k("OBS", () => this.change({ obs: !s.obs }), s.obs) : dimKey("OBS"),
           // PFDInstrumentsController.incrCDISource: GPS, NAV1, NAV2.
           k("CDI", () => this.change({ cdiSource: cdi[(cdi.indexOf(s.cdiSource) + 1) % 3] })),
           k("DME", () => this.openWindow("DME"), u.window === "DME"), k("XPDR", () => this.go("xpdr")), k("IDENT", () => this.ident()),

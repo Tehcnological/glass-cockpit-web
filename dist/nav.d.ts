@@ -76,22 +76,29 @@ export declare function planName(legs: (MapPoint | undefined)[]): string;
 /** Whether the GPS may fly an approach (by `approachName`'s names): RNAV (GPS) and GPS approaches. The rest ask NOT APPROVED FOR GPS. */
 export declare function gpsApproved(name: string): boolean;
 /** Vector-to-final makes the final approach fix active; an approach without one starts at its first leg. */
-export declare function vtfLeg(legs: {
+export declare function vtfLeg(legs: readonly (string | {
     role?: string;
-}[]): number;
+})[]): number;
 /**
  * Vector-to-final with the approach's fixes from `route[start]`: the final approach fix is active, its leg on the final
  * course. With no fix before the FAF to draw that leg from (or no FAF), it goes direct from the aircraft at `here`.
  */
-export declare function vtfPatch(start: number, legs: {
+export declare function vtfPatch(start: number, legs: readonly (string | {
     role?: string;
-}[], here: LatLon): {
+})[], here: LatLon): {
     activeLeg: number;
     directFrom: LatLon | null;
     vtf: true;
 };
-/** PROC's change to the flight plan: the approach `pts` after the en route waypoints, loaded, activated or vectors-to-final. */
-export declare function approachPatch(enroute: (string | MapPoint)[], pts: MapPoint[], mode: "load" | "activate" | "vectors", here: LatLon): {
+type Route = (string | MapPoint)[];
+/** The approach loaded in `route`: its fixes, which PROC marks with `approach`, from `start` on. */
+export declare function loadedApproach(route: Route): {
+    start: number;
+    name: string;
+    pts: Route;
+} | null;
+/** PROC's change to the flight plan: the approach `pts` after the en route waypoints (replacing one loaded before), loaded, activated or vectors-to-final. */
+export declare function approachPatch(route0: Route, pts: MapPoint[], mode: "load" | "activate" | "vectors", here: LatLon): {
     route: (string | MapPoint)[];
     vtf: boolean;
     activeLeg?: undefined;
@@ -107,3 +114,4 @@ export declare function approachPatch(enroute: (string | MapPoint)[], pts: MapPo
     vtf: true;
     route: (string | MapPoint)[];
 };
+export {};

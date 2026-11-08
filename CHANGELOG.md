@@ -10,7 +10,7 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 - Changed: the PFD's speed references start off, as the trainer has them. A host that relied on the bugs showing by default sets `vspeedsOn`. TMR/REF follows the trainer's REFERENCES layout.
 - PFD: `failed` shows FG1000's failure flags for attitude, airspeed, altitude, vertical speed and heading.
 - PFD: the DME window and DME TUNING. `dmeText` in `glass-cockpit-web/radio`.
-- MFD: PROC opens a PROCEDURES menu (activate vector-to-final, approach, missed approach), asks NOT APPROVED FOR GPS before activating a non-GPS approach, and activates vector-to-final with the VECTORS transition. New MFD state `vtf`; `gpsApproved` and `vtfLeg` exported.
+- MFD: PROC opens a PROCEDURES menu (activate vector-to-final, approach, missed approach), asks NOT APPROVED FOR GPS before activating a non-GPS approach, and activates vector-to-final with the VECTORS transition. New MFD state `vtf`, and route points PROC loads carry `approach`; `gpsApproved` and `vtfLeg` exported.
 - ALT knob: the selected altitude stays on 100 ft steps, even when the host set an odd value. The demo slider steps 100 ft.
 - `glass-cockpit-web/navdata`: NASR and CIFP transformations (`buildNasr`, `parseCifp`, `near`, `approachName`) moved from instrumentready.com, unchanged output. A separate export; the displays don't load it.
 - Community docs: CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, NOTICE, issue and PR templates. README reorganised.

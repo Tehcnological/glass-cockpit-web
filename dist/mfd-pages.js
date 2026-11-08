@@ -3,7 +3,7 @@
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, rangeLabel } from "./map.js";
-import { approachPatch, bearingDistance, gpsApproved, latLon, nearest, planName, routePoint, vtfPatch } from "./nav.js";
+import { approachPatch, bearingDistance, gpsApproved, latLon, loadedApproach, nearest, planName, routePoint, vtfPatch } from "./nav.js";
 import { BLANK, IdEntry, ListView, NS, dimKey, firstRow, key } from "./ui.js";
 // Surround.PAGE_GROUPS
 export const PAGE_GROUPS = [
@@ -667,7 +667,8 @@ class FlightPlanPage extends MapPage {
         const s = this.s;
         const route = [...s.route];
         route.splice(at, 0, s.points.includes(p) || p.type === "APT" ? p.id : p);
-        this.m.change({ route, activeLeg: at <= s.activeLeg && s.route.length ? s.activeLeg + 1 : s.activeLeg });
+        const activeLeg = at <= s.activeLeg && s.route.length ? s.activeLeg + 1 : s.activeLeg;
+        this.m.change({ route, activeLeg, vtf: s.vtf && route[activeLeg] === s.route[s.activeLeg] });
         this.rows.sel = at;
     }
     ent() {
@@ -681,7 +682,9 @@ class FlightPlanPage extends MapPage {
         if (!this.crsr || at >= s.route.length)
             return;
         const route = s.route.filter((_, i) => i !== at);
-        this.m.change({ route, activeLeg: clamp(at < s.activeLeg ? s.activeLeg - 1 : s.activeLeg, 0, Math.max(0, route.length - 1)) });
+        const activeLeg = clamp(at < s.activeLeg ? s.activeLeg - 1 : s.activeLeg, 0, Math.max(0, route.length - 1));
+        // Vector-to-final ends when its fix is deleted.
+        this.m.change({ route, activeLeg, vtf: s.vtf && route[activeLeg] === s.route[s.activeLeg] });
     }
     draw() {
         const s = this.s;
@@ -979,6 +982,8 @@ class ProceduresPage extends MfdPage {
     view = "menu";
     item = SELECT_APPROACH;
     yes = true;
+    /** The activation NOT APPROVED FOR GPS asks about, and the view NO goes back to. */
+    pending = null;
     grp = "APR";
     apr = 0;
     trans = 0;
@@ -1029,15 +1034,23 @@ class ProceduresPage extends MfdPage {
         const p = this.procs()[this.apr];
         return p ? Object.keys(p.transitions) : [];
     }
-    /** The loaded approach: its fixes are the route's own points, after the en route waypoints (see `load`). */
     loaded() {
-        const s = this.s;
-        const start = s.route.findIndex((r) => typeof r !== "string" && !s.points.includes(r));
-        return start < 0 ? null : { start, pts: s.route.slice(start) };
+        return loadedApproach(this.s.route);
     }
-    // The ACTIVATE items need a loaded approach; SELECT ARRIVAL and SELECT DEPARTURE are not ported.
+    // The ACTIVATE items need a loaded approach, ACTIVATE MISSED APPROACH one with missed approach legs; SELECT ARRIVAL
+    // and SELECT DEPARTURE are not ported.
     enabled(i) {
-        return i === SELECT_APPROACH || (i < SELECT_APPROACH && this.loaded() !== null);
+        const a = this.loaded();
+        if (i === 2)
+            return !!a?.pts.some((p) => typeof p !== "string" && p.role === "MISSED");
+        return i === SELECT_APPROACH || (i < SELECT_APPROACH && a !== null);
+    }
+    // v13 trainer: activating an approach the GPS may not fly asks NOT APPROVED FOR GPS first, YES selected.
+    confirm(name, act) {
+        if (gpsApproved(name))
+            return act();
+        this.pending = { act, from: this.view === "menu" ? "menu" : "select" };
+        [this.view, this.yes] = ["ask", true];
     }
     keys() {
         return this.m.topKeys();
@@ -1082,9 +1095,11 @@ class ProceduresPage extends MfdPage {
         if (this.view === "menu")
             return this.menuItem();
         if (this.view === "ask") {
-            this.view = "select";
+            const pending = this.pending;
+            this.view = pending?.from ?? "select";
+            this.pending = null;
             if (this.yes)
-                this.load(true);
+                pending?.act();
             return;
         }
         const p = this.procs()[this.apr];
@@ -1099,16 +1114,18 @@ class ProceduresPage extends MfdPage {
             this.grp = this.transitions().length > 1 ? "TRANS" : "LOAD";
         else if (this.grp === "TRANS")
             this.grp = "LOAD";
-        else if (this.grp === "ACTIVATE" && p && !gpsApproved(p.name))
-            [this.view, this.yes] = ["ask", true];
+        else if (this.grp === "ACTIVATE" && p)
+            this.confirm(p.name, () => this.load(true));
         else
             this.load(this.grp === "ACTIVATE");
     }
     clr() {
         if (this.view === "ask")
-            this.view = "select"; // as NO
+            [this.view, this.pending] = [this.pending?.from ?? "select", null]; // as NO
         else if (this.entry.editing)
             this.entry.cancel();
+        else if (this.view === "select")
+            this.view = "menu";
         else
             this.m.close();
     }
@@ -1119,18 +1136,19 @@ class ProceduresPage extends MfdPage {
             return;
         }
         const a = this.loaded();
-        if (!a)
+        if (!a || !this.enabled(this.item))
             return;
+        const here = { lat: this.s.lat, lon: this.s.lon };
+        const done = (patch) => () => {
+            this.m.change(patch);
+            this.m.close();
+        };
         if (this.item === 0)
-            this.m.change(vtfPatch(a.start, a.pts, { lat: this.s.lat, lon: this.s.lon }));
+            this.confirm(a.name, done(vtfPatch(a.start, a.pts, here)));
         else if (this.item === 1)
-            this.m.change({ activeLeg: a.start, directFrom: { lat: this.s.lat, lon: this.s.lon }, vtf: false });
-        else {
-            const missed = a.pts.findIndex((p) => p.role === "MISSED");
-            if (missed >= 0)
-                this.m.change({ activeLeg: a.start + missed, directFrom: null, vtf: false });
-        }
-        this.m.close();
+            this.confirm(a.name, done({ activeLeg: a.start, directFrom: here, vtf: false }));
+        else
+            done({ activeLeg: a.start + a.pts.findIndex((p) => typeof p !== "string" && p.role === "MISSED"), directFrom: null, vtf: false })();
     }
     // Adds the approach after the en route waypoints (replacing an approach loaded before), as the G1000 does. ACTIVATE
     // with the VECTORS transition is vector-to-final: the final approach fix is active, its leg on the final course.
@@ -1144,9 +1162,8 @@ class ProceduresPage extends MfdPage {
         const legs = [...(p.transitions[name] ?? []), ...p.legs];
         const pts = legs
             .filter((l, i) => i === 0 || l.fix !== legs[i - 1].fix)
-            .map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, role: l.role }));
-        const enroute = s.route.filter((r) => typeof r === "string" || s.points.includes(r));
-        this.m.change(approachPatch(enroute, pts, !activate ? "load" : name === "VECTORS" ? "vectors" : "activate", { lat: s.lat, lon: s.lon }));
+            .map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, role: l.role, approach: p.name }));
+        this.m.change(approachPatch(s.route, pts, !activate ? "load" : name === "VECTORS" ? "vectors" : "activate", { lat: s.lat, lon: s.lon }));
         this.m.close();
     }
     draw() {
