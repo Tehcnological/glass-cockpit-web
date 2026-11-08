@@ -3,7 +3,7 @@ import { type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { Highlighter, type Key } from "./ui.js";
 import { type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
-import type { Pan } from "./pan.js";
+import { type Pan } from "./pan.js";
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
 export interface Checklist {
     group: string;
