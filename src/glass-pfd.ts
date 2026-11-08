@@ -6,6 +6,9 @@ import SURROUND from "./svg/surround-pfd.js";
 import NRST from "./svg/nrst-pfd.js";
 import NRST_INFO from "./svg/nrst-info-pfd.js";
 import FPL from "./svg/fpl-pfd.js";
+import EIS from "./svg/eis.js";
+import { drawEis, engineKeys, reversionaryLayout, type EngineMenu } from "./eis.js";
+import type { Engine } from "./glass-mfd.js";
 import { buildDisplay, type DisplayOptions } from "./display.js";
 import { Page, clamp, deg3, matrixAttr, mod, ownMatrix, pad } from "./page.js";
 import { RADIOS, Surround, type Radios } from "./surround.js";
@@ -99,6 +102,13 @@ export interface PfdState {
    * `attitude` only; an air data failure flags `airspeed`, `altitude` and `vsi` together.
    */
   failed: Partial<Record<Failure, boolean>>;
+  /**
+   * Reversionary mode (Pilot's Guide; FG1000 does not wire it): the engine strip down the left, `engine` in it, OAT under
+   * TAS, the inset map in the lower right and ENGINE on the first softkey. The host sets it on both units' places (the
+   * MFD's taken by a second PFD) when DISPLAY BACKUP is pushed or a display fails.
+   */
+  reversionary: boolean;
+  /** For the engine strip in reversionary mode (see the MFD's). */ engine: Engine;
 }
 
 /** A change `onChange` reports. */
@@ -121,9 +131,12 @@ const DEFAULTS: PfdState = {
   radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], directFrom: null, vtf: false, activeLeg: 1, airports: [], procedures: [], magVar: 0, wind: null,
   xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
   vspeedsOn: { Vglide: false, Vr: false, Vx: false, Vy: false }, minimums: null, failed: {}, // v13 trainer: references start off
+  reversionary: false,
+  engine: { rpm: 0, fuelFlow: 0, oilPressure: 0, oilTemp: 0, egt: 0, vacuum: 0, fuelLeft: 0, fuelRight: 0, volts: 0, engineHours: 0 },
 };
 
-type Menu = "top" | "inset" | "pfd" | "wind" | "synvis" | "hsi" | "altunit" | "xpdr" | "code";
+const ENGINE_MENUS: string[] = ["engine", "lean", "system"];
+type Menu = "top" | "inset" | "pfd" | "wind" | "synvis" | "hsi" | "altunit" | "xpdr" | "code" | "engine" | "lean" | "system";
 /** SETUP: the PFD SETUP MENU; MENU: the flight plan's PAGE MENU. */
 /** Whether a PAGE MENU option can be chosen: it makes a change or opens a window. */
 const on = (o: { patch?: object | null; tool?: string }) => !!(o.patch || o.tool);
@@ -195,6 +208,9 @@ export class GlassPfd {
   readonly svg: SVGSVGElement;
   private state: PfdState = { ...DEFAULTS };
   /** In an unusual attitude as of the last set(). */ private ua = false;
+  private eis: Page;
+  private eisBack: SVGRectElement;
+  /** Where reversionary mode moves OAT and the inset map. */ private rev: ReturnType<typeof reversionaryLayout>;
   private p: Page;
   private surround: Surround;
   /** Removes the bezel's window listener. */ private unbezel = () => {};
@@ -234,7 +250,7 @@ export class GlassPfd {
 
   /** The container must be visible: layout is measured once here. */
   constructor(container: HTMLElement, private options: PfdOptions = {}) {
-    const { svg, screen } = buildDisplay(container, [PFD, SURROUND, NRST, NRST_INFO, FPL], "Primary flight display", options);
+    const { svg, screen } = buildDisplay(container, [PFD, EIS, SURROUND, NRST, NRST_INFO, FPL], "Primary flight display", options);
     this.svg = svg;
     this.p = new Page(screen, "PFDInstruments");
     this.dtoEntry = new IdEntry(this.p, 5);
@@ -282,6 +298,13 @@ export class GlassPfd {
     this.ladderWindow();
     this.p.el("HDG")?.setAttribute("transform", `translate(0 ${-HDG_LIFT})`);
     this.speedStrip(options.speedRanges ?? SPEEDS_172S);
+    // Reversionary mode: the engine strip on a black backing over the horizon, OAT and the inset map moved for it.
+    this.eis = new Page(screen, "EIS");
+    const strip = screenBox(screen, this.eis.el("Group")!);
+    this.eisBack = document.createElementNS(NS, "rect");
+    for (const [a, v] of [["x", 0], ["y", strip.y], ["width", strip.x + strip.width], ["height", strip.height], ["fill", "#000000"]] as const) this.eisBack.setAttribute(a, String(v));
+    this.eis.el("Group")!.parentNode!.insertBefore(this.eisBack, this.eis.el("Group")!);
+    this.rev = reversionaryLayout(screenBox(screen, this.p.el("TAS")!), screenBox(screen, this.p.el("OAT")!), frame);
     // Autopilot annunciations start blank, as Surround.new() leaves them.
     for (const id of AFCS) this.surround.p.text(`Header${id}`, "");
     if (options.bezel) this.unbezel = bezelInput(svg, (i) => this.input(i));
@@ -458,7 +481,8 @@ export class GlassPfd {
         const cdi: CdiSource[] = ["GPS", "NAV1", "NAV2"];
         // v13 trainer: OBS is dim with no flight plan (FG1000 always offers it); while on, it stays so it can be turned off.
         return [
-          blank, off(k("INSET", () => { u.inset = true; this.go("inset"); })), blank, off(k("PFD", () => this.go("pfd"))),
+          s.reversionary ? k("ENGINE", () => this.go("engine")) : blank,
+          off(k("INSET", () => { u.inset = true; this.go("inset"); })), blank, off(k("PFD", () => this.go("pfd"))),
           s.route.length || s.obs ? k("OBS", () => this.change({ obs: !s.obs }), s.obs) : dimKey("OBS"),
           // PFDInstrumentsController.incrCDISource: GPS, NAV1, NAV2.
           k("CDI", () => this.change({ cdiSource: cdi[(cdi.indexOf(s.cdiSource) + 1) % 3] })),
@@ -504,6 +528,10 @@ export class GlassPfd {
           k("VFR", () => this.change({ xpdr: { ...s.xpdr, code: "1200" } })), k("CODE", () => this.go("code")),
           k("IDENT", () => this.ident()), blank, back("top"), alerts];
       }
+      case "engine":
+      case "lean":
+      case "system":
+        return [...engineKeys(u.menu as EngineMenu, (m) => () => this.go(m)), back(u.menu === "engine" ? "top" : "engine"), alerts]; // reached only from ENGINE
       case "code":
         return [...[0, 1, 2, 3, 4, 5, 6, 7].map((d) => k(String(d), () => this.xpdrDigit(String(d)))),
           k("IDENT", () => this.ident()), k("BKSP", () => this.xpdrDigit("BKSP")), back("xpdr"), alerts];
@@ -709,6 +737,7 @@ export class GlassPfd {
     this.updateLeg(s.leg);
     this.updateXpdr();
     this.updateWind(s);
+    this.updateReversionary(s);
     this.updateInset(s);
     this.updateNrst();
     this.updateFlightPlan(s);
@@ -778,6 +807,17 @@ export class GlassPfd {
       this.p.text("WindData-OPTN3-HDG-text", `${pad(Math.trunc(mod(direction, 360)), 3, "0")}°T`);
       this.p.text("WindData-OPTN3-SPD-text", `${Math.trunc(speed)}KT`);
     }
+  }
+
+  private updateReversionary(s: PfdState) {
+    const on = s.reversionary;
+    this.eis.show("Group", on);
+    this.eisBack.style.display = on ? "inline" : "none";
+    if (on) drawEis(this.eis, s.engine);
+    const move = (id: string, d: { dx: number; dy: number }) => this.p.el(id)?.setAttribute("transform", on ? `translate(${d.dx} ${d.dy})` : "");
+    move("OAT", this.rev.oat);
+    move("PFD-Map", this.rev.inset);
+    if (!on && ENGINE_MENUS.includes(this.ui.menu)) this.ui.menu = "top";
   }
 
   // setInsetMapVisible and the inset NavMap: north up, the range on the RANGE knob.
