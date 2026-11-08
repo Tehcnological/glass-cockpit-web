@@ -55,9 +55,10 @@ let ladderCount = 0;
 /** The heading box sits on the turn rate band (Pilot's Guide: the band is directly above the card); FG1000 has it
  * 17.2 px lower, over the band's top. */
 const HDG_LIFT = 17.2;
-/** The pitch ladder's window on the screen: a semicircle about the aircraft symbol (459, 282.8) inside the roll pointer
- * and slip/skid bar, then straight down to the heading box's top. */
-const LADDER = { cx: 459, cy: 282.8, r: 152.8, bottom: 400.5 - HDG_LIFT };
+/** The pitch ladder's window on the screen: a circle about the aircraft symbol (459, 282.8), wide enough for the 20°
+ * labels whole (their far corners are 166.5 out) and inside the roll scale (187), cut flat at the heading box's top.
+ * The roll pointer and slip/skid bar draw over it. */
+const LADDER = { cx: 459, cy: 282.8, r: 167, bottom: 400.5 - HDG_LIFT };
 // The turn rate band above the compass card: its center and the radii it spans (FG1000's band art).
 const TURN = { cx: 459.5, cy: 586.5, r0: 145, r1: 170.5 };
 /** A point on the turn rate band, `t` radians right of the lubber line, `r` from the card's center. */
@@ -920,8 +921,8 @@ export class GlassPfd {
         g.innerHTML = band(0, v.vso, x, w, "#ff0000") + band(v.vs1, v.vno, x, w, "#00ff00") + band(v.vso, v.vfe, x, w / 2, "#ffffff") +
             band(v.vno, v.vne, x, w, "#ffff00") + band(v.vne, 999, x, w, "#ff0000");
     }
-    // The pitch ladder shows inside a semicircle just under the roll pointer and slip/skid bar, down to the top of the
-    // heading box, cut hard (Chris's call; FG1000 cuts a rectangle from y 70, through the pointer, to 370). Also the extreme pitch chevrons
+    // The pitch ladder shows inside a circle under the roll scale, down to the top of the heading box, cut hard (Chris's
+    // call; FG1000 cuts a rectangle from y 70, through the pointer, to 370). Also the extreme pitch chevrons
     // (Pilot's Guide: red, pointing to the horizon, from 50° up and 30° down); FG1000 has none, so their shape and
     // spacing are ours. updateAI keeps the window fixed on the screen.
     ladderWindow() {
@@ -933,7 +934,8 @@ export class GlassPfd {
         cp.id = id;
         cp.setAttribute("clipPathUnits", "userSpaceOnUse");
         const shape = cp.appendChild(document.createElementNS(NS, "path"));
-        shape.setAttribute("d", `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy} L ${cx + r} ${bottom} L ${cx - r} ${bottom} Z`);
+        const dx = Math.sqrt(r * r - (bottom - cy) ** 2); // where the circle meets the flat bottom
+        shape.setAttribute("d", `M ${cx - dx} ${bottom} A ${r} ${r} 0 1 1 ${cx + dx} ${bottom} Z`);
         ladder.setAttribute("clip-path", `url(#${id})`);
         // Chevrons midway between the ladder's lines, in the horizon's coordinates (0° at y 282.8, 6.849 px a degree).
         const chevron = (deg) => {
