@@ -117,6 +117,12 @@ export interface SpeedRanges {
 }
 /** Cessna 172S, KIAS. */
 export declare const SPEEDS_172S: SpeedRanges;
+/** The turn rate trend vector for a rate in deg/s: an arc to the heading 6 seconds ahead, clamped to the band, and
+ * the arrowhead the Pilot's Guide shows past 4 deg/s, where the prediction is no longer valid. */
+export declare function turnVector(rate: number): {
+    arc: string;
+    arrow: string;
+};
 export declare class GlassPfd {
     private options;
     readonly svg: SVGSVGElement;
@@ -128,6 +134,7 @@ export declare class GlassPfd {
     private fpl;
     private fplRows;
     private turnTrend;
+    private turnArrow;
     /** The pitch ladder's window, a clip rectangle kept fixed on the screen. */ private ladderClip;
     private minBug;
     private inset;

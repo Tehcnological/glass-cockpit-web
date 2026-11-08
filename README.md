@@ -67,7 +67,7 @@ Two callbacks let a host follow the controls:
 
 DIRECT TO and PROC open windows where NRST opens, and work as the MFD's do (see below): DIRECT TO needs `points` and `airports`, PROC `procedures`.
 
-FG1000 draws the turn rate scale above the compass rose but never moves anything on it; `turnRate` (degrees per second) draws a magenta trend vector there, the heading 6 seconds ahead, as the real unit does.
+FG1000 draws the turn rate scale above the compass rose but never moves anything on it; `turnRate` (degrees per second) draws a magenta trend vector there, the heading 6 seconds ahead, as the real unit does, with an arrowhead past 4°/s. `turnVector(rate)` returns its path data.
 
 The airspeed tape's color strip comes from the `speedRanges` option, knots: `{ vso, vs1, vfe, vno, vne }`, white from `vso` to `vfe`, green from `vs1` to `vno`, yellow to `vne`, red above, and red under `vso` for low speed awareness. It defaults to the 172S's (`SPEEDS_172S`: 40, 48, 85, 129, 163). Its `vne` also turns the IAS box red when `vne` is not set.
 

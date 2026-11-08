@@ -161,6 +161,22 @@ const HDG_LIFT = 17.2;
 const LADDER = { cx: 459, cy: 282.8, r: 152.8, bottom: 400.5 - HDG_LIFT };
 // The turn rate band above the compass card: its center and the radii it spans (FG1000's band art).
 const TURN = { cx: 459.5, cy: 586.5, r0: 145, r1: 170.5 };
+
+/** The turn rate trend vector for a rate in deg/s: an arc to the heading 6 seconds ahead, clamped to the band, and
+ * the arrowhead the Pilot's Guide shows past 4 deg/s, where the prediction is no longer valid. */
+export function turnVector(rate: number): { arc: string; arrow: string } {
+  const a = (clamp(rate * 6, -24, 24) * Math.PI) / 180;
+  if (Math.abs(a) < 0.005) return { arc: "", arrow: "" };
+  const { cx, cy } = TURN;
+  const r = (TURN.r0 + TURN.r1) / 2;
+  const at = (t: number, rr = r) => `${cx + rr * Math.sin(t)} ${cy - rr * Math.cos(t)}`;
+  const arrow = Math.abs(rate) > 4;
+  const end = arrow ? a - Math.sign(a) * (10 / r) : a; // the arrowhead takes the last 10 px
+  return {
+    arc: `M ${at(0)} A ${r} ${r} 0 0 ${a > 0 ? 1 : 0} ${at(end)}`,
+    arrow: arrow ? `M ${at(end, r - 7)} L ${at(a)} L ${at(end, r + 7)} Z` : "",
+  };
+}
 const INSET_PAN_FONT = 12;
 const GREEN = "#00ff00";
 
@@ -174,6 +190,7 @@ export class GlassPfd {
   private fpl: Page;
   private fplRows: ListView;
   private turnTrend: SVGPathElement;
+  private turnArrow: SVGPathElement;
   /** The pitch ladder's window, a clip rectangle kept fixed on the screen. */ private ladderClip: Element;
   private minBug: SVGGraphicsElement;
   private inset: SVGGElement;
@@ -260,6 +277,8 @@ export class GlassPfd {
     const scale = this.p.el("turnrate-indicator")!;
     this.turnTrend = scale.parentNode!.insertBefore(document.createElementNS("http://www.w3.org/2000/svg", "path"), scale.nextSibling);
     for (const [k, v] of Object.entries({ fill: "none", stroke: MAGENTA, "stroke-width": "5" })) this.turnTrend.setAttribute(k, v);
+    this.turnArrow = scale.parentNode!.insertBefore(document.createElementNS(NS_SVG, "path"), this.turnTrend.nextSibling);
+    this.turnArrow.setAttribute("fill", MAGENTA);
     // Pilot's Guide: ticks each side of the lubber line at half-standard and standard rate (9° and 18° in 6 s). FG1000
     // draws the band only.
     const ticks = [-18, -9, 9, 18].map((deg) => {
@@ -274,11 +293,9 @@ export class GlassPfd {
   // Turn rate trend vector: the heading 6 seconds ahead, along the arc above the compass rose, through the ticks.
   // The scale spans about 24° each side, so standard rate (3°/s) reaches 18°.
   private updateTurnRate(rate: number) {
-    const a = (Math.max(-24, Math.min(24, rate * 6)) * Math.PI) / 180;
-    const { cx, cy } = TURN;
-    const r = (TURN.r0 + TURN.r1) / 2;
-    const d = Math.abs(a) < 0.005 ? "" : `M ${cx} ${cy - r} A ${r} ${r} 0 0 ${a > 0 ? 1 : 0} ${cx + r * Math.sin(a)} ${cy - r * Math.cos(a)}`;
-    this.turnTrend.setAttribute("d", d);
+    const v = turnVector(rate);
+    this.turnTrend.setAttribute("d", v.arc);
+    this.turnArrow.setAttribute("d", v.arrow);
   }
 
   /** Stops the clock. Call when the display is removed. */
