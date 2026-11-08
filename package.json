@@ -9,6 +9,7 @@
   "exports": {
     ".": "./dist/glass-pfd.js",
     "./radio": "./dist/radio.js",
+    "./navdata": "./dist/navdata.js",
     "./vue/*": "./vue/*"
   },
   "files": ["dist", "src", "vue", "LICENSE", "NOTICE.md"],
