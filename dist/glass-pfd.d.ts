@@ -1,6 +1,6 @@
 import type { Engine } from "./glass-mfd.js";
 import { type DisplayOptions } from "./display.js";
-import { type Radios } from "./surround.js";
+import { type RadioFailure, type Radios } from "./surround.js";
 import { type Airspace, type LatLon, type MapPoint } from "./map.js";
 import { type Airport, type Procedure } from "./nav.js";
 import { unusualAttitude } from "./unusual-attitude.js";
@@ -10,7 +10,8 @@ export type { Checklist } from "./mfd-pages.js";
 export type { MapPoint, Airspace, LatLon } from "./map.js";
 export type { Airport, Runway, Freq, Station, Procedure, ProcLeg } from "./nav.js";
 export { gpsApproved, vtfLeg } from "./nav.js";
-export type { Radio, Radios } from "./surround.js";
+export type { Radio, Radios, RadioFailure } from "./surround.js";
+export { DisplayBackup, displayModes, type DisplayMode } from "./display-backup.js";
 export type { DisplayOptions } from "./display.js";
 export type { Control, Input } from "./bezel.js";
 export type CdiSource = "GPS" | "NAV1" | "NAV2" | "OFF";
@@ -96,6 +97,7 @@ export interface PfdState {
     /**
      * Failed instruments, flagged with FG1000's red X and yellow text. As the trainer shows them: an AHRS failure flags
      * `attitude` only; an air data failure flags `airspeed`, `altitude` and `vsi` together.
+     * `com1`, `nav1`, `com2` and `nav2` cross out a radio's field (a GIA or display failure; see `displayModes`).
      */
     failed: Partial<Record<Failure, boolean>>;
     /**
@@ -108,7 +110,7 @@ export interface PfdState {
 }
 /** A change `onChange` reports. */
 export type PfdChange = Partial<PfdState>;
-export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading";
+export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading" | RadioFailure;
 export interface PfdOptions extends DisplayOptions {
     /** Called when a bezel input changes the state (heading bug, course, baro, selected altitude, radios, CDI source). */
     onChange?: (patch: PfdChange) => void;

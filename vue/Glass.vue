@@ -2,6 +2,8 @@
 // Glass PFD or MFD from glass-cockpit-web (a port of FlightGear's FG1000, GPL-2.0-or-later, github.com/Tehcnological/glass-cockpit-web),
 // loaded as its own script and driven by the kit's FlightState. `mfd` passes map, flight plan and engine data through
 // (the PFD uses its position, map and airports for the inset map and NRST window); `vspeeds` sets the PFD's speed references.
+// `reversionary` puts a PFD in reversionary mode, with `mfd.engine` in its engine strip; for the MFD's place in
+// reversionary mode, the host shows a second `unit="pfd"` with it set.
 // The bezel's knobs work with the mouse; changes to FlightState values come back as a `change` event.
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { GlassMfd, GlassPfd, MfdState, PfdOptions } from "glass-cockpit-web";
@@ -10,10 +12,11 @@ import { tuneNav } from "glass-cockpit-web/radio";
 
 const props = withDefaults(defineProps<{
   state: FlightState; unit?: "pfd" | "mfd"; bezel?: boolean;
-  mfd?: Partial<MfdState>; vspeeds?: PfdOptions["vspeeds"];
+  mfd?: Partial<MfdState>; vspeeds?: PfdOptions["vspeeds"]; reversionary?: boolean;
 }>(), {
   unit: "pfd",
   bezel: true,
+  reversionary: false,
 });
 const emit = defineEmits<{ change: [patch: Partial<FlightState>]; mfd: [patch: Partial<MfdState>] }>();
 const box = ref<HTMLDivElement>();
@@ -31,6 +34,7 @@ function draw(s: FlightState) {
     bearings: { ...nav?.bearings, ...(s.adf !== null && { ADF: { id: "", bearing: s.heading + s.adf } }) },
     ...pickKeys(m, ["lat", "lon", "points", "airspaces", "route", "activeLeg", "directFrom", "vtf", "airports", "procedures", "magVar", "selectedAlt"]),
     ...nav && { radios: nav.radios },
+    reversionary: props.reversionary, ...m.engine && { engine: m.engine },
   });
   mfd?.set({ heading: s.heading, headingBug: s.headingBug, course: s.course, baro: s.baro, alt: s.alt, track: s.heading, groundspeed: s.ias, ...m, ...nav });
 }
@@ -54,7 +58,7 @@ onMounted(async () => {
 onUnmounted(() => (pfd?.destroy(), mfd?.destroy()));
 
 const pickKeys = (o: object, keys: string[]) => Object.fromEntries(Object.entries(o).filter(([k]) => keys.includes(k)));
-watch(() => [{ ...props.state }, props.mfd], () => draw(props.state), { deep: true });
+watch(() => [{ ...props.state }, props.mfd, props.reversionary], () => draw(props.state), { deep: true });
 </script>
 
 <template>

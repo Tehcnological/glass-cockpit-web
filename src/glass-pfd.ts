@@ -11,7 +11,7 @@ import { drawEis, engineKeys, reversionaryLayout, type EngineMenu } from "./eis.
 import type { Engine } from "./glass-mfd.js";
 import { buildDisplay, type DisplayOptions } from "./display.js";
 import { Page, clamp, deg3, matrixAttr, mod, ownMatrix, pad } from "./page.js";
-import { RADIOS, Surround, type Radios } from "./surround.js";
+import { RADIOS, Surround, type RadioFailure, type Radios } from "./surround.js";
 import { adjust, bezelInput, type Input } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { ProcFlow, PROC_MENU } from "./procedures.js";
@@ -31,7 +31,8 @@ export type { Checklist } from "./mfd-pages.js";
 export type { MapPoint, Airspace, LatLon } from "./map.js";
 export type { Airport, Runway, Freq, Station, Procedure, ProcLeg } from "./nav.js";
 export { gpsApproved, vtfLeg } from "./nav.js";
-export type { Radio, Radios } from "./surround.js";
+export type { Radio, Radios, RadioFailure } from "./surround.js";
+export { DisplayBackup, displayModes, type DisplayMode } from "./display-backup.js";
 export type { DisplayOptions } from "./display.js";
 export type { Control, Input } from "./bezel.js";
 
@@ -100,6 +101,7 @@ export interface PfdState {
   /**
    * Failed instruments, flagged with FG1000's red X and yellow text. As the trainer shows them: an AHRS failure flags
    * `attitude` only; an air data failure flags `airspeed`, `altitude` and `vsi` together.
+   * `com1`, `nav1`, `com2` and `nav2` cross out a radio's field (a GIA or display failure; see `displayModes`).
    */
   failed: Partial<Record<Failure, boolean>>;
   /**
@@ -114,7 +116,7 @@ export interface PfdState {
 /** A change `onChange` reports. */
 export type PfdChange = Partial<PfdState>;
 
-export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading";
+export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading" | RadioFailure;
 
 export interface PfdOptions extends DisplayOptions {
   /** Called when a bezel input changes the state (heading bug, course, baro, selected altitude, radios, CDI source). */
@@ -707,6 +709,7 @@ export class GlassPfd {
     this.p.tf("Heading-bug", { rot: s.headingBug });
     this.p.text("SelectedHDG-text", deg3(s.headingBug));
     for (const [f, id] of FAILURES) this.p.show(id, !!s.failed[f]);
+    this.surround.setFailed(s.failed);
     this.p.show("DME1", this.ui.dme);
     if (this.ui.dme) {
       const src = this.ui.dmeSource;

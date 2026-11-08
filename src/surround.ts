@@ -2,6 +2,8 @@
 // the bottom. Port of FG1000 Nasal/MFDPages/Surround/Surround.nas (Copyright 2018 Stuart Buchanan), GPL-2.0-or-later.
 import { Page } from "./page.js";
 
+/** A COM or NAV radio whose field flags invalid. */
+export type RadioFailure = "com1" | "nav1" | "com2" | "nav2";
 export interface Radio { /** MHz. */ active: number; /** MHz. */ standby: number }
 export interface Radios {
   nav1: Radio & { /** Station identifier, shown next to the frequencies. */ id: string };
@@ -85,6 +87,14 @@ export class Surround {
   destroy() {
     clearTimeout(this.volumeTimers.Nav);
     clearTimeout(this.volumeTimers.Comm);
+  }
+
+  /** FG1000's red X over each failed COM or NAV field. */
+  setFailed(failed: Partial<Record<RadioFailure, boolean>>) {
+    for (const n of [1, 2] as const) {
+      this.p.show(`Nav${n}Failed`, !!failed[`nav${n}`]);
+      this.p.show(`Comm${n}Failed`, !!failed[`com${n}`]);
+    }
   }
 
   /** `navSource` is the NAV radio driving the CDI; its active frequency shows green. */

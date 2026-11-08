@@ -1,4 +1,6 @@
 import { Page } from "./page.js";
+/** A COM or NAV radio whose field flags invalid. */
+export type RadioFailure = "com1" | "nav1" | "com2" | "nav2";
 export interface Radio {
     active: number; /** MHz. */
     standby: number;
@@ -36,6 +38,8 @@ export declare class Surround {
     private showVolume;
     /** Stops the volume timers. */
     destroy(): void;
+    /** FG1000's red X over each failed COM or NAV field. */
+    setFailed(failed: Partial<Record<RadioFailure, boolean>>): void;
     /** `navSource` is the NAV radio driving the CDI; its active frequency shows green. */
     setRadios(r: Radios, navSource: 1 | 2 | null): void;
     /** Twelve labels, left to right; "" leaves a key blank. A lit key (an option that is on) is black on grey; a dim key is grey. */
