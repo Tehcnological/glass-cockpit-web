@@ -22,7 +22,7 @@ const DEFAULTS = {
     cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null,
     radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], activeLeg: 1, airports: [], magVar: 0, wind: null,
     xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
-    vspeedsOn: { Vglide: true, Vr: true, Vx: true, Vy: true }, minimums: null,
+    vspeedsOn: { Vglide: false, Vr: false, Vx: false, Vy: false }, minimums: null, // v13 trainer: references start off
 };
 const BRG_SOURCES = ["OFF", "NAV1", "NAV2", "GPS", "ADF"];
 const VSPEEDS = ["Vglide", "Vr", "Vx", "Vy"];
@@ -537,32 +537,45 @@ export class GlassPfd {
         }
         const { x, y, width: w, height: h } = this.winBox;
         const rows = [];
+        const end = w - 14;
         if (u.window === "TMR/REF") {
+            // v13 trainer layout: titled REFERENCES, the timer on one row, GLIDE for the glide speed, minimums on one row.
             const t = Math.round(this.timerValue());
             const p2 = (n) => String(n).padStart(2, "0");
-            rows.push(["TIMER", `${p2(Math.floor(t / 3600))}:${p2(Math.floor(t / 60) % 60)}:${p2(t % 60)}`, "time"]);
-            rows.push(["", u.timer.up ? "UP" : "DN", "dir"]);
-            rows.push(["", this.timerLabel(), "action"]);
+            rows.push({ label: "REFERENCES", cells: [], title: true });
+            rows.push({ label: "TIMER", cells: [
+                    { text: `${p2(Math.floor(t / 3600))}:${p2(Math.floor(t / 60) % 60)}:${p2(t % 60)}`, field: "time", right: 160 },
+                    { text: u.timer.up ? "UP" : "DN", field: "dir", right: 200 },
+                    { text: this.timerLabel(), field: "action", right: end },
+                ] });
             for (const v of VSPEEDS) {
                 const spd = this.options.vspeeds?.[v];
-                rows.push([`${v.toUpperCase()}  ${spd === undefined ? "---" : spd}KT`, s.vspeedsOn[v] ? "ON" : "OFF", v]);
+                const name = v === "Vglide" ? "GLIDE" : v;
+                rows.push({ label: `${name}  ${spd === undefined ? "---" : spd}KT`, cells: [{ text: s.vspeedsOn[v] ? "ON" : "OFF", field: v, right: end }] });
             }
-            rows.push(["MINIMUMS", s.minimums === null ? "OFF" : "BARO", "minimums"]);
-            rows.push(["", s.minimums === null ? "" : `${s.minimums}FT`, "minalt"]);
+            rows.push({ label: "MINIMUMS", cells: [
+                    { text: s.minimums === null ? "OFF" : "BARO", field: "minimums", right: 180 },
+                    { text: s.minimums === null ? "____FT" : `${s.minimums}FT`, field: "minalt", right: end },
+                ] });
         }
         else {
             for (const a of s.alerts)
-                rows.push([a, ""]);
+                rows.push({ label: a, cells: [] });
         }
         const line = Math.min(22, (h - 8) / Math.max(rows.length, 1));
+        const width = (text) => text.length * 10 + 8; // shortcut: estimated text width for the cursor box
         let out = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#000" stroke="#ffffff" stroke-width="2"/>`;
-        rows.forEach(([label, value, field], i) => {
+        rows.forEach(({ label, cells, title }, i) => {
             const ty = y + 6 + line * (i + 0.8);
-            const cur = u.window === "TMR/REF" && TMR_FIELDS[u.cursor] === field;
-            out += `<text x="${x + 10}" y="${ty}" ${FONT} fill="#ffffff">${esc(label)}</text>`;
-            if (cur)
-                out += `<rect x="${x + w - 112}" y="${ty - line * 0.8}" width="102" height="${line}" fill="${CYAN}"/>`;
-            out += `<text x="${x + w - 14}" y="${ty}" text-anchor="end" ${FONT} fill="${cur ? "#000" : CYAN}">${esc(value)}</text>`;
+            out += title
+                ? `<text x="${x + w / 2}" y="${ty}" text-anchor="middle" ${FONT} fill="#ffffff">${esc(label)}</text>`
+                : `<text x="${x + 10}" y="${ty}" ${FONT} fill="#ffffff">${esc(label)}</text>`;
+            for (const c of cells) {
+                const cur = u.window === "TMR/REF" && TMR_FIELDS[u.cursor] === c.field;
+                if (cur)
+                    out += `<rect x="${x + c.right - width(c.text) + 4}" y="${ty - line * 0.8}" width="${width(c.text)}" height="${line}" fill="${CYAN}"/>`;
+                out += `<text x="${x + c.right}" y="${ty}" text-anchor="end" ${FONT} fill="${cur ? "#000" : CYAN}">${esc(c.text)}</text>`;
+            }
         });
         this.win.innerHTML = out;
     }
