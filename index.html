@@ -26,7 +26,9 @@
     if (Object.keys(p).length) to().set(p);
   };
   const pfd = new GlassPfd(document.getElementById("pfd"), { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share(() => mfd) });
-  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true, onChange: share(() => pfd) });
+  // Scheduler messages from AUX - UTILITY go to the PFD's ALERTS window.
+  const scheduled = [];
+  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true, onChange: share(() => pfd), onScheduler: (m) => (scheduled.push(m), update()) });
   // Made-up points for the demo, not real navigation data.
   const points = [
     { id: "KAAA", type: "APT", lat: 33.40, lon: -112.00 }, { id: "ABC", type: "VOR", lat: 33.50, lon: -111.85 },
@@ -50,7 +52,7 @@
   const update = () => {
     const s = Object.fromEntries([...new FormData(f)].map(([k, v]) => [k, Number(v)]));
     f.querySelectorAll("label").forEach((l) => l.querySelector("output") && (l.querySelector("output").value = l.querySelector("input").value));
-    pfd.set({ ...s, alerts: f.alert.checked ? ["DEMO - A sample message."] : [],
+    pfd.set({ ...s, alerts: [...(f.alert.checked ? ["DEMO - A sample message."] : []), ...scheduled],
       failed: { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked }, cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, turnRate: s.ias > 0 ? (1091 * Math.tan((s.roll * Math.PI) / 180)) / (s.ias + 6) : 0, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 } });
     mfd.set({
       heading: s.heading, headingBug: s.headingBug, course: s.course, selectedAlt: s.selectedAlt, alt: s.alt, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,

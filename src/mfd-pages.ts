@@ -12,6 +12,7 @@ import type { MfdState } from "./glass-mfd.js";
 import { panStart, type Pan } from "./pan.js";
 import { PROC_MENU, ProcFlow } from "./procedures.js";
 import { AprInfo, type AprRow } from "./apr-info.js";
+import { Scheduler, type ScheduleField } from "./scheduler.js";
 import { densityAltitude, fuelStats, sunTimes, tripLeg, trueAirspeed } from "./trip-planning.js";
 import { SETUP_FIELDS, UTILITY_FIELDS, Utility, airportMatches, clockText, ete, hms, setupValue, stepSetup, type Setup, type UtilityField } from "./aux-pages.js";
 
@@ -1578,6 +1579,12 @@ function panelColumn(x: number, w: number, y: number, boxes: PanelBox[], rowH = 
   return out;
 }
 
+/** DD-MMM-YY in the clock's time zone. */
+function dateText(ms: number, s: Setup) {
+  const date = new Date(ms + (s.timeFormat === "UTC" ? 0 : s.offset * 60_000));
+  return `${String(date.getUTCDate()).padStart(2, "0")}-${date.toLocaleString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase()}-${String(date.getUTCFullYear()).slice(2)}`;
+}
+
 /** A page of its own boxes, with no FG1000 SVG: the AUX pages. */
 class PanelPage extends MfdPage {
   live = true; // their clocks run
@@ -1619,10 +1626,8 @@ class SystemSetupPage extends PanelPage {
     const now = Date.now();
     const field = (box: string): PanelRow[] => SETUP_FIELDS.flatMap((f, i) =>
       f.box === box ? [{ label: f.label, value: setupValue(s, i), cur: this.crsr && i === this.at ? "value" as const : undefined }] : []);
-    const date = new Date(now + (s.timeFormat === "UTC" ? 0 : s.offset * 60_000));
-    const dd = `${String(date.getUTCDate()).padStart(2, "0")}-${date.toLocaleString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase()}-${String(date.getUTCFullYear()).slice(2)}`;
     this.paint([
-      { title: "DATE / TIME", rows: [{ label: "DATE", value: dd }, { label: "TIME", value: clockText(now, s) }, ...field("DATE / TIME")] },
+      { title: "DATE / TIME", rows: [{ label: "DATE", value: dateText(now, s) }, { label: "TIME", value: clockText(now, s) }, ...field("DATE / TIME")] },
       greyBox("DISPLAY UNITS", [["NAV ANGLE", "MAGNETIC(°)"], ["DIS, SPD", "NAUTICAL(NM,KT)"], ["ALT, VS", "FEET(FT,FPM)"], ["TEMP", "CELSIUS(°C)"], ["FUEL", "GALLONS(GL,GL/HR)"], ["POSITION", "HDDD°MM.MM'"]]),
       greyBox("BARO TRANSITION ALERT", [["ALTITUDE", "18000FT"], ["LEVEL", "FL180"]]),
       greyBox("AIRSPACE ALERTS", [["ALT BUFFER", "200FT"], ["CLASS B/TMA", "ON"], ["CLASS C/TCA", "ON"], ["CLASS D", "ON"], ["RESTRICTED", "ON"], ["MOA (MILITARY)", "ON"], ["OTHER/ADIZ", "ON"]]),
@@ -1640,10 +1645,15 @@ class SystemSetupPage extends PanelPage {
 }
 
 // AUX - UTILITY (Pilot's Guide): the generic, flight and departure timers and trip statistics, reset from the PAGE
-// MENU. The scheduler and flight data logger are not ported.
+// MENU, and the scheduler, below the timers for the large FMS knob. The flight data logger is not ported.
 class UtilityPage extends PanelPage {
   private at = 0;
   readonly util = new Utility(Date.now());
+  readonly sched = new Scheduler();
+  /** The cursor is in the scheduler, after the timers. */
+  private get inSched() {
+    return this.at === UTILITY_FIELDS.length;
+  }
 
   toggleCrsr() {
     super.toggleCrsr();
@@ -1651,16 +1661,28 @@ class UtilityPage extends PanelPage {
   }
 
   fms(outer: boolean, d: number) {
-    if (outer) this.at = clamp(this.at + (d > 0 ? 1 : -1), 0, UTILITY_FIELDS.length - 1);
-    else this.util.field(UTILITY_FIELDS[this.at], d, Date.now());
+    const now = Date.now();
+    const s = this.sched;
+    if (!outer) this.inSched ? s.inner(d, now) : this.util.field(UTILITY_FIELDS[this.at], d, now);
+    else if (this.inSched && !s.editing && s.i === 0 && s.f === "text" && d < 0) this.at--;
+    else if (this.inSched) s.outer(d);
+    else {
+      this.at = clamp(this.at + (d > 0 ? 1 : -1), 0, UTILITY_FIELDS.length);
+      if (this.inSched) s.cursor(0, "text");
+    }
     return true;
   }
 
   // ENT on the direction or the time goes on to START?; on START?, STOP? or RESET? it carries it out.
   ent() {
     if (!this.crsr) return;
-    if (UTILITY_FIELDS[this.at] === "action") this.util.action(Date.now());
+    if (this.inSched) this.sched.ent(Date.now());
+    else if (UTILITY_FIELDS[this.at] === "action") this.util.action(Date.now());
     else if (this.at < 2) this.at = 2;
+  }
+
+  clr() {
+    if (this.crsr && this.inSched) this.sched.clr();
   }
 
   pageMenu(): MenuOption[] {
@@ -1689,7 +1711,20 @@ class UtilityPage extends PanelPage {
         { label: "ODOMETER", value: `${u.odom.toFixed(1)}NM` }, { label: "TRIP ODOM", value: `${u.trip.toFixed(1)}NM` },
         { label: "TRIP AVG GS", value: `${u.avgGs()}KT` }, { label: "MAXIMUM GS", value: `${Math.round(u.maxGs)}KT` },
       ] },
-    ], []);
+    ], [{ title: "SCHEDULER", rows: this.sched.items.flatMap((r, i): PanelRow[] => {
+      const s = this.sched;
+      const on = (f: ScheduleField) => this.crsr && this.inSched && s.i === i && s.f === f;
+      // While typing, the text up to the large knob's character, blanks as underscores.
+      const typed = on("text") && s.editing && s.editing.join("").slice(0, Math.max(s.pos + 1, s.editing.join("").trimEnd().length)).replace(/ /g, "_");
+      const setup = this.m.ui.setup;
+      const time = r.type === "Event"
+        ? (r.at === null ? "__-___-__ __:__" : `${dateText(r.at, setup)} ${clockText(r.at, setup, false)}`)
+        : hms(r.due === null ? r.timer : Math.max(0, (r.due - now) / 1000));
+      return [
+        { label: typed || r.text || "____________________", cur: on("text") ? "label" : undefined },
+        { label: "", mid: r.type, value: time, cur: on("type") ? "mid" : on("time") ? "value" : undefined },
+      ];
+    }) }]);
   }
 }
 

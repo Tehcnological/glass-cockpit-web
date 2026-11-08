@@ -5,6 +5,7 @@ import { Highlighter, type Key } from "./ui.js";
 import { type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
 import { type Pan } from "./pan.js";
+import { Scheduler } from "./scheduler.js";
 import { Utility, type Setup } from "./aux-pages.js";
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
 export interface Checklist {
@@ -203,9 +204,13 @@ declare class PanelPage extends MfdPage {
 declare class UtilityPage extends PanelPage {
     private at;
     readonly util: Utility;
+    readonly sched: Scheduler;
+    /** The cursor is in the scheduler, after the timers. */
+    private get inSched();
     toggleCrsr(): void;
     fms(outer: boolean, d: number): boolean;
     ent(): void;
+    clr(): void;
     pageMenu(): MenuOption[];
     draw(): void;
 }

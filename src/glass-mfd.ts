@@ -85,6 +85,8 @@ const POINTERS: [string, keyof Engine, number, number][] = [
 export interface MfdOptions extends DisplayOptions {
   /** Called when a bezel input changes the state (range, radios, flight plan, and the shared knob values). */
   onChange?: (patch: Partial<MfdState>) => void;
+  /** Called with a scheduler message (AUX - UTILITY) when it comes due; give it to the PFD's `alerts`. */
+  onScheduler?: (message: string) => void;
 }
 
 // Constants.nas MAP_FULL and MAP_PARTIAL: header 56 px, footer 25 px, engine strip 150 px, data display 300 px; the
@@ -156,6 +158,7 @@ export class GlassMfd {
     this.pages = makePages(this.api(), screen);
     this.clock = setInterval(() => {
       this.pages.utility.util.tick(this.state.groundspeed, Date.now());
+      for (const m of this.pages.utility.sched.tick(Date.now())) this.options.onScheduler?.(m);
       if (this.page.live || this.groupPage.live) this.set({}); // still under the PAGE MENU
     }, 1000);
     if (options.bezel) this.unbezel = bezelInput(svg, (i) => this.input(i));

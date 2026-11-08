@@ -102,6 +102,8 @@ export class GlassMfd {
         this.pages = makePages(this.api(), screen);
         this.clock = setInterval(() => {
             this.pages.utility.util.tick(this.state.groundspeed, Date.now());
+            for (const m of this.pages.utility.sched.tick(Date.now()))
+                this.options.onScheduler?.(m);
             if (this.page.live || this.groupPage.live)
                 this.set({}); // still under the PAGE MENU
         }, 1000);
