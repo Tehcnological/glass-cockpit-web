@@ -60,6 +60,7 @@ Garmin art, screenshots, data or manual text is copied.
 | PFD | SYN VIS, DFLTS, WIND, DME, BRG1, HSI FRMT, BRG2, ALT UNIT, STD BARO, BACK | Partial: SYN VIS No data; HSI FRMT (arc HSI) missing |
 | XPDR | STBY, ON, ALT, VFR, CODE, IDENT, BACK; CODE: digits 0 to 7, BKSP | Done |
 | OBS, SUSP | OBS; becomes SUSP during an approach | Partial: SUSP not ported |
+| Unusual attitude | Past +30°/-20° pitch or 65° bank (Pilot's Guide): the PFD declutters, its windows and inset go, and their keys dim | Done |
 
 ## PFD windows
 
@@ -84,7 +85,7 @@ Garmin art, screenshots, data or manual text is copied.
 | MAP | Stormscope, weather data link, TAWS | No data |
 | WPT | Airport information | Partial: info and APPROACH INFORMATION (APR) done; departure, arrival and weather (DP, STAR, WX) grey with no data; INFO-2 directory missing |
 | WPT | Intersection, NDB, VOR information | Done |
-| WPT | User waypoint information | Missing (no user waypoints) |
+| WPT | User waypoint information | Missing (user waypoints exist, from Closest Point of FPL and ATK offsets, but have no page) |
 | AUX | Utility | Partial: timers, trip statistics and scheduler done (times stepped, not typed); flight data logger missing |
 | AUX | Trip planning | Partial: AUTO and MANUAL, flight plan mode; WPTS mode and ESA missing |
 | AUX | GPS status, system status | Partial: aircraft position and LRUs; no satellite, RAIM, SBAS, version or database data |
@@ -94,7 +95,7 @@ Garmin art, screenshots, data or manual text is copied.
 | FPL | Flight plan catalog, stored plans | Missing |
 | LST | Checklists | Done |
 | NRST | Airports | Done |
-| NRST | Intersections, NDB, VOR | Partial: VOR's FREQ key missing |
+| NRST | Intersections, NDB, VOR | Done (VOR and FREQ keys on NEAREST VOR) |
 | NRST | Frequencies | Done |
 | NRST | User waypoints, airspaces | Missing / No data |
 
@@ -104,7 +105,7 @@ Garmin art, screenshots, data or manual text is copied.
 | --- | --- | --- |
 | Root | ENGINE, MAP, DCLTR, SHW CHRT, CHKLIST | Done (SHW CHRT No data) |
 | MAP | TRAFFIC, PROFILE, TOPO, TERRAIN, AIRWAYS, PRECIP, METAR, LEGEND, BACK | Partial: PROFILE (no terrain) and AIRWAYS (host data) done; the rest No data |
-| ENGINE, LEAN, SYSTEM | CYL SLCT, ASSIST, RST FUEL, GAL REM (+/- 1, 10 GAL) | Partial: keys present; GAL REM adjust not checked |
+| ENGINE, LEAN, SYSTEM | CYL SLCT, ASSIST, RST FUEL, GAL REM (+/- 1, 10 GAL) | Partial: keys shown, but LEAN and SYSTEM change only the softkeys (the strip keeps its ENGINE page) and CYL SLCT, ASSIST, RST FUEL and GAL REM do nothing |
 | Nearest airports | APT, RNWY, FREQ, APR, LD APR | Done |
 | Procedures page | DP, STAR, APR, GO BACK | Missing |
 
@@ -139,7 +140,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | PROC: activate vector-to-final, approach, missed; NOT APPROVED FOR GPS | Done on the MFD |
 | PROC: select arrival, select departure | Missing |
 | Hold at waypoint / present position | Missing |
-| Airways (load, collapse, expand) | Missing (no airway data) |
+| Airways (load, collapse, expand) | Missing (airway data is there since `buildNasr` airways; the flight plan cannot load them yet) |
 | Duplicate waypoint picker | Missing |
 | Approach suspend (SUSP) and missed approach sequencing | Missing |
 | VNAV | Missing |
@@ -148,7 +149,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 
 | Behavior | Status |
 | --- | --- |
-| DISPLAY BACKUP: one push puts both displays in reversionary mode (flight instruments and engine strip on each); a second push returns them | Missing (with the audio panel) |
+| DISPLAY BACKUP: one push puts both displays in reversionary mode (flight instruments and engine strip on each); a second push returns them | Done in the demo (the host shows a second PFD in the MFD's place) |
 | A display that loses power sends the other into reversionary mode on its own; the failed side's COM/NAV fields flag invalid | Missing |
 | A failed sensor or unit red-X's its fields: attitude (AHRS), heading (AHRS or magnetometer), air data (ADC), COM/NAV 1 or 2 (GIA), transponder, engine data, OAT | Partial: `failed` flags attitude, airspeed, altitude, vertical speed and heading; not COM/NAV, transponder, engine or OAT |
 | Start-up: attitude, airspeed and altitude invalid for the first 40 to 60 s while the AHRS aligns | Missing |
@@ -164,8 +165,11 @@ airport sub-pages, the AUX pages, the SUSP key and hold entry. Read the Pilot's 
 ## Phases
 
 1. **Controls that did nothing:** joystick pan mode, COM squelch, PFD DIRECT TO and PROC, long presses. Done.
-2. **Page menus:** read each page's options off the trainer, then wire the ones this package can carry out.
-3. **Missing pages and softkeys:** WPT airport sub-pages, nearest airport RNWY/FREQ/APR/LD APR, MAP PROFILE and AIRWAYS,
-   AUX system setup.
-4. **Flows:** SUSP and missed approach sequencing, arrivals and departures, holds, duplicate waypoints.
-5. **Later, by request:** keyboard typing, the audio panel and reversionary mode.
+2. **Page menus:** read each page's options off the trainer, then wire the ones this package can carry out. Partial:
+   navigation map, flight plan, direct-to, nearest airports, utility; the rest above are missing.
+3. **Missing pages and softkeys:** nearest airport RNWY/FREQ/APR/LD APR, MAP PROFILE and AIRWAYS, Map Setup's Airways
+   and Profile groups, the AUX pages (system setup, utility and its scheduler, trip planning, GPS status, system
+   status). Done. Left: WPT airport INFO-2, user waypoint pages, the flight plan catalog, the procedures page softkeys.
+4. **Flows:** SUSP and missed approach sequencing, arrivals and departures, holds, duplicate waypoints, airways in the
+   flight plan.
+5. **Later, by request:** keyboard typing, the audio panel, the failed display's NAV/COM flags and the autopilot.
