@@ -732,12 +732,12 @@ export class GlassPfd {
     this.surround.setRadios(s.radios, s.cdiSource === "NAV1" ? 1 : s.cdiSource === "NAV2" ? 2 : null);
     this.surround.setVolume("Nav", s.navVolume);
     this.surround.setVolume("Comm", s.comVolume);
+    this.updateReversionary(s); // before the softkeys: it can leave an engine menu
     const keys = this.menu();
     this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit), keys.map((k) => !!k.dim));
     this.updateLeg(s.leg);
     this.updateXpdr();
     this.updateWind(s);
-    this.updateReversionary(s);
     this.updateInset(s);
     this.updateNrst();
     this.updateFlightPlan(s);

@@ -77,7 +77,7 @@
     const ps = { ...s, alerts: [...(f.alert.checked ? ["DEMO - A sample message."] : []), ...scheduled],
       failed: { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked }, cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, turnRate: s.ias > 0 ? (1091 * Math.tan((s.roll * Math.PI) / 180)) / (s.ias + 6) : 0, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 }, engine };
     pfd.set({ ...ps, reversionary });
-    rev?.set({ ...ps, reversionary: true });
+    if (reversionary) rev?.set({ ...ps, reversionary: true }); // hidden otherwise; onChange updates it when shown
     mfd.set({
       heading: s.heading, headingBug: s.headingBug, course: s.course, selectedAlt: s.selectedAlt, alt: s.alt, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
       engine,
