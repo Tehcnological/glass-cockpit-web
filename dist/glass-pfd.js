@@ -13,6 +13,7 @@ import { adjust, bezelInput } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
 import { bearingDistance, bestApproach, latLon, nearest, nrstFreq, planName, routePoint } from "./nav.js";
 import { alertsKey } from "./alerts.js";
+import { cdiLabel } from "./radio.js";
 import { BLANK as blank, CYAN, Highlighter, ListView, NS, dimKey, esc, key as k, screenBox } from "./ui.js";
 export { GlassMfd } from "./glass-mfd.js";
 const DEFAULTS = {
@@ -378,8 +379,9 @@ export class GlassPfd {
         this.p.text("HDG-text", deg3(s.heading));
         this.p.tf("Heading-bug", { rot: s.headingBug });
         this.p.text("SelectedHDG-text", deg3(s.headingBug));
-        this.setCDISource(s.cdiSource);
+        this.setCDISource(s.cdiSource, cdiLabel(s.cdiSource, s.radios));
         this.p.text("SelectedCRS-text", deg3(s.course), s.cdiSource === "GPS" ? MAGENTA : GREEN);
+        this.p.text("SelectedCRS-bgtext", s.cdiSource === "GPS" ? "DTK" : "CRS"); // v13 trainer: DTK on GPS (FG1000: always CRS)
         this.updateCDI(s);
         this.p.show("GS-ILS", s.gs !== null);
         this.p.show("GS-type", s.gs !== null);
@@ -638,12 +640,13 @@ export class GlassPfd {
         if (selected !== null)
             this.p.tf("SelectedALT-bug", { ty: clamp(alt - selected, -300, 300) * 0.567 });
     }
-    setCDISource(source) {
+    // v13 trainer: the label names the station type, VOR1 or LOC2 (FG1000: NAV1, NAV2).
+    setCDISource(source, label) {
         for (const s of ["GPS", "NAV1", "NAV2"]) {
             for (const part of ["pointer", "CDI", "FROM", "TO"])
                 this.p.show(`${s}-${part}`, source === s);
         }
-        this.p.text("CDI-SRC-text", source, source === "GPS" ? MAGENTA : GREEN);
+        this.p.text("CDI-SRC-text", label, source === "GPS" ? MAGENTA : GREEN);
         this.p.show("CDI-SRC-text", source !== "OFF");
     }
     updateCDI(s) {
