@@ -2,7 +2,8 @@
 // draws into its FG1000 SVG (src/fg1000/<page>.svg, prefix <page>) and takes the FMS knob, CRSR, ENT and CLR while its
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
-import { ORIENTATIONS, TRACK_VECTOR, mapGroup, mapUp, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
+import { mapGroup, mapUp, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
+import { SETUP_GROUPS, type MapSettings } from "./map-setup.js";
 import { bearingDistance, cancelDirectTo, cancelParallel, directToPatch, findPoint, isParallel, latLon, nearest, planEntry, planName, routePoint, vtfEdit, type Airport, type Procedure } from "./nav.js";
 import { FPL_TOOLS, FplTool, toolEnabled, type FplToolName } from "./fpl-tools.js";
 import { BLANK, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key, type Key } from "./ui.js";
@@ -11,7 +12,9 @@ import type { MfdState } from "./glass-mfd.js";
 import { panStart, type Pan } from "./pan.js";
 import { PROC_MENU, ProcFlow } from "./procedures.js";
 import { AprInfo, type AprRow } from "./apr-info.js";
-import { SETUP_FIELDS, UTILITY_FIELDS, Utility, airportMatches, clockText, hms, setupValue, stepSetup, type Setup, type UtilityField } from "./aux-pages.js";
+import { Scheduler, type ScheduleField } from "./scheduler.js";
+import { densityAltitude, fuelStats, sunTimes, tripLeg, trueAirspeed } from "./trip-planning.js";
+import { SETUP_FIELDS, UTILITY_FIELDS, Utility, airportMatches, clockText, ete, hms, setupValue, stepSetup, type Setup, type UtilityField } from "./aux-pages.js";
 
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
 export interface Checklist { group: string; name: string; items: { name: string; value: string }[] }
@@ -25,6 +28,7 @@ export interface MfdUi {
   /** Declutter level, 0 to 3. */ dcltr: number;
   /** MAP SETUP's track vector look-ahead, seconds; 0 is off. */ trackVector: number;
   /** Airways key state, 0 to 3. */ airways: number;
+  /** MAP SETUP's airway ranges: the largest map range, nm, each type shows at. */ airwayRange: Record<"LO" | "HI", number>;
   /** MAP menu toggles. */ layers: Record<string, boolean>;
   /** Waypoints entered in DIRECT TO and WAYPOINT ENTRY, latest first: their RECENT list. */ recent: string[];
   /** Pan mode on the navigation map (joystick push), or null. */ pan: Pan | null;
@@ -146,6 +150,11 @@ export class MfdPage {
   }
 
   /** The MENU key's PAGE MENU options, or null for a page without one here. */
+  /** Where the navigation map draws the nearest airport line, if this page has one. */
+  nearestLine(): LatLon | null {
+    return null;
+  }
+
   pageMenu(): MenuOption[] | null {
     return null;
   }
@@ -323,6 +332,11 @@ class NearestAirportsPage extends MfdPage {
 
   selected() {
     return this.crsr ? this.apt?.id ?? null : null;
+  }
+
+  // Pilot's Guide: the map draws a dashed white line from the aircraft to the selected airport.
+  nearestLine() {
+    return this.apt ?? null;
   }
 
   draw() {
@@ -1401,15 +1415,14 @@ export class PageMenuPage extends MfdPage {
   }
 }
 
-// MAP SETUP (Pilot's Guide), the navigation map's settings: a window like the PAGE MENU, with its Map group only.
-// ORIENTATION and TRACK VECTOR work; the rest are grey (no terrain, wind, fuel or synthetic vision data here). The outer
-// FMS knob moves the cursor, the inner changes the setting; CLR, MENU or pushing the FMS knob closes it.
-// shortcut: a setting changes as the knob turns (the real unit takes it on ENT), and TRACK VECTOR's on/off and
-// look-ahead time are one field.
-const SETUP_ROWS = ["ORIENTATION", "AUTO ZOOM", "LAND DATA", "TRACK VECTOR", "WIND VECTOR", "NAV RANGE RING", "TOPO DATA", "FUEL RNG (RSV)", "FIELD OF VIEW"];
-const SETUP_ON = [0, 3];
+// MAP SETUP (Pilot's Guide), the navigation map's settings: a window like the PAGE MENU, opening with the cursor on its
+// GROUP (Map, Airways, Profile; see map-setup.ts). The small FMS knob changes the group or the setting under the cursor,
+// the large knob moves the cursor; settings this package can't carry out are grey. CLR, MENU or pushing the FMS knob
+// closes it. shortcut: a setting changes as the knob turns (the real unit takes it on ENT).
+const SETUP_ROWS = Math.max(...SETUP_GROUPS.map((g) => g.rows.length));
 export class MapSetupPage extends MfdPage {
-  private at = 0;
+  private group = 0;
+  /** The row under the cursor, -1 for GROUP. */ private at = -1;
 
   constructor(m: Mfd, screen: SVGGElement, after: Element) {
     super(m, "MapSetup", screen);
@@ -1420,31 +1433,36 @@ export class MapSetupPage extends MfdPage {
     const text = (t: string, x: number, y: number, anchor = "start", id = "", fill = "#ffffff") =>
       `<text ${id && `id="MapSetup${id}"`} x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style}">${t}</text>`;
     let rows = "";
-    SETUP_ROWS.forEach((label, i) => {
-      rows += text(label, 744, 150 + i * 27, "start", "", SETUP_ON.includes(i) ? "#ffffff" : "#808080") + text("", 1014, 150 + i * 27, "end", `Value${i}`, CYAN);
-    });
+    for (let i = 0; i < SETUP_ROWS; i++) rows += text("", 744, 150 + i * 27, "start", `Label${i}`) + text("", 1014, 150 + i * 27, "end", `Value${i}`, CYAN);
     g.innerHTML =
       `<rect x="724.5" y="53.5" width="310" height="390" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>` +
-      text("MAP SETUP", 874, 82, "middle") + text("GROUP", 740, 115) + text("Map", 1014, 115, "end", "", CYAN) +
-      `<rect x="734.5" y="120.5" width="290" height="${SETUP_ROWS.length * 27 + 12}" style="fill:none;stroke:#808080;stroke-width:1"/>` +
+      text("MAP SETUP", 874, 82, "middle") + text("GROUP", 740, 115) + text("", 1014, 115, "end", "Group", CYAN) +
+      `<rect x="734.5" y="120.5" width="290" height="${SETUP_ROWS * 27 + 12}" style="fill:none;stroke:#808080;stroke-width:1"/>` +
       text("Press the FMS CRSR knob to", 874, 395, "middle") + text("return to base page", 874, 420, "middle") + rows;
     after.after(g);
     this.root = g;
   }
 
   open() {
-    [this.at, this.crsr] = [SETUP_ON[0], true];
+    [this.at, this.crsr] = [-1, true];
     return this;
   }
 
+  private settings(): MapSettings {
+    const u = this.m.ui;
+    return { orientation: this.s.orientation, trackVector: u.trackVector, airways: u.airways, airwayRange: u.airwayRange };
+  }
+
   fms(outer: boolean, d: number) {
-    if (outer) this.at = SETUP_ON[Math.max(0, Math.min(SETUP_ON.length - 1, SETUP_ON.indexOf(this.at) + d))];
-    else if (this.at === 0) {
-      const i = ORIENTATIONS.indexOf(this.s.orientation);
-      this.m.change({ orientation: ORIENTATIONS[clamp(i + d, 0, ORIENTATIONS.length - 1)] });
-    } else {
-      const u = this.m.ui;
-      u.trackVector = TRACK_VECTOR[clamp(TRACK_VECTOR.indexOf(u.trackVector) + d, 0, TRACK_VECTOR.length - 1)];
+    const rows = SETUP_GROUPS[this.group].rows;
+    if (outer) {
+      const stops = [-1, ...rows.flatMap((r, i) => (r.step ? [i] : []))];
+      this.at = stops[clamp(stops.indexOf(this.at) + d, 0, stops.length - 1)];
+    } else if (this.at === -1) this.group = clamp(this.group + d, 0, SETUP_GROUPS.length - 1);
+    else {
+      const { orientation, ...rest } = rows[this.at].step!(this.settings(), d);
+      if (orientation) this.m.change({ orientation });
+      Object.assign(this.m.ui, rest);
     }
     return true;
   }
@@ -1460,12 +1478,16 @@ export class MapSetupPage extends MfdPage {
   }
 
   draw() {
-    const t = this.m.ui.trackVector;
-    const values: Record<number, string> = { 0: this.s.orientation, 3: t === 0 ? "Off" : t < 120 ? `On ${t} sec` : `On ${t / 60} min` };
-    SETUP_ROWS.forEach((_, i) => {
-      this.p.text(`Value${i}`, values[i] ?? "");
+    const g = SETUP_GROUPS[this.group];
+    const s = this.settings();
+    this.p.text("Group", g.name);
+    this.m.hl.set(this.p.el("Group"), this.at === -1);
+    for (let i = 0; i < SETUP_ROWS; i++) {
+      const r = g.rows[i];
+      this.p.text(`Label${i}`, r?.label ?? "", r?.step ? "#ffffff" : "#808080");
+      this.p.text(`Value${i}`, r?.step ? r.value!(s) : "");
       this.m.hl.set(this.p.el(`Value${i}`), i === this.at);
-    });
+    }
   }
 }
 
@@ -1532,9 +1554,11 @@ export class FplToolPage extends MfdPage {
 }
 
 // AUX pages drawn in the approach window's style (FG1000 has none): boxes down two columns of the whole page.
-interface PanelRow { label: string; value?: string; mid?: string; cur?: "label" | "mid" | "value"; dim?: boolean }
+interface PanelRow { label: string; value?: string; mid?: string; cur?: "label" | "mid" | "value"; dim?: boolean; /** The value's, cyan by default. */ color?: string }
 interface PanelBox { title: string; rows: PanelRow[] }
 const PANEL_BG = "#1a3030";
+/** A box of what this package does not carry out, grey. */
+const greyBox = (title: string, rows: [string, string][]): PanelBox => ({ title, rows: rows.map(([label, value]) => ({ label, value, dim: true })) });
 
 /** `boxes` stacked down a column at x, w wide, from y. */
 function panelColumn(x: number, w: number, y: number, boxes: PanelBox[], rowH = 23): string {
@@ -1548,11 +1572,17 @@ function panelColumn(x: number, w: number, y: number, boxes: PanelBox[], rowH = 
       const fill = (on: boolean, normal: string) => (on ? "#000000" : r.dim ? "#808080" : normal);
       out += panelText(r.label, x + 10, ry, "start", fill(r.cur === "label", r.cur === "label" ? CYAN : "#ffffff"), r.cur === "label");
       if (r.mid !== undefined) out += panelText(r.mid, x + w * 0.62, ry, "end", fill(r.cur === "mid", CYAN), r.cur === "mid");
-      if (r.value !== undefined) out += panelText(r.value, x + w - 10, ry, "end", fill(r.cur === "value", CYAN), r.cur === "value");
+      if (r.value !== undefined) out += panelText(r.value, x + w - 10, ry, "end", fill(r.cur === "value", r.color ?? CYAN), r.cur === "value");
     });
     y += b.rows.length * rowH + 12 + 30;
   }
   return out;
+}
+
+/** DD-MMM-YY in the clock's time zone. */
+function dateText(ms: number, s: Setup) {
+  const date = new Date(ms + (s.timeFormat === "UTC" ? 0 : s.offset * 60_000));
+  return `${String(date.getUTCDate()).padStart(2, "0")}-${date.toLocaleString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase()}-${String(date.getUTCFullYear()).slice(2)}`;
 }
 
 /** A page of its own boxes, with no FG1000 SVG: the AUX pages. */
@@ -1596,32 +1626,34 @@ class SystemSetupPage extends PanelPage {
     const now = Date.now();
     const field = (box: string): PanelRow[] => SETUP_FIELDS.flatMap((f, i) =>
       f.box === box ? [{ label: f.label, value: setupValue(s, i), cur: this.crsr && i === this.at ? "value" as const : undefined }] : []);
-    const grey = (title: string, rows: [string, string][]): PanelBox => ({ title, rows: rows.map(([label, value]) => ({ label, value, dim: true })) });
-    const date = new Date(now + (s.timeFormat === "UTC" ? 0 : s.offset * 60_000));
-    const dd = `${String(date.getUTCDate()).padStart(2, "0")}-${date.toLocaleString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase()}-${String(date.getUTCFullYear()).slice(2)}`;
     this.paint([
-      { title: "DATE / TIME", rows: [{ label: "DATE", value: dd }, { label: "TIME", value: clockText(now, s) }, ...field("DATE / TIME")] },
-      grey("DISPLAY UNITS", [["NAV ANGLE", "MAGNETIC(°)"], ["DIS, SPD", "NAUTICAL(NM,KT)"], ["ALT, VS", "FEET(FT,FPM)"], ["TEMP", "CELSIUS(°C)"], ["FUEL", "GALLONS(GL,GL/HR)"], ["POSITION", "HDDD°MM.MM'"]]),
-      grey("BARO TRANSITION ALERT", [["ALTITUDE", "18000FT"], ["LEVEL", "FL180"]]),
-      grey("AIRSPACE ALERTS", [["ALT BUFFER", "200FT"], ["CLASS B/TMA", "ON"], ["CLASS C/TCA", "ON"], ["CLASS D", "ON"], ["RESTRICTED", "ON"], ["MOA (MILITARY)", "ON"], ["OTHER/ADIZ", "ON"]]),
+      { title: "DATE / TIME", rows: [{ label: "DATE", value: dateText(now, s) }, { label: "TIME", value: clockText(now, s) }, ...field("DATE / TIME")] },
+      greyBox("DISPLAY UNITS", [["NAV ANGLE", "MAGNETIC(°)"], ["DIS, SPD", "NAUTICAL(NM,KT)"], ["ALT, VS", "FEET(FT,FPM)"], ["TEMP", "CELSIUS(°C)"], ["FUEL", "GALLONS(GL,GL/HR)"], ["POSITION", "HDDD°MM.MM'"]]),
+      greyBox("BARO TRANSITION ALERT", [["ALTITUDE", "18000FT"], ["LEVEL", "FL180"]]),
+      greyBox("AIRSPACE ALERTS", [["ALT BUFFER", "200FT"], ["CLASS B/TMA", "ON"], ["CLASS C/TCA", "ON"], ["CLASS D", "ON"], ["RESTRICTED", "ON"], ["MOA (MILITARY)", "ON"], ["OTHER/ADIZ", "ON"]]),
     ], [
-      grey("ARRIVAL ALERT", [["ALERT", "____"]]),
-      grey("AUDIO ALERT", [["VOICE", "____"]]),
-      grey("FLIGHT DIRECTOR", [["ACTIVE FORMAT", "SINGLE CUE"]]),
+      greyBox("ARRIVAL ALERT", [["ALERT", "____"]]),
+      greyBox("AUDIO ALERT", [["VOICE", "____"]]),
+      greyBox("FLIGHT DIRECTOR", [["ACTIVE FORMAT", "SINGLE CUE"]]),
       { title: "MFD DATA BAR FIELDS", rows: field("MFD DATA BAR FIELDS") },
       { title: "PAGE NAVIGATION", rows: field("PAGE NAVIGATION") },
-      grey("GPS CDI", [["SELECTED", "AUTO"], ["SYSTEM CDI", "____"]]),
-      grey("COM CONFIG", [["CHANNEL SPACING", "25.0 KHZ"]]),
+      greyBox("GPS CDI", [["SELECTED", "AUTO"], ["SYSTEM CDI", "____"]]),
+      greyBox("COM CONFIG", [["CHANNEL SPACING", "25.0 KHZ"]]),
       { title: "NEAREST AIRPORT", rows: field("NEAREST AIRPORT") },
     ]);
   }
 }
 
 // AUX - UTILITY (Pilot's Guide): the generic, flight and departure timers and trip statistics, reset from the PAGE
-// MENU. The scheduler and flight data logger are not ported.
+// MENU, and the scheduler, below the timers for the large FMS knob. The flight data logger is not ported.
 class UtilityPage extends PanelPage {
   private at = 0;
   readonly util = new Utility(Date.now());
+  readonly sched = new Scheduler();
+  /** The cursor is in the scheduler, after the timers. */
+  private get inSched() {
+    return this.at === UTILITY_FIELDS.length;
+  }
 
   toggleCrsr() {
     super.toggleCrsr();
@@ -1629,16 +1661,28 @@ class UtilityPage extends PanelPage {
   }
 
   fms(outer: boolean, d: number) {
-    if (outer) this.at = clamp(this.at + (d > 0 ? 1 : -1), 0, UTILITY_FIELDS.length - 1);
-    else this.util.field(UTILITY_FIELDS[this.at], d, Date.now());
+    const now = Date.now();
+    const s = this.sched;
+    if (!outer) this.inSched ? s.inner(d, now) : this.util.field(UTILITY_FIELDS[this.at], d, now);
+    else if (this.inSched && !s.editing && s.i === 0 && s.f === "text" && d < 0) this.at--;
+    else if (this.inSched) s.outer(d);
+    else {
+      this.at = clamp(this.at + (d > 0 ? 1 : -1), 0, UTILITY_FIELDS.length);
+      if (this.inSched) s.cursor(0, "text");
+    }
     return true;
   }
 
   // ENT on the direction or the time goes on to START?; on START?, STOP? or RESET? it carries it out.
   ent() {
     if (!this.crsr) return;
-    if (UTILITY_FIELDS[this.at] === "action") this.util.action(Date.now());
+    if (this.inSched) this.sched.ent();
+    else if (UTILITY_FIELDS[this.at] === "action") this.util.action(Date.now());
     else if (this.at < 2) this.at = 2;
+  }
+
+  clr() {
+    if (this.crsr && this.inSched) this.sched.clr();
   }
 
   pageMenu(): MenuOption[] {
@@ -1667,7 +1711,172 @@ class UtilityPage extends PanelPage {
         { label: "ODOMETER", value: `${u.odom.toFixed(1)}NM` }, { label: "TRIP ODOM", value: `${u.trip.toFixed(1)}NM` },
         { label: "TRIP AVG GS", value: `${u.avgGs()}KT` }, { label: "MAXIMUM GS", value: `${Math.round(u.maxGs)}KT` },
       ] },
-    ], []);
+    ], [{ title: "SCHEDULER", rows: this.sched.items.flatMap((r, i): PanelRow[] => {
+      const s = this.sched;
+      const on = (f: ScheduleField) => this.crsr && this.inSched && s.i === i && s.f === f;
+      // While typing, the text up to the large knob's character, blanks as underscores.
+      const typed = on("text") && s.editing && s.editing.join("").slice(0, Math.max(s.pos + 1, s.editing.join("").trimEnd().length)).replace(/ /g, "_");
+      const setup = this.m.ui.setup;
+      const time = r.type === "Event"
+        ? (r.at === null ? "__-___-__ __:__" : `${dateText(r.at, setup)} ${clockText(r.at, setup, false)}`)
+        : hms(r.due === null ? r.timer : Math.max(0, (r.due - now) / 1000));
+      return [
+        { label: typed || r.text || "____________________", cur: on("text") ? "label" : undefined },
+        { label: "", mid: r.type, value: time, cur: on("type") ? "mid" : on("time") ? "value" : undefined },
+      ];
+    }) }]);
+  }
+}
+
+// AUX - TRIP PLANNING (Pilot's Guide; FG1000 shows no data here): AUTO takes groundspeed, fuel flow and fuel on board from the aircraft; MANUAL takes
+// them, and the air data density altitude and true airspeed need, from the small FMS knob. The leg is the flight plan's
+// REM or one of its legs. WPTS mode and ESA are not ported.
+const TRIP_INPUTS = [
+  { key: "gs", label: "GS", step: 1, unit: "KT", digits: 0, min: 0, max: 999 },
+  { key: "ff", label: "FUEL FLOW", step: 0.1, unit: "GL/HR", digits: 1, min: 0, max: 99.9 },
+  { key: "fuel", label: "FUEL ON BOARD", step: 1, unit: "GL", digits: 1, min: 0, max: 999 },
+  { key: "cas", label: "CALIBRATED AS", step: 1, unit: "KT", digits: 0, min: 0, max: 999 },
+  { key: "alt", label: "IND ALTITUDE", step: 100, unit: "FT", digits: 0, min: -1000, max: 50000 },
+  { key: "baro", label: "BARO", step: 0.01, unit: "IN", digits: 2, min: 27, max: 32 },
+  { key: "tat", label: "TOTAL AIR TEMP", step: 1, unit: "°C", digits: 0, min: -99, max: 99 },
+] as const;
+type TripInputs = Record<(typeof TRIP_INPUTS)[number]["key"], number>;
+
+class TripPlanningPage extends PanelPage {
+  private manual: TripInputs | null = null;
+  private leg: number | "REM" = "REM";
+  /** The flight plan the leg was picked from: a changed plan goes back to REM, as its leg numbers move. */
+  private legRoute: MfdState["route"] | null = null;
+  private at = 0;
+
+  private sensors(): TripInputs {
+    const s = this.m.s;
+    const fuel = s.engine.fuelLeft + s.engine.fuelRight;
+    return { gs: Math.round(s.groundspeed), ff: s.engine.fuelFlow, fuel, cas: Math.round(s.groundspeed), alt: Math.round(s.alt / 100) * 100, baro: s.baro, tat: 15 };
+  }
+
+  toggleCrsr() {
+    super.toggleCrsr();
+    this.at = 0;
+  }
+
+  fms(outer: boolean, d: number) {
+    if (outer) this.at = clamp(this.at + (d > 0 ? 1 : -1), 0, this.manual ? TRIP_INPUTS.length : 0);
+    else if (this.at === 0) {
+      const legs = ["REM" as const, ...this.m.s.route.keys()].filter((l) => l !== 0);
+      [this.leg, this.legRoute] = [legs[clamp(legs.indexOf(this.leg) + d, 0, legs.length - 1)], this.m.s.route];
+    } else if (this.manual) {
+      const f = TRIP_INPUTS[this.at - 1];
+      this.manual[f.key] = clamp(+(this.manual[f.key] + d * f.step).toFixed(f.digits), f.min, f.max);
+    }
+    return true;
+  }
+
+  keys() {
+    return this.m.topKeys({
+      4: key("AUTO", () => ([this.manual, this.at] = [null, 0]), !this.manual),
+      5: key("MANUAL", () => (this.manual ??= this.sensors()), !!this.manual),
+      7: key("FPL", undefined, true), 8: dimKey("WPTS"),
+    });
+  }
+
+  draw() {
+    const s = this.m.s;
+    const setup = this.m.ui.setup;
+    const now = Date.now();
+    if (this.leg !== "REM" && s.route !== this.legRoute) this.leg = "REM";
+    const inp = this.manual ?? this.sensors();
+    const id = (i: number) => routePoint(s.route[i] ?? "", s.points, s.airports);
+    const to = id(this.leg === "REM" ? s.route.length - 1 : this.leg);
+    const from = this.leg === "REM" || this.leg === s.activeLeg ? "P.POS" : id(this.leg - 1)?.id;
+    const leg = tripLeg(s, this.leg);
+    const hours = leg.dis !== null && inp.gs > 0 ? leg.dis / inp.gs : null;
+    const f = fuelStats(inp.gs, inp.ff, inp.fuel, hours);
+    const sun = to ? sunTimes(to.lat, to.lon, now + (hours ?? 0) * 3_600_000) : { rise: null, set: null };
+    const or = <T,>(v: T | null, fmt: (v: T) => string, none: string) => (v === null ? none : fmt(v));
+    const hm = (h: number) => `${h < 0 ? "-" : ""}${hms(Math.abs(h) * 3600).slice(0, 5)}`;
+    const clock = (ms: number) => clockText(ms, setup, false);
+    const cur = (i: number) => (this.crsr && this.at === i ? ("value" as const) : undefined);
+    // AUTO has no air data: calibrated airspeed and total air temperature are the pilot's to enter.
+    const noAir = !this.manual;
+    this.paint([
+      { title: "FLIGHT PLAN", rows: [
+        { label: "LEG", value: this.leg === "REM" ? "REM" : String(this.leg).padStart(2, "0"), cur: cur(0) },
+        { label: "FROM", value: from ?? "____" }, { label: "TO", value: to?.id ?? "____" },
+      ] },
+      { title: "INPUT DATA", rows: [
+        { label: "DEP TIME", value: clock(now) },
+        ...TRIP_INPUTS.map((t, i): PanelRow => noAir && (t.key === "cas" || t.key === "tat")
+          ? { label: t.label, value: `____${t.unit}`, dim: true }
+          : { label: t.label, value: `${inp[t.key].toFixed(t.digits)}${t.unit}`, cur: cur(i + 1) }),
+      ] },
+    ], [
+      { title: "TRIP STATISTICS", rows: [
+        { label: "DTK", value: or(leg.dtk, deg3, "___°") }, { label: "DIS", value: or(leg.dis, (v) => `${v.toFixed(1)}NM`, "___NM") },
+        { label: "ETE", value: or(hours, (h) => ete(h * 3600), "__:__") }, { label: "ETA", value: or(hours, (h) => clock(now + h * 3_600_000), "__:__") },
+        { label: "ESA", value: "____FT", dim: true },
+        { label: "SUNRISE", value: or(sun.rise, clock, "__:__") }, { label: "SUNSET", value: or(sun.set, clock, "__:__") },
+      ] },
+      { title: "FUEL STATISTICS", rows: [
+        { label: "EFFICIENCY", value: or(f.efficiency, (v) => `${v.toFixed(1)}NM/GL`, "__._NM/GL") },
+        { label: "TOTAL ENDUR", value: or(f.endurance, hm, "__:__") }, { label: "REM FUEL", value: or(f.remFuel, (v) => `${v.toFixed(1)}GL`, "__._GL") },
+        { label: "REM ENDUR", value: or(f.remEndurance, hm, "__:__") }, { label: "FUEL REQ", value: or(f.fuelReq, (v) => `${v.toFixed(1)}GL`, "__._GL") },
+        { label: "TOTAL RANGE", value: or(f.range, (v) => `${Math.round(v)}NM`, "___NM") },
+      ] },
+      { title: "OTHER STATISTICS", rows: [
+        { label: "DENSITY ALT", value: noAir ? "_____FT" : `${Math.round(densityAltitude(inp.alt, inp.baro, inp.tat))}FT`, dim: noAir },
+        { label: "TRUE AIRSPEED", value: noAir ? "___KT" : `${Math.round(trueAirspeed(inp.cas, inp.alt, inp.baro, inp.tat))}KT`, dim: noAir },
+      ] },
+    ]);
+  }
+}
+
+// AUX - GPS STATUS (Pilot's Guide; FG1000 shows no data here): the position, time, altitude, groundspeed and track the aircraft gives. There are no
+// satellites here, so the sky view and signal bars are left out and the accuracy, RAIM and SBAS boxes are grey.
+class GpsStatusPage extends PanelPage {
+  private rx = 1;
+  private sbas = false;
+
+  keys() {
+    return this.m.topKeys({
+      4: key("GPS1", () => (this.rx = 1), this.rx === 1), 5: key("GPS2", () => (this.rx = 2), this.rx === 2),
+      7: key("RAIM", () => (this.sbas = false), !this.sbas), 8: key("SBAS", () => (this.sbas = true), this.sbas),
+    });
+  }
+
+  draw() {
+    const s = this.m.s;
+    this.paint([
+      { title: `GPS${this.rx} POSITION`, rows: [
+        { label: "SOLUTION", value: "3D NAV" }, { label: "POSITION", value: latLon(s.lat, "N", "S") }, { label: "", value: latLon(s.lon, "E", "W") },
+        { label: "TIME", value: clockText(Date.now(), { timeFormat: "UTC", offset: 0 }) }, { label: "ALTITUDE", value: `${Math.round(s.alt)}FT` },
+        { label: "GS", value: `${Math.round(s.groundspeed)}KT` }, { label: "TRK", value: deg3(s.track) },
+      ] },
+      greyBox("ACCURACY", [["EPU", "__._NM"], ["HDOP", "__._"], ["HFOM", "__._NM"], ["VFOM", "___FT"]]),
+    ], [
+      this.sbas
+        ? greyBox("SBAS SELECTION", [["WAAS", "ON"], ["EGNOS", "OFF"], ["MSAS", "OFF"]])
+        : greyBox("RAIM PREDICTION", [["WAYPOINT", "P.POS"], ["TIME", "__:__"], ["DATE", "__-___-__"], ["AVAILABILITY", "COMPUTE RAIM?"]]),
+    ]);
+  }
+}
+
+// AUX - SYSTEM STATUS (Pilot's Guide; FG1000 shows no data here): every LRU reports in. There are no serial numbers, versions or databases here, so
+// the airframe and database boxes are grey and ANN TEST is dim.
+const LRUS = ["GDC1", "GEA1", "GIA1", "GIA2", "GMA1", "GMU1", "GRS1", "GTX1", "MFD1", "PFD1"];
+
+class SystemStatusPage extends PanelPage {
+  private db: "MFD1" | "PFD1" = "MFD1";
+
+  keys() {
+    return this.m.topKeys({ 7: key(`${this.db} DB`, () => (this.db = this.db === "MFD1" ? "PFD1" : "MFD1")), 8: dimKey("ANN TEST") });
+  }
+
+  draw() {
+    this.paint([{ title: "LRU INFO", rows: LRUS.map((label) => ({ label, value: "✓", color: "#00ff00" })) }], [
+      greyBox("AIRFRAME", [["AIRFRAME", "____"]]),
+      greyBox(`${this.db} DATABASE`, [["BASEMAP", "____"], ["NAVIGATION", "____"], ["OBSTACLE", "____"], ["TERRAIN", "____"]]),
+    ]);
   }
 }
 
@@ -1704,6 +1913,9 @@ export function makePages(m: Mfd, screen: SVGGElement): Pages {
       case "AirportInfo": return new AirportInfoPage(m, screen);
       case "Utility": return utility;
       case "SystemSetup": return new SystemSetupPage(m, name, screen, top);
+      case "TripPlanning": return new TripPlanningPage(m, name, screen, top);
+      case "GPSStatus": return new GpsStatusPage(m, name, screen, top);
+      case "SystemStatus": return new SystemStatusPage(m, name, screen, top);
       case "Checklist": return new ChecklistPage(m, screen);
       case "ActiveFlightPlanNarrow": return new FlightPlanPage(m, screen, waypointEntry, () => fplTool);
     }

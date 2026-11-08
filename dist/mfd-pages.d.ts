@@ -5,6 +5,7 @@ import { Highlighter, type Key } from "./ui.js";
 import { type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
 import { type Pan } from "./pan.js";
+import { Scheduler } from "./scheduler.js";
 import { Utility, type Setup } from "./aux-pages.js";
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
 export interface Checklist {
@@ -24,6 +25,7 @@ export interface MfdUi {
     /** Declutter level, 0 to 3. */ dcltr: number;
     /** MAP SETUP's track vector look-ahead, seconds; 0 is off. */ trackVector: number;
     /** Airways key state, 0 to 3. */ airways: number;
+    /** MAP SETUP's airway ranges: the largest map range, nm, each type shows at. */ airwayRange: Record<"LO" | "HI", number>;
     /** MAP menu toggles. */ layers: Record<string, boolean>;
     /** Waypoints entered in DIRECT TO and WAYPOINT ENTRY, latest first: their RECENT list. */ recent: string[];
     /** Pan mode on the navigation map (joystick push), or null. */ pan: Pan | null;
@@ -76,6 +78,8 @@ export declare class MfdPage {
     /** The waypoint DIRECT TO starts with from this page (the one under the cursor). */
     selected(): string | null;
     /** The MENU key's PAGE MENU options, or null for a page without one here. */
+    /** Where the navigation map draws the nearest airport line, if this page has one. */
+    nearestLine(): LatLon | null;
     pageMenu(): MenuOption[] | null;
     draw(): void;
 }
@@ -154,9 +158,11 @@ export declare class PageMenuPage extends MfdPage {
     draw(): void;
 }
 export declare class MapSetupPage extends MfdPage {
-    private at;
+    private group;
+    /** The row under the cursor, -1 for GROUP. */ private at;
     constructor(m: Mfd, screen: SVGGElement, after: Element);
     open(): this;
+    private settings;
     fms(outer: boolean, d: number): boolean;
     ent(): void;
     clr(): void;
@@ -181,7 +187,8 @@ interface PanelRow {
     value?: string;
     mid?: string;
     cur?: "label" | "mid" | "value";
-    dim?: boolean;
+    dim?: boolean; /** The value's, cyan by default. */
+    color?: string;
 }
 interface PanelBox {
     title: string;
@@ -197,9 +204,13 @@ declare class PanelPage extends MfdPage {
 declare class UtilityPage extends PanelPage {
     private at;
     readonly util: Utility;
+    readonly sched: Scheduler;
+    /** The cursor is in the scheduler, after the timers. */
+    private get inSched();
     toggleCrsr(): void;
     fms(outer: boolean, d: number): boolean;
     ent(): void;
+    clr(): void;
     pageMenu(): MenuOption[];
     draw(): void;
 }

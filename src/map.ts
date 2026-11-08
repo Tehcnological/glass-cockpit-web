@@ -53,15 +53,16 @@ export interface MapData {
   /** Map center when not the aircraft (WPT pages center on the waypoint). */ center?: LatLon;
   /** A procedure previewed on a WPT page: its fixes in order, white, the missed approach dashed. */ preview?: MapPoint[];
   /** The airways to draw (see `shownAirways`), low first. */ airways?: Airway[];
+  /** NRST - NEAREST AIRPORTS' selected airport: a dashed white line runs to it from the aircraft. */ nearestLine?: LatLon;
   /** Profile View's path: its length and total width, nm, along the track. */ profilePath?: { nm: number; width: number; ticks: number[] };
 }
 
-// Pilot's Guide, Table 5-4: the map range at or under which each airway type shows.
-const AIRWAY_RANGE = { LO: 200, HI: 300 };
+// Pilot's Guide, Table 5-4: the map range at or under which each airway type shows by default; MAP SETUP changes it.
+export const AIRWAY_RANGE: Record<Airway["type"], number> = { LO: 200, HI: 300 };
 
 /** The airways the AIRWAYS key shows at `range`: 0 none, 1 all, 2 low, 3 high. High ones last, drawn over the low. */
-export function shownAirways(all: Airway[], mode: number, range: number): Airway[] {
-  const want = (a: Airway) => (mode === 1 || (mode === 2 && a.type === "LO") || (mode === 3 && a.type === "HI")) && range <= AIRWAY_RANGE[a.type];
+export function shownAirways(all: Airway[], mode: number, range: number, limits = AIRWAY_RANGE): Airway[] {
+  const want = (a: Airway) => (mode === 1 || (mode === 2 && a.type === "LO") || (mode === 3 && a.type === "HI")) && range <= limits[a.type];
   return [...all.filter((a) => a.type === "LO"), ...all.filter((a) => a.type === "HI")].filter(want);
 }
 
@@ -195,6 +196,10 @@ const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer]
   if (s.activeLeg === 0 && s.directFrom && route[0]) {
     const [[x1, y1], [x2, y2]] = [xy(s.directFrom), xy(route[0])];
     out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ff00ff" stroke-width="2"/>`;
+  }
+  if (s.nearestLine) {
+    const [[x1, y1], [x2, y2]] = [xy(s), xy(s.nearestLine)];
+    out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ffffff" stroke-width="2" stroke-dasharray="8 6"/>`;
   }
   for (const p of symbolPoints(s, declutter)) {
     const [x, y] = xy(p);

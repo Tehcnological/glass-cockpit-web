@@ -56,14 +56,16 @@ export interface MapData {
     /** Map center when not the aircraft (WPT pages center on the waypoint). */ center?: LatLon;
     /** A procedure previewed on a WPT page: its fixes in order, white, the missed approach dashed. */ preview?: MapPoint[];
     /** The airways to draw (see `shownAirways`), low first. */ airways?: Airway[];
+    /** NRST - NEAREST AIRPORTS' selected airport: a dashed white line runs to it from the aircraft. */ nearestLine?: LatLon;
     /** Profile View's path: its length and total width, nm, along the track. */ profilePath?: {
         nm: number;
         width: number;
         ticks: number[];
     };
 }
+export declare const AIRWAY_RANGE: Record<Airway["type"], number>;
 /** The airways the AIRWAYS key shows at `range`: 0 none, 1 all, 2 low, 3 high. High ones last, drawn over the low. */
-export declare function shownAirways(all: Airway[], mode: number, range: number): Airway[];
+export declare function shownAirways(all: Airway[], mode: number, range: number, limits?: Record<"LO" | "HI", number>): Airway[];
 /** Profile View's scales: half the map range (none under 1 nm), five distance marks, and four altitude steps with the
  * aircraft at the start of the second. shortcut: our own altitude steps; the Pilot's Guide gives none. */
 export declare function profileView(alt: number, range: number): {

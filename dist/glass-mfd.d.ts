@@ -50,6 +50,8 @@ export interface MfdState extends Knobs {
 export interface MfdOptions extends DisplayOptions {
     /** Called when a bezel input changes the state (range, radios, flight plan, and the shared knob values). */
     onChange?: (patch: Partial<MfdState>) => void;
+    /** Called with a scheduler message (AUX - UTILITY) when it comes due; give it to the PFD's `alerts`. */
+    onScheduler?: (message: string) => void;
 }
 export declare class GlassMfd {
     private options;
