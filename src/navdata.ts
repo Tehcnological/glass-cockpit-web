@@ -152,3 +152,89 @@ export function parseCifp(text: string): Cifp["procedures"] {
     .filter((p) => p[3].length)
     .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
 }
+
+/** The six NASR CSV files buildNasr reads, by file name without .csv, as rows of column name to value. */
+export type NasrCsv = Record<"NAV_BASE" | "FIX_BASE" | "APT_BASE" | "APT_RWY" | "FRQ" | "ILS_BASE", Record<string, string>[]>;
+
+/**
+ * NASR records from the 28-day subscription's CSV files: navaids (VOR, VOR/DME, VORTAC, NDB, NDB/DME) in service, fixes,
+ * public-use airports with their frequencies, runways and details, and ARTCC, FSS and weather frequencies. Class B, C
+ * and D airspace comes from a shapefile, so the host builds it and passes it in.
+ */
+export function buildNasr(cycle: string, csv: NasrCsv, airspace: Nasr["airspace"]): Nasr {
+  const round = (v: string | number) => Math.round(Number(v) * 1e5) / 1e5;
+  const vhf = (f: string) => Number(f) >= 118 && Number(f) < 137;
+  const magVar = (v: string, hemis: string) => (Number(v) || 0) * (hemis === "W" ? -1 : 1);
+
+  // Navaids: VORs and NDBs, in service. Service volume as the G1000 names it.
+  const NAV_TYPES: Record<string, "VOR" | "NDB"> = { VOR: "VOR", "VOR/DME": "VOR", VORTAC: "VOR", NDB: "NDB", "NDB/DME": "NDB" };
+  const CLASS: Record<string, string> = { H: "HIGH ALT", L: "LOW ALT", T: "TERMINAL" };
+  const navRows = csv.NAV_BASE;
+  const navaids: Nasr["navaids"] = navRows
+    .filter((r) => NAV_TYPES[r.NAV_TYPE] && r.NAV_STATUS.startsWith("OPERATIONAL"))
+    .map((r) => [r.NAV_ID, NAV_TYPES[r.NAV_TYPE], round(r.LAT_DECIMAL), round(r.LONG_DECIMAL), Number(r.FREQ), r.NAME, r.NAV_TYPE,
+      r.CITY, r.STATE_CODE, magVar(r.MAG_VARN, r.MAG_VARN_HEMIS), CLASS[r.ALT_CODE?.[1]] ?? ""]);
+
+  const fixes: Nasr["fixes"] = csv.FIX_BASE.map((r) => [r.FIX_ID, round(r.LAT_DECIMAL), round(r.LONG_DECIMAL), r.STATE_CODE]);
+
+  // Airport frequencies under the G1000's labels; NASR's other uses (STAR and DP names, CLASS B, ...) are left out.
+  const USES: [RegExp, string][] = [[/^D?-?ATIS$/, "ATIS"], [/^LCL\//, "TOWER"], [/^GND\//, "GROUND"], [/^CD(\/|$)/, "CLEARANCE"],
+    [/^APCH\//, "APPROACH"], [/^DEP\//, "DEPARTURE"], [/^CTAF$/, "CTAF"], [/^UNICOM$/, "UNICOM"]];
+  const apt = csv.APT_BASE.filter((r) => r.SITE_TYPE_CODE === "A" && r.FACILITY_USE_CODE === "PU" && r.ARPT_STATUS === "O");
+  const icao = new Map(apt.map((r) => [r.ARPT_ID, r.ICAO_ID || r.ARPT_ID]));
+  const freqs = new Map<string, [string, string][]>();
+  const add = (id: string, use: string, f: string) => {
+    const list = freqs.get(id) ?? [];
+    const freq = Number(f).toFixed(3);
+    if (!list.some(([u, x]) => u === use && x === freq)) list.push([use, freq]);
+    freqs.set(id, list);
+  };
+  const frq = csv.FRQ;
+  for (const r of frq) {
+    if (!r.FREQ || !vhf(r.FREQ)) continue;
+    if (r.FACILITY_TYPE === "ASOS_AWOS") add(r.SERVICED_FACILITY, r.SERVICED_SITE_TYPE.split("-")[0], r.FREQ);
+    for (const use of r.FREQ_USE.split(" ")) {
+      const label = USES.find(([re]) => re.test(use))?.[1];
+      if (label) add(r.SERVICED_FACILITY, label, r.FREQ);
+    }
+  }
+  for (const r of csv.ILS_BASE) {
+    if (r.LOC_FREQ) add(r.ARPT_ID, `${["LS", "LD", "LG"].includes(r.SYSTEM_TYPE_CODE) ? "ILS" : "LOC"} ${r.RWY_END_ID}`, r.LOC_FREQ);
+  }
+  const runways = new Map<string, Nasr["airports"][number][7]>();
+  for (const r of csv.APT_RWY) {
+    const list = runways.get(r.ARPT_ID) ?? [];
+    list.push([r.RWY_ID.replace("/", "-"), Number(r.RWY_LEN) || 0, Number(r.RWY_WIDTH) || 0, r.SURFACE_TYPE_CODE, r.RWY_LGT_CODE]);
+    runways.set(r.ARPT_ID, list);
+  }
+  const airports: Nasr["airports"] = apt.map((r) => [r.ARPT_ID, r.ICAO_ID, r.ARPT_NAME, round(r.LAT_DECIMAL), round(r.LONG_DECIMAL),
+    freqs.get(r.ARPT_ID) ?? [], Math.round(Number(r.ELEV)), (runways.get(r.ARPT_ID) ?? []).sort((a, b) => b[1] - a[1]),
+    r.CITY, r.STATE_CODE, (r.FUEL_TYPES ?? "").split(",").filter(Boolean).join(", ")]);
+
+  // Frequencies that are not an airport's own: center outlets (RCAG) under their ARTCC, flight service outlets (RCO)
+  // under their FSS, and ASOS/AWOS and ATIS for NRST - NEAREST FREQUENCIES' weather list.
+  // Center names come from the navaids' ARTCC columns ("ALBUQUERQUE"), FSS names from the FSS records.
+  const names = new Map(frq.filter((r) => r.FACILITY_TYPE === "FSS").map((r) => [r.FACILITY, r.FAC_NAME]));
+  for (const r of navRows) for (const [id, name] of [[r.LOW_ALT_ARTCC_ID, r.LOW_ARTCC_NAME], [r.HIGH_ALT_ARTCC_ID, r.HIGH_ARTCC_NAME]]) {
+    if (id && name) names.set(id, `${name} CENTER`);
+  }
+  const stations: Nasr["stations"] = [];
+  const seen = new Set<string>();
+  for (const r of frq) {
+    if (!r.FREQ || !vhf(r.FREQ) || !r.LAT_DECIMAL) continue;
+    const at = [round(r.LAT_DECIMAL), round(r.LONG_DECIMAL)] as const;
+    let s: Nasr["stations"][number] | null = null;
+    if (r.FACILITY_TYPE === "RCAG" && r.ARTCC_OR_FSS_ID) {
+      s = ["ARTCC", r.ARTCC_OR_FSS_ID, names.get(r.ARTCC_OR_FSS_ID) ?? r.ARTCC_OR_FSS_ID, ...at, r.FREQ];
+    } else if (r.FACILITY_TYPE === "RCO" && r.ARTCC_OR_FSS_ID) s = ["FSS", r.ARTCC_OR_FSS_ID, names.get(r.ARTCC_OR_FSS_ID) ?? r.ARTCC_OR_FSS_ID, ...at, r.FREQ];
+    else if (r.FACILITY_TYPE === "ASOS_AWOS") s = ["WX", icao.get(r.SERVICED_FACILITY) ?? r.SERVICED_FACILITY, r.SERVICED_SITE_TYPE, ...at, r.FREQ];
+    else if (/(^| )D?-?ATIS( |$)/.test(r.FREQ_USE) && icao.has(r.SERVICED_FACILITY)) s = ["WX", icao.get(r.SERVICED_FACILITY)!, "ATIS", ...at, r.FREQ];
+    const k = s && `${s[0]} ${s[1]} ${s[5]}`;
+    if (s && !seen.has(k!)) {
+      seen.add(k!);
+      stations.push(s);
+    }
+  }
+
+  return { cycle, navaids, fixes, airports, stations, airspace };
+}

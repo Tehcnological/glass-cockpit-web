@@ -54,3 +54,11 @@ export declare function approachName(id: string): string;
  * left out.
  */
 export declare function parseCifp(text: string): Cifp["procedures"];
+/** The six NASR CSV files buildNasr reads, by file name without .csv, as rows of column name to value. */
+export type NasrCsv = Record<"NAV_BASE" | "FIX_BASE" | "APT_BASE" | "APT_RWY" | "FRQ" | "ILS_BASE", Record<string, string>[]>;
+/**
+ * NASR records from the 28-day subscription's CSV files: navaids (VOR, VOR/DME, VORTAC, NDB, NDB/DME) in service, fixes,
+ * public-use airports with their frequencies, runways and details, and ARTCC, FSS and weather frequencies. Class B, C
+ * and D airspace comes from a shapefile, so the host builds it and passes it in.
+ */
+export declare function buildNasr(cycle: string, csv: NasrCsv, airspace: Nasr["airspace"]): Nasr;

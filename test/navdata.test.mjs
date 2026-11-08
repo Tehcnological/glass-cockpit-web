@@ -1,7 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { approachName, near, parseCifp } from "../dist/navdata.js";
+import { approachName, buildNasr, near, parseCifp } from "../dist/navdata.js";
+
+const fixture = (f) => JSON.parse(readFileSync(new URL(`fixtures/${f}`, import.meta.url), "utf8"));
+const rows = fixture("nasr-rows.json");
+const expected = fixture("nasr-expected.json");
+
+test("buildNasr reproduces today's records for real 2026-10-29 rows", () => {
+  assert.deepEqual(buildNasr("2026-10-29", rows, []), expected.nasr);
+});
+
+test("an airport's repeated frequency is listed once", () => {
+  const twice = { ...rows, FRQ: [...rows.FRQ, rows.FRQ.find((r) => r.SERVICED_FACILITY === "PHX" && r.FREQ_USE.includes("LCL/"))] };
+  const phx = (n) => n.airports.find((a) => a[0] === "PHX")[5];
+  assert.deepEqual(phx(buildNasr("2026-10-29", twice, [])), phx(expected.nasr));
+});
 
 // KPHX ILS RWY 08 from CIFP 2611, with its fixes.
 const CIFP = `
