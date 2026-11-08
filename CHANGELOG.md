@@ -16,6 +16,7 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 - PFD: the VSI scale stops at ±2000 fpm, its readout rounded to 50 fpm. MENU opens the PFD SETUP MENU, or the flight plan's PAGE MENU.
 - MFD: MENU opens a PAGE MENU on the navigation map and flight plan pages (Declutter; Invert, Delete, Remove Approach). FPL again goes back to the previous page; PROC again closes PROCEDURES.
 - Bezel: the left column is no longer shaded darker than the right.
+- PFD: the pitch ladder no longer overlaps the roll pointer, and the turn rate indicator has half-standard and standard rate ticks.
 - MFD and PFD inset: the joystick push starts pan mode: a pointer, and an info bar with the point under it, its distance and bearing, latitude and longitude. RANGE recenters on the pointer. DIRECT TO takes the point under the pointer.
 - PFD: DIRECT TO and PROC open their windows, sharing the MFD's flow. New PFD state `procedures`, and `directFrom` so the inset draws a direct leg without a host round trip. Vue passes both from `mfd`.
 - Bezel: holding COM ⇄ or CLR for 2 s is a long press, as Shift+click is.

@@ -134,7 +134,7 @@ const HIDDEN = ["L_NoGPS", "GSPD", "PFD-Multilines", "Annunciation", "SelectedAL
 
 // Tape clipping, as "rect(top, right, bottom, left)" in screen coordinates.
 const CLIPS: Record<string, [number, number, number, number]> = {
-  PitchScale: [70, 664, 370, 256],
+  PitchScale: [130, 664, 370, 256], // stops above the roll pointer and slip/skid bar (FG1000: 70, through them)
   SpeedLint1: [252, 226, 318, 204],
   SpeedTape: [115, 239, 455, 156],
   LintAlt: [115, 808, 455, 704],
@@ -142,6 +142,8 @@ const CLIPS: Record<string, [number, number, number, number]> = {
 };
 
 const MAGENTA = "#ff00ff";
+// The turn rate band's arc: its center, and the radii its ticks span (clear of the heading box).
+const TURN = { cx: 459.5, cy: 586.5, r0: 136, r1: 152 };
 const GREEN = "#00ff00";
 
 export class GlassPfd {
@@ -231,14 +233,23 @@ export class GlassPfd {
     const scale = this.p.el("turnrate-indicator")!;
     this.turnTrend = scale.parentNode!.insertBefore(document.createElementNS("http://www.w3.org/2000/svg", "path"), scale.nextSibling);
     for (const [k, v] of Object.entries({ fill: "none", stroke: MAGENTA, "stroke-width": "5" })) this.turnTrend.setAttribute(k, v);
+    // Pilot's Guide: ticks each side of the lubber line at half-standard and standard rate (9° and 18° in 6 s). FG1000
+    // draws the band only.
+    const ticks = [-18, -9, 9, 18].map((deg) => {
+      const a = (deg * Math.PI) / 180;
+      return `M ${TURN.cx + TURN.r0 * Math.sin(a)} ${TURN.cy - TURN.r0 * Math.cos(a)} L ${TURN.cx + TURN.r1 * Math.sin(a)} ${TURN.cy - TURN.r1 * Math.cos(a)}`;
+    });
+    const tickPath = scale.parentNode!.insertBefore(document.createElementNS("http://www.w3.org/2000/svg", "path"), this.turnTrend.nextSibling);
+    for (const [k, v] of Object.entries({ d: ticks.join(" "), stroke: "#ffffff", "stroke-width": "2" })) tickPath.setAttribute(k, v);
     this.set({});
   }
 
-  // Turn rate trend vector: the heading 6 seconds ahead, along the arc above the compass rose (center 459.5, 586.5).
+  // Turn rate trend vector: the heading 6 seconds ahead, along the arc above the compass rose, through the ticks.
   // The scale spans about 24° each side, so standard rate (3°/s) reaches 18°.
   private updateTurnRate(rate: number) {
     const a = (Math.max(-24, Math.min(24, rate * 6)) * Math.PI) / 180;
-    const [cx, cy, r] = [459.5, 586.5, 157];
+    const { cx, cy } = TURN;
+    const r = (TURN.r0 + TURN.r1) / 2;
     const d = Math.abs(a) < 0.005 ? "" : `M ${cx} ${cy - r} A ${r} ${r} 0 0 ${a > 0 ? 1 : 0} ${cx + r * Math.sin(a)} ${cy - r * Math.cos(a)}`;
     this.turnTrend.setAttribute("d", d);
   }
