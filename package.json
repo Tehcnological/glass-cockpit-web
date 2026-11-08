@@ -11,7 +11,7 @@
     "./radio": "./dist/radio.js",
     "./vue/*": "./vue/*"
   },
-  "files": ["dist", "src", "vue", "LICENSE"],
+  "files": ["dist", "src", "vue", "LICENSE", "NOTICE.md"],
   "scripts": {
     "test": "tsc && node --test test/*.test.mjs",
     "build": "node scripts/build-svg.mjs && tsc -p tsconfig.json"
