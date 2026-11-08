@@ -216,7 +216,8 @@ export function atkOffset(s, at, nm) {
     const w = pts[at];
     // Along the plan's leg that side; before the active waypoint, also short of the aircraft's distance to go.
     const here = nm < 0 && at === s.activeLeg ? { lat: s.lat, lon: s.lon } : undefined;
-    const other = pts[at + Math.sign(nm)] ?? here;
+    // On a direct-to, the leg into the active waypoint starts where the direct-to did.
+    const other = (here && s.directFrom) || pts[at + Math.sign(nm)] || here;
     if (!w || !other)
         return null;
     const { to, from } = local(w);

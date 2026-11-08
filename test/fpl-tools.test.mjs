@@ -136,3 +136,9 @@ test("a waypoint entered from a parallel plan goes in as the waypoint it came fr
   assert.equal(planEntry(s, B), "B");
   assert.deepEqual(planEntry(s, { ...pt("F", 1, 1), approach: "X", role: "FAF" }), pt("F", 1, 1));
 });
+
+test("during a direct-to, an offset before the active waypoint lies on the direct course", () => {
+  const dto = { ...s, activeLeg: 2, lat: 0.5, lon: 2, directFrom: { lat: 0.5, lon: 2 } }; // 30 nm north of C, direct to C
+  const r = atkOffset(dto, 2, -10);
+  assert.ok(near(r.point.lat, 10 / 60, 1e-4) && near(r.point.lon, 2, 1e-4));
+});

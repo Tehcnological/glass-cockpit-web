@@ -270,14 +270,15 @@ export function closestPointOfFpl(s: Plan, ref: MapPoint) {
  * waypoint, the distance to go), with no leg that side, or at or after the final approach fix; and where one with
  * the same name is already in the plan.
  */
-export function atkOffset(s: Plan & LatLon & { activeLeg: number }, at: number, nm: number) {
+export function atkOffset(s: Plan & LatLon & { activeLeg: number; directFrom?: LatLon | null }, at: number, nm: number) {
   const faf = s.route.findIndex((r) => isApproach(r) && r.role === "FAF");
   if (!Number.isInteger(nm) || !nm || Math.abs(nm) > 999 || (faf >= 0 && at >= faf)) return null;
   const pts = s.route.map((r) => routePoint(r, s.points, s.airports));
   const w = pts[at];
   // Along the plan's leg that side; before the active waypoint, also short of the aircraft's distance to go.
   const here = nm < 0 && at === s.activeLeg ? { lat: s.lat, lon: s.lon } : undefined;
-  const other = pts[at + Math.sign(nm)] ?? here;
+  // On a direct-to, the leg into the active waypoint starts where the direct-to did.
+  const other = (here && s.directFrom) || pts[at + Math.sign(nm)] || here;
   if (!w || !other) return null;
   const { to, from } = local(w);
   const [x, y] = to(other);

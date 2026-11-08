@@ -188,6 +188,7 @@ export declare function closestPointOfFpl(s: Plan, ref: MapPoint): {
  */
 export declare function atkOffset(s: Plan & LatLon & {
     activeLeg: number;
+    directFrom?: LatLon | null;
 }, at: number, nm: number): {
     at: number;
     point: MapPoint;
