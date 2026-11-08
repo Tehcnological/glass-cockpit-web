@@ -36,6 +36,11 @@ export function fplMenu(route: Route, activeLeg: number): { label: string; patch
   // Inverting drops the approach, as the G1000 does, and flies the first leg.
   if (enroute.length > 1) patches["Invert Flight Plan"] = { route: [...enroute].reverse(), activeLeg: 1, directFrom: null, vtf: false };
   if (route.length) patches["Delete Flight Plan"] = { route: [], activeLeg: 0, directFrom: null, vtf: false };
-  if (a) patches["Remove Approach"] = { route: enroute, activeLeg: Math.min(kept, Math.max(0, enroute.length - 1)), vtf: false };
+  if (a) {
+    const patch: FplPatch = { route: enroute, activeLeg: Math.min(kept, Math.max(0, enroute.length - 1)), vtf: false };
+    // A direct-to an approach fix (activating the approach makes one) ends with it; one to a waypoint kept stays.
+    if (route[activeLeg] !== undefined && isApproach(route[activeLeg])) patch.directFrom = null;
+    patches["Remove Approach"] = patch;
+  }
   return FPL_OPTIONS.map((label) => ({ label, patch: patches[label] }));
 }

@@ -114,8 +114,8 @@ export function wheelStep(control: Control, gap: number): number {
   return (control === "HEADING" || control === "CRS") && gap < 100 ? 5 : 1;
 }
 
-/** Adds the hotspots to a display drawn with its bezel and reports each input. */
-export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void): void {
+/** Adds the hotspots to a display drawn with its bezel and reports each input. Returns a function that removes the window listener. */
+export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void): () => void {
   const layer = svg.appendChild(document.createElementNS(NS, "g"));
   layer.setAttribute("fill", "transparent");
   layer.setAttribute("cursor", "pointer");
@@ -183,6 +183,10 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void):
     const control = e.shiftKey ? s.shiftClick : s.click;
     if (control) fire(s, control);
   });
+  return () => {
+    stop();
+    window.removeEventListener("pointerup", stop);
+  };
 }
 
 // NAV and COM bands in whole MHz (Constants.nas). Frequencies are worked in kHz to keep them exact.

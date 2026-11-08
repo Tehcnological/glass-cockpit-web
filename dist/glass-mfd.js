@@ -44,6 +44,7 @@ export class GlassMfd {
     eis;
     nav;
     surround;
+    /** Removes the bezel's window listener. */ unbezel = () => { };
     raw;
     map;
     mapPartial;
@@ -80,7 +81,7 @@ export class GlassMfd {
         screen.insertBefore(this.frame, surround);
         this.pages = makePages(this.api(), screen);
         if (options.bezel)
-            bezelInput(svg, (i) => this.input(i));
+            this.unbezel = bezelInput(svg, (i) => this.input(i));
         this.loadPage();
     }
     /** Stops the page menu timers. Call when the display is removed. */
@@ -88,6 +89,7 @@ export class GlassMfd {
         clearTimeout(this.timers.menu);
         clearTimeout(this.timers.load);
         this.surround.destroy();
+        this.unbezel();
     }
     // What the pages may use.
     api() {

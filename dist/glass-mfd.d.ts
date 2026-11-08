@@ -57,6 +57,7 @@ export declare class GlassMfd {
     private eis;
     private nav;
     private surround;
+    /** Removes the bezel's window listener. */ private unbezel;
     private raw;
     private map;
     private mapPartial;

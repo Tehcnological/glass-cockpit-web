@@ -111,6 +111,7 @@ export declare class GlassPfd {
     private state;
     private p;
     private surround;
+    /** Removes the bezel's window listener. */ private unbezel;
     private nrst;
     private fpl;
     private fplRows;

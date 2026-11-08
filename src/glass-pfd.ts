@@ -145,6 +145,7 @@ export class GlassPfd {
   private state: PfdState = { ...DEFAULTS };
   private p: Page;
   private surround: Surround;
+  /** Removes the bezel's window listener. */ private unbezel = () => {};
   private nrst: Page;
   private fpl: Page;
   private fplRows: ListView;
@@ -211,7 +212,7 @@ export class GlassPfd {
     for (const id of ["APLateralArmed", "APLateralActive", "APVerticalArmed", "APVerticalActive", "APVerticalReference", "APStatus"]) {
       this.surround.p.text(`Header${id}`, "");
     }
-    if (options.bezel) bezelInput(svg, (i) => this.input(i));
+    if (options.bezel) this.unbezel = bezelInput(svg, (i) => this.input(i));
     // FG1000 draws the turn rate scale but never drives it; the trend vector is drawn here.
     const scale = this.p.el("turnrate-indicator")!;
     this.turnTrend = scale.parentNode!.insertBefore(document.createElementNS("http://www.w3.org/2000/svg", "path"), scale.nextSibling);
@@ -233,6 +234,7 @@ export class GlassPfd {
     clearInterval(this.clock);
     this.timers.forEach(clearTimeout);
     this.surround.destroy();
+    this.unbezel();
   }
 
   private input(i: Input) {

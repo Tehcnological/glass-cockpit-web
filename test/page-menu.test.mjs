@@ -37,7 +37,7 @@ test("delete, invert and remove approach change the flight plan", () => {
   assert.deepEqual(opt("Delete Flight Plan"), { route: [], activeLeg: 0, directFrom: null, vtf: false });
   // Inverting drops the approach and makes the first leg active.
   assert.deepEqual(opt("Invert Flight Plan"), { route: ["KAAA", "WPONE", "ABC"], activeLeg: 1, directFrom: null, vtf: false });
-  assert.deepEqual(opt("Remove Approach"), { route: ["ABC", "WPONE", "KAAA"], activeLeg: 2, vtf: false });
+  assert.deepEqual(opt("Remove Approach"), { route: ["ABC", "WPONE", "KAAA"], activeLeg: 2, vtf: false, directFrom: null });
 });
 
 test("waypoints entered among the approach fixes stay when the approach goes", () => {
@@ -49,4 +49,11 @@ test("waypoints entered among the approach fixes stay when the approach goes", (
   assert.equal(opt("Remove Approach", 2).activeLeg, 2);
   assert.equal(opt("Remove Approach", 4).activeLeg, 2);
   assert.deepEqual(opt("Invert Flight Plan", 1).route, ["USER", "KAAA", "ABC"]);
+});
+
+test("removing the approach ends a direct-to its active fix, not one to a waypoint kept", () => {
+  const route = ["ABC", "KAAA", pt("A", "ILS"), pt("B", "ILS")];
+  const remove = (leg) => fplMenu(route, leg).find((o) => o.label === "Remove Approach").patch;
+  assert.equal(remove(2).directFrom, null);
+  assert.equal("directFrom" in remove(1), false);
 });

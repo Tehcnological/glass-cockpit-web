@@ -96,6 +96,7 @@ export class GlassMfd {
   private eis: Page;
   private nav: Page;
   private surround: Surround;
+  /** Removes the bezel's window listener. */ private unbezel = () => {};
   private raw: Page;
   private map: SVGGElement;
   private mapPartial: SVGGElement;
@@ -131,7 +132,7 @@ export class GlassMfd {
     while (surround.parentNode !== screen) surround = surround.parentNode!;
     screen.insertBefore(this.frame, surround);
     this.pages = makePages(this.api(), screen);
-    if (options.bezel) bezelInput(svg, (i) => this.input(i));
+    if (options.bezel) this.unbezel = bezelInput(svg, (i) => this.input(i));
     this.loadPage();
   }
 
@@ -140,6 +141,7 @@ export class GlassMfd {
     clearTimeout(this.timers.menu);
     clearTimeout(this.timers.load);
     this.surround.destroy();
+    this.unbezel();
   }
 
   // What the pages may use.

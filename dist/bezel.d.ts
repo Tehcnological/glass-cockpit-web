@@ -38,8 +38,8 @@ export type Spot = {
 export declare const SPOTS: Spot[];
 /** Detents one wheel notch turns: HDG and CRS turn 5 when the wheel spins fast (`gap`, ms since the last notch), as a quick twist does. */
 export declare function wheelStep(control: Control, gap: number): number;
-/** Adds the hotspots to a display drawn with its bezel and reports each input. */
-export declare function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void): void;
+/** Adds the hotspots to a display drawn with its bezel and reports each input. Returns a function that removes the window listener. */
+export declare function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void): () => void;
 /**
  * The knob and button changes SurroundController makes, as a patch; null when the input does not change these values.
  * `toStation` is the magnetic bearing to the station of the NAV radio the CDI shows, if the host gives one.
