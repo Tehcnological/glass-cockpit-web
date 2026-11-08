@@ -10,7 +10,7 @@ import EIS from "./svg/eis.js";
 import SURROUND from "./svg/surround-mfd.js";
 import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay, type DisplayOptions } from "./display.js";
-import { Page, clamp, deg3, mod } from "./page.js";
+import { Page, clamp, mod } from "./page.js";
 import { panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget, type PanView } from "./pan.js";
 import { drawMap, mapGroup, mapUp, rangeLabel, stepRange, type Airspace, type LatLon, type MapGeometry, type MapPoint, type Orientation } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
@@ -18,6 +18,7 @@ import type { CdiSource } from "./glass-pfd.js";
 import { adjust, bezelInput, type Input, type Knobs } from "./bezel.js";
 import type { Airport, Procedure, Station } from "./nav.js";
 import { BLANK, Highlighter, NS, dimKey, key, type Key } from "./ui.js";
+import { dataBar, setupDefaults } from "./aux-pages.js";
 import { PAGE_GROUPS, makePages, type Checklist, type Mfd, type MfdPage, type MfdUi, type Pages } from "./mfd-pages.js";
 
 /** The pan info bar's text size, px. */
@@ -110,10 +111,11 @@ export class GlassMfd {
   /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ private overlay: MfdPage | null = null;
   /** The page FPL goes back to: group and page names. */ private beforeFpl: [string, string] = ["MapPageGroup", "NavigationMap"];
   private timers = { menu: 0, load: 0 };
+  /** Once a second: the Utility page's trip statistics, and the AUX pages' clocks. */ private clock: ReturnType<typeof setInterval>;
   private hl = new Highlighter();
   private ui: MfdUi = {
     group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, trackVector: 0, airways: 0,
-    layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false }, recent: [], pan: null,
+    layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false }, recent: [], pan: null, setup: setupDefaults(),
   };
 
   /** The container must be visible: layout is measured once here. */
@@ -137,13 +139,19 @@ export class GlassMfd {
     let surround: Node = this.raw.el("PageTitle")!;
     while (surround.parentNode !== screen) surround = surround.parentNode!;
     screen.insertBefore(this.frame, surround);
+    addSystemSetupTab(this.raw);
     this.pages = makePages(this.api(), screen);
+    this.clock = setInterval(() => {
+      this.pages.utility.util.tick(this.state.groundspeed, Date.now());
+      if (this.page.live) this.set({});
+    }, 1000);
     if (options.bezel) this.unbezel = bezelInput(svg, (i) => this.input(i));
     this.loadPage();
   }
 
   /** Stops the page menu timers. Call when the display is removed. */
   destroy(): void {
+    clearInterval(this.clock);
     clearTimeout(this.timers.menu);
     clearTimeout(this.timers.load);
     this.surround.destroy();
@@ -297,7 +305,8 @@ export class GlassMfd {
   // the page loads half a second after the last click and the menu hides after three.
   private pageMenu(outer: boolean, value: number) {
     const u = this.ui;
-    if (u.menuVisible) {
+    // AUX - SYSTEM SETUP's Page Navigation: Change On 1st Click moves on the first click too; its timeout.
+    if (u.menuVisible || u.setup.firstClick) {
       const d = value > 0 ? 1 : -1;
       if (outer) {
         u.group = mod(u.group + d, PAGE_GROUPS.length);
@@ -309,7 +318,7 @@ export class GlassMfd {
     this.showMenu();
     clearTimeout(this.timers.menu);
     clearTimeout(this.timers.load);
-    this.timers.menu = window.setTimeout(() => this.hideMenu(), 3000);
+    this.timers.menu = window.setTimeout(() => this.hideMenu(), u.setup.timeout * 1000);
     this.timers.load = window.setTimeout(() => this.loadPage(), 500);
   }
 
@@ -363,6 +372,7 @@ export class GlassMfd {
   /** Merge new values into the state and redraw. */
   set(patch: Partial<MfdState>): void {
     const s = (this.state = { ...this.state, ...patch });
+    this.pages.utility.util.tick(s.groundspeed, Date.now());
     const page = this.page;
     const under = this.groupPage;
     this.surround.setRadios(s.radios, s.cdiSource === "NAV1" ? 1 : s.cdiSource === "NAV2" ? 2 : null);
@@ -461,14 +471,9 @@ export class GlassMfd {
     this.change({ radios: { ...r, [which]: { ...r[which], standby: freq } } });
   }
 
-  // Surround.updateHeaderData, MFD half: the default fields GS, DTK, TRK, ETE.
+  // Surround.updateHeaderData, MFD half: FG1000's GS, DTK, TRK, ETE, or the fields AUX - SYSTEM SETUP picks.
   private updateHeader(s: MfdState) {
-    const fields: [string, string][] = [
-      ["GS", `${Math.round(s.groundspeed)}kts`],
-      ["DTK", s.dtk === null ? "---°" : deg3(s.dtk)],
-      ["TRK", deg3(s.track)],
-      ["ETE", s.ete === null ? "--:--" : ete(s.ete)],
-    ];
+    const fields = this.ui.setup.dataBar.map((f) => [f, dataBar(f, s, Date.now(), this.ui.setup)]);
     fields.forEach(([label, value], i) => {
       this.surround.p.text(`Header${i + 1}Label`, label);
       this.surround.p.text(`Header${i + 1}Value`, value);
@@ -487,9 +492,26 @@ export class GlassMfd {
   }
 }
 
-// ETE as Surround.updateHeaderData formats it: m:ss under an hour, h:mm over.
-export function ete(sec: number) {
-  const s = Math.max(0, Math.round(sec));
-  const p2 = (n: number) => String(n).padStart(2, "0");
-  return s < 3600 ? `${Math.floor(s / 60)}:${p2(s % 60)}` : `${Math.floor(s / 3600)}:${p2(Math.floor(s / 60) % 60)}`;
+export { ete } from "./aux-pages.js";
+
+/** AUX - SYSTEM SETUP in the AUX page group's tab menu, after GPS STATUS (Pilot's Guide; FG1000's menu has no such
+ * line). The box grows up a line, as the NRST group's taller box does. */
+function addSystemSetupTab(raw: Page) {
+  const gps = raw.el("GPSStatus");
+  const box = raw.el("AuxPageGroup")?.querySelector("rect");
+  if (!gps || !box) return;
+  const LINE = 16.13;
+  box.setAttribute("y", String(Number(box.getAttribute("y")) - LINE));
+  box.setAttribute("height", String(Number(box.getAttribute("height")) + LINE));
+  for (const id of ["TripPlanning", "Utility", "GPSStatus"]) {
+    for (const e of [raw.el(id)!, ...raw.el(id)!.querySelectorAll("tspan")]) e.setAttribute("y", String(Number(e.getAttribute("y")) - LINE));
+  }
+  const t = gps.cloneNode(true) as SVGTextElement;
+  for (const e of [t, ...t.querySelectorAll("tspan")]) {
+    e.removeAttribute("id");
+    e.setAttribute("y", String(Number(e.getAttribute("y")) + LINE));
+  }
+  t.id = "SystemSetup";
+  t.querySelector("tspan")!.textContent = "SYSTEM SETUP";
+  gps.after(t);
 }

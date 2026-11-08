@@ -10,11 +10,13 @@ import { firstOption, fplMenu, stepMenu } from "./page-menu.js";
 import { panStart } from "./pan.js";
 import { PROC_MENU, ProcFlow } from "./procedures.js";
 import { AprInfo } from "./apr-info.js";
+import { SETUP_FIELDS, UTILITY_FIELDS, Utility, airportMatches, clockText, hms, setupValue, stepSetup } from "./aux-pages.js";
 // Surround.PAGE_GROUPS
 export const PAGE_GROUPS = [
     { group: "MapPageGroup", label: "MapPageGroupLabel", pages: ["NavigationMap", "TrafficMap", "Stormscope", "WeatherDataLink", "TAWSB"] },
     { group: "WPTPageGroup", label: "WPTGroupLabel", pages: ["AirportInfo", "IntersectionInfo", "NDBInfo", "VORInfo", "UserWPTInfo"] },
-    { group: "AuxPageGroup", label: "AuxGroupLabel", pages: ["TripPlanning", "Utility", "GPSStatus", "XMRadio", "SystemStatus"] },
+    // System Setup after GPS Status, as the Pilot's Guide orders them (FG1000 has no System Setup).
+    { group: "AuxPageGroup", label: "AuxGroupLabel", pages: ["TripPlanning", "Utility", "GPSStatus", "SystemSetup", "XMRadio", "SystemStatus"] },
     { group: "FPLPageGroup", label: "FPLGroupLabel", pages: ["ActiveFlightPlanNarrow", "FlightPlanCatalog", "StoredFlightPlan"] },
     { group: "LstPageGroup", label: "LstGroupLabel", pages: ["Checklist"] },
     { group: "NrstPageGroup", label: "NrstGroupLabel", pages: ["NearestAirports", "NearestIntersections", "NearestNDB", "NearestVOR", "NearestUserWaypoints", "NearestFrequencies", "NearestAirspaces"] },
@@ -24,7 +26,7 @@ const TITLES = {
     NavigationMap: "MAP - NAVIGATION MAP", TrafficMap: "MAP - TRAFFIC MAP", Stormscope: "MAP - STORMSCOPE", WeatherDataLink: "MAP - WEATHER DATA LINK",
     TAWSB: "MAP - TAWS", AirportInfo: "WPT - AIRPORT INFORMATION", IntersectionInfo: "WPT - INTERSECTION INFORMATION", NDBInfo: "WPT - NDB INFORMATION",
     VORInfo: "WPT - VOR INFORMATION", UserWPTInfo: "WPT - USER WPT INFORMATION", TripPlanning: "AUX - TRIP PLANNING", Utility: "AUX - UTILITY",
-    GPSStatus: "AUX - GPS STATUS", XMRadio: "AUX - XM RADIO", SystemStatus: "AUX - SYSTEM STATUS", ActiveFlightPlanNarrow: "FPL - ACTIVE FLIGHT PLAN",
+    GPSStatus: "AUX - GPS STATUS", SystemSetup: "AUX - SYSTEM SETUP", XMRadio: "AUX - XM RADIO", SystemStatus: "AUX - SYSTEM STATUS", ActiveFlightPlanNarrow: "FPL - ACTIVE FLIGHT PLAN",
     FlightPlanCatalog: "FPL - FLIGHT PLAN CATALOG", StoredFlightPlan: "FPL - STORED FLIGHT PLAN", Checklist: "LST - CHECKLIST",
     NearestAirports: "NRST - NEAREST AIRPORTS", NearestIntersections: "NRST - NEAREST INTERSECTIONS", NearestNDB: "NRST - NEAREST NDB",
     NearestVOR: "NRST - NEAREST VOR", NearestUserWaypoints: "NRST - NEAREST USER WPTS", NearestFrequencies: "NRST - NEAREST FREQUENCIES",
@@ -48,6 +50,7 @@ export class MfdPage {
     m;
     name;
     /** The FMS cursor is on the page (CRSR). */ crsr = false;
+    /** Redrawn every second (a clock on the page). */ live = false;
     /** The navigation map behind the page: the whole map, or the map beside the page's data. */
     navMap = null;
     p;
@@ -201,7 +204,8 @@ class NearestAirportsPage extends MfdPage {
     freqs = new ListView(this.p, ["FreqLabel", "Freq"], 3, "Freq", false, { trough: "FreqScrollBar", thumb: "FreqScroll" });
     apprs = new ListView(this.p, ["Approach"], 3, "Approach", false, { trough: "ApproachScrollBar", thumb: "ApproachScroll" });
     list() {
-        return nearest(this.s.airports, this.s.lat, this.s.lon, this.s.magVar);
+        // AUX - SYSTEM SETUP's Nearest Airport criteria: runway surface and length.
+        return nearest(this.s.airports.filter((a) => airportMatches(a, this.m.ui.setup)), this.s.lat, this.s.lon, this.s.magVar);
     }
     get apt() {
         return this.list()[this.apts.sel]?.item;
@@ -1440,12 +1444,144 @@ export class FplToolPage extends MfdPage {
         cursorBoxes(this.g);
     }
 }
+const PANEL_BG = "#1a3030";
+/** `boxes` stacked down a column at x, w wide, from y. */
+function panelColumn(x, w, y, boxes, rowH = 23) {
+    let out = "";
+    for (const b of boxes) {
+        out += `<rect x="${x + 0.5}" y="${y + 0.5}" width="${w}" height="${b.rows.length * rowH + 12}" fill="#000000" stroke="#ffffff"/>` +
+            `<rect x="${x + 15.5}" y="${y - 9.5}" width="${b.title.length * 9 + 12}" height="20" fill="${PANEL_BG}" stroke="#ffffff"/>` +
+            `<text x="${x + 21}" y="${y + 5}" fill="#ffffff" style="font-family:'Liberation Sans',sans-serif;font-size:14.5px">${esc(b.title)}</text>`;
+        b.rows.forEach((r, i) => {
+            const ry = y + 28 + i * rowH;
+            const fill = (on, normal) => (on ? "#000000" : r.dim ? "#808080" : normal);
+            out += panelText(r.label, x + 10, ry, "start", fill(r.cur === "label", r.cur === "label" ? CYAN : "#ffffff"), r.cur === "label");
+            if (r.mid !== undefined)
+                out += panelText(r.mid, x + w * 0.62, ry, "end", fill(r.cur === "mid", CYAN), r.cur === "mid");
+            if (r.value !== undefined)
+                out += panelText(r.value, x + w - 10, ry, "end", fill(r.cur === "value", CYAN), r.cur === "value");
+        });
+        y += b.rows.length * rowH + 12 + 30;
+    }
+    return out;
+}
+/** A page of its own boxes, with no FG1000 SVG: the AUX pages. */
+class PanelPage extends MfdPage {
+    live = true; // their clocks run
+    g;
+    constructor(m, name, screen, after) {
+        super(m, name, screen);
+        this.g = document.createElementNS(NS, "g");
+        this.g.id = `Page-${name}`;
+        this.g.style.display = "none";
+        after.after(this.g);
+        this.root = this.g;
+    }
+    paint(left, right) {
+        this.g.innerHTML = `<rect x="150.5" y="53.5" width="884" height="689" fill="${PANEL_BG}" stroke="#ffffff"/>` +
+            panelColumn(160, 425, 75, left) + panelColumn(600, 425, 75, right);
+        cursorBoxes(this.g);
+    }
+}
+// AUX - SYSTEM SETUP (Pilot's Guide): the settings in `aux-pages.ts` work; the boxes this package does not carry out are grey.
+class SystemSetupPage extends PanelPage {
+    at = 0;
+    toggleCrsr() {
+        super.toggleCrsr();
+        this.at = 0;
+    }
+    fms(outer, d) {
+        if (outer)
+            this.at = clamp(this.at + (d > 0 ? 1 : -1), 0, SETUP_FIELDS.length - 1);
+        else
+            stepSetup(this.m.ui.setup, this.at, d);
+        return true;
+    }
+    draw() {
+        const s = this.m.ui.setup;
+        const now = Date.now();
+        const field = (box) => SETUP_FIELDS.flatMap((f, i) => f.box === box ? [{ label: f.label, value: setupValue(s, i), cur: this.crsr && i === this.at ? "value" : undefined }] : []);
+        const grey = (title, rows) => ({ title, rows: rows.map(([label, value]) => ({ label, value, dim: true })) });
+        const date = new Date(now + (s.timeFormat === "UTC" ? 0 : s.offset * 60_000));
+        const dd = `${String(date.getUTCDate()).padStart(2, "0")}-${date.toLocaleString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase()}-${String(date.getUTCFullYear()).slice(2)}`;
+        this.paint([
+            { title: "DATE / TIME", rows: [{ label: "DATE", value: dd }, { label: "TIME", value: clockText(now, s) }, ...field("DATE / TIME")] },
+            grey("DISPLAY UNITS", [["NAV ANGLE", "MAGNETIC(°)"], ["DIS, SPD", "NAUTICAL(NM,KT)"], ["ALT, VS", "FEET(FT,FPM)"], ["TEMP", "CELSIUS(°C)"], ["FUEL", "GALLONS(GL,GL/HR)"], ["POSITION", "HDDD°MM.MM'"]]),
+            grey("BARO TRANSITION ALERT", [["ALTITUDE", "18000FT"], ["LEVEL", "FL180"]]),
+            grey("AIRSPACE ALERTS", [["ALT BUFFER", "200FT"], ["CLASS B/TMA", "ON"], ["CLASS C/TCA", "ON"], ["CLASS D", "ON"], ["RESTRICTED", "ON"], ["MOA (MILITARY)", "ON"], ["OTHER/ADIZ", "ON"]]),
+        ], [
+            grey("ARRIVAL ALERT", [["ALERT", "____"]]),
+            grey("AUDIO ALERT", [["VOICE", "____"]]),
+            grey("FLIGHT DIRECTOR", [["ACTIVE FORMAT", "SINGLE CUE"]]),
+            { title: "MFD DATA BAR FIELDS", rows: field("MFD DATA BAR FIELDS") },
+            { title: "PAGE NAVIGATION", rows: field("PAGE NAVIGATION") },
+            grey("GPS CDI", [["SELECTED", "AUTO"], ["SYSTEM CDI", "____"]]),
+            grey("COM CONFIG", [["CHANNEL SPACING", "25.0 KHZ"]]),
+            { title: "NEAREST AIRPORT", rows: field("NEAREST AIRPORT") },
+        ]);
+    }
+}
+// AUX - UTILITY (Pilot's Guide): the generic, flight and departure timers and trip statistics, reset from the PAGE
+// MENU. The scheduler and flight data logger are not ported.
+class UtilityPage extends PanelPage {
+    at = 0;
+    util = new Utility(Date.now());
+    toggleCrsr() {
+        super.toggleCrsr();
+        this.at = 0;
+    }
+    fms(outer, d) {
+        if (outer)
+            this.at = clamp(this.at + (d > 0 ? 1 : -1), 0, UTILITY_FIELDS.length - 1);
+        else
+            this.util.field(UTILITY_FIELDS[this.at], d, Date.now());
+        return true;
+    }
+    // ENT on the direction or the time goes on to START?; on START?, STOP? or RESET? it carries it out.
+    ent() {
+        if (!this.crsr)
+            return;
+        if (UTILITY_FIELDS[this.at] === "action")
+            this.util.action(Date.now());
+        else if (this.at < 2)
+            this.at = 2;
+    }
+    pageMenu() {
+        const r = (label, what) => ({ label, act: () => this.util.reset(what, Date.now()) });
+        return [
+            r("Reset Flight Timer", "flight"), r("Reset Departure Time", "departure"), r("Reset Trip ODOM/AVG GS", "trip"),
+            r("Reset Odometer", "odom"), r("Reset Maximum Speed", "max"), r("Reset All", "all"),
+        ];
+    }
+    draw() {
+        const u = this.util;
+        const now = Date.now();
+        const on = (f) => this.crsr && UTILITY_FIELDS[this.at] === f;
+        const cur = (f, where) => (on(f) ? where : undefined);
+        const flight = u.flight(now);
+        const dep = u.departure(now);
+        this.paint([
+            { title: "TIMERS", rows: [
+                    { label: "GENERIC", mid: u.up ? "UP" : "DN", value: hms(u.timer(now)), cur: cur("dir", "mid") ?? cur("time", "value") },
+                    { label: u.label(), cur: cur("action", "label") },
+                    { label: "FLIGHT", mid: u.flightFrom, value: flight === null ? "__:__:__" : hms(flight), cur: cur("flight", "mid") },
+                    { label: "DEPARTURE", mid: u.depFrom, value: dep === null ? "__:__:__" : clockText(dep, this.m.ui.setup), cur: cur("departure", "mid") },
+                ] },
+            { title: "TRIP STATISTICS", rows: [
+                    { label: "ODOMETER", value: `${u.odom.toFixed(1)}NM` }, { label: "TRIP ODOM", value: `${u.trip.toFixed(1)}NM` },
+                    { label: "TRIP AVG GS", value: `${u.avgGs()}KT` }, { label: "MAXIMUM GS", value: `${Math.round(u.maxGs)}KT` },
+                ] },
+        ], []);
+    }
+}
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
 export function makePages(m, screen) {
     const roots = [...screen.querySelectorAll('[id^="Page-"]')];
     for (const r of roots)
         r.style.display = "inline";
     const waypointEntry = new WaypointEntryPage(m, screen);
+    const top = roots[roots.length - 1].parentNode;
+    const utility = new UtilityPage(m, "Utility", screen, top);
     const make = (name) => {
         switch (name) {
             case "NavigationMap": return new NavigationMapPage(m, name, screen, () => mapSetup);
@@ -1459,6 +1595,8 @@ export function makePages(m, screen) {
             case "NDBInfo": return new NavInfoPage(m, name, screen, "NDB", 3);
             case "IntersectionInfo": return new NavInfoPage(m, name, screen, "FIX", 5);
             case "AirportInfo": return new AirportInfoPage(m, screen);
+            case "Utility": return utility;
+            case "SystemSetup": return new SystemSetupPage(m, name, screen, top);
             case "Checklist": return new ChecklistPage(m, screen);
             case "ActiveFlightPlanNarrow": return new FlightPlanPage(m, screen, waypointEntry, () => fplTool);
         }
@@ -1476,5 +1614,5 @@ export function makePages(m, screen) {
     const fplTool = new FplToolPage(m, screen, roots[roots.length - 1].parentNode);
     for (const r of roots)
         r.style.display = "none";
-    return { groups, directTo, procedures, waypointEntry, pageMenu, mapSetup, fplTool };
+    return { groups, directTo, procedures, waypointEntry, pageMenu, mapSetup, fplTool, utility };
 }

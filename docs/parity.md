@@ -85,8 +85,9 @@ Garmin art, screenshots, data or manual text is copied.
 | WPT | Airport information | Partial: info and APPROACH INFORMATION (APR) done; departure, arrival and weather (DP, STAR, WX) grey with no data; INFO-2 directory missing |
 | WPT | Intersection, NDB, VOR information | Done |
 | WPT | User waypoint information | Missing (no user waypoints) |
-| AUX | Trip planning, utility, GPS status, XM, system status | Missing / No data |
-| AUX | System setup | Missing |
+| AUX | Utility | Partial: generic, flight and departure timers and trip statistics done; scheduler and flight data logger missing |
+| AUX | Trip planning, GPS status, XM, system status | No data |
+| AUX | System setup | Partial: time format and offset, MFD data bar fields, page navigation, nearest airport criteria done; display units, alerts, GPS CDI, COM spacing shown grey |
 | FPL | Active flight plan | Partial: insert, delete, activate leg, PAGE MENU; no VNV, no airways, no stored plans |
 | FPL | Flight plan catalog, stored plans | Missing |
 | LST | Checklists | Done |
@@ -123,7 +124,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Nearest VOR | Select VOR Window, Select Frequency Window | Missing |
 | Nearest airspaces | Select Alerts Window | Missing / No data |
 | Trip planning | Flight Plan Mode, Waypoints Mode, Auto Mode, Manual Mode | Missing |
-| Utility | Reset Departure Time, Reset Flight Timer | Missing |
+| Utility | Reset Flight Timer, Reset Departure Time, Reset Trip ODOM/AVG GS, Reset Odometer, Reset Maximum Speed, Reset All | Done |
 | AUX GPS status | Set WPT to Present Position (RAIM prediction) | Missing |
 | Weather (XM, FIS-B, Connext), traffic, TAWS, terrain, Stormscope, Iridium phone and text | Product groups, legends, operate/standby/test, inhibit, show flight IDs, call and message actions | No data |
 

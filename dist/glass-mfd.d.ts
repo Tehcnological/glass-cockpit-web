@@ -67,6 +67,7 @@ export declare class GlassMfd {
     /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ private overlay;
     /** The page FPL goes back to: group and page names. */ private beforeFpl;
     private timers;
+    /** Once a second: the Utility page's trip statistics, and the AUX pages' clocks. */ private clock;
     private hl;
     private ui;
     /** The container must be visible: layout is measured once here. */
@@ -100,4 +101,4 @@ export declare class GlassMfd {
     private updateHeader;
     private updateEIS;
 }
-export declare function ete(sec: number): string;
+export { ete } from "./aux-pages.js";

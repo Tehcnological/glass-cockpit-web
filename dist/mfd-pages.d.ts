@@ -5,6 +5,7 @@ import { Highlighter, type Key } from "./ui.js";
 import { type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
 import { type Pan } from "./pan.js";
+import { Utility, type Setup } from "./aux-pages.js";
 /** A checklist for LST - CHECKLIST, e.g. { group: "EMERGENCY", name: "ENGINE FIRE", items: [{ name: "Mixture", value: "IDLE CUTOFF" }] }. */
 export interface Checklist {
     group: string;
@@ -26,6 +27,7 @@ export interface MfdUi {
     /** MAP menu toggles. */ layers: Record<string, boolean>;
     /** Waypoints entered in DIRECT TO and WAYPOINT ENTRY, latest first: their RECENT list. */ recent: string[];
     /** Pan mode on the navigation map (joystick push), or null. */ pan: Pan | null;
+    /** AUX - SYSTEM SETUP's settings. */ setup: Setup;
 }
 /** What the MFD gives its pages. */
 export interface Mfd {
@@ -50,6 +52,7 @@ export declare class MfdPage {
     protected m: Mfd;
     readonly name: string;
     /** The FMS cursor is on the page (CRSR). */ crsr: boolean;
+    /** Redrawn every second (a clock on the page). */ live: boolean;
     /** The navigation map behind the page: the whole map, or the map beside the page's data. */
     navMap: "full" | "partial" | null;
     protected p: Page;
@@ -173,6 +176,33 @@ export declare class FplToolPage extends MfdPage {
     toggleCrsr(): void;
     draw(): void;
 }
+interface PanelRow {
+    label: string;
+    value?: string;
+    mid?: string;
+    cur?: "label" | "mid" | "value";
+    dim?: boolean;
+}
+interface PanelBox {
+    title: string;
+    rows: PanelRow[];
+}
+/** A page of its own boxes, with no FG1000 SVG: the AUX pages. */
+declare class PanelPage extends MfdPage {
+    live: boolean;
+    protected g: SVGGElement;
+    constructor(m: Mfd, name: string, screen: SVGGElement, after: Element);
+    protected paint(left: PanelBox[], right: PanelBox[]): void;
+}
+declare class UtilityPage extends PanelPage {
+    private at;
+    readonly util: Utility;
+    toggleCrsr(): void;
+    fms(outer: boolean, d: number): boolean;
+    ent(): void;
+    pageMenu(): MenuOption[];
+    draw(): void;
+}
 export interface Pages {
     groups: MfdPage[][];
     directTo: DirectToPage;
@@ -181,6 +211,7 @@ export interface Pages {
     pageMenu: PageMenuPage;
     mapSetup: MapSetupPage;
     fplTool: FplToolPage;
+    utility: UtilityPage;
 }
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
 export declare function makePages(m: Mfd, screen: SVGGElement): Pages;

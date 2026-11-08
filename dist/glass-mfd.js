@@ -10,12 +10,13 @@ import EIS from "./svg/eis.js";
 import SURROUND from "./svg/surround-mfd.js";
 import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay } from "./display.js";
-import { Page, clamp, deg3, mod } from "./page.js";
+import { Page, clamp, mod } from "./page.js";
 import { panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget } from "./pan.js";
 import { drawMap, mapGroup, mapUp, rangeLabel, stepRange } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
 import { BLANK, Highlighter, NS, dimKey, key } from "./ui.js";
+import { dataBar, setupDefaults } from "./aux-pages.js";
 import { PAGE_GROUPS, makePages } from "./mfd-pages.js";
 /** The pan info bar's text size, px. */
 const PAN_FONT = 18;
@@ -57,10 +58,11 @@ export class GlassMfd {
     /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ overlay = null;
     /** The page FPL goes back to: group and page names. */ beforeFpl = ["MapPageGroup", "NavigationMap"];
     timers = { menu: 0, load: 0 };
+    /** Once a second: the Utility page's trip statistics, and the AUX pages' clocks. */ clock;
     hl = new Highlighter();
     ui = {
         group: 0, page: 0, shown: [0, 0], menuVisible: false, menu: "top", dcltr: 0, trackVector: 0, airways: 0,
-        layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false }, recent: [], pan: null,
+        layers: { TRAFFIC: false, PROFILE: false, TOPO: false, TERRAIN: false }, recent: [], pan: null, setup: setupDefaults(),
     };
     /** The container must be visible: layout is measured once here. */
     constructor(container, options = {}) {
@@ -84,13 +86,20 @@ export class GlassMfd {
         while (surround.parentNode !== screen)
             surround = surround.parentNode;
         screen.insertBefore(this.frame, surround);
+        addSystemSetupTab(this.raw);
         this.pages = makePages(this.api(), screen);
+        this.clock = setInterval(() => {
+            this.pages.utility.util.tick(this.state.groundspeed, Date.now());
+            if (this.page.live)
+                this.set({});
+        }, 1000);
         if (options.bezel)
             this.unbezel = bezelInput(svg, (i) => this.input(i));
         this.loadPage();
     }
     /** Stops the page menu timers. Call when the display is removed. */
     destroy() {
+        clearInterval(this.clock);
         clearTimeout(this.timers.menu);
         clearTimeout(this.timers.load);
         this.surround.destroy();
@@ -247,7 +256,8 @@ export class GlassMfd {
     // the page loads half a second after the last click and the menu hides after three.
     pageMenu(outer, value) {
         const u = this.ui;
-        if (u.menuVisible) {
+        // AUX - SYSTEM SETUP's Page Navigation: Change On 1st Click moves on the first click too; its timeout.
+        if (u.menuVisible || u.setup.firstClick) {
             const d = value > 0 ? 1 : -1;
             if (outer) {
                 u.group = mod(u.group + d, PAGE_GROUPS.length);
@@ -260,7 +270,7 @@ export class GlassMfd {
         this.showMenu();
         clearTimeout(this.timers.menu);
         clearTimeout(this.timers.load);
-        this.timers.menu = window.setTimeout(() => this.hideMenu(), 3000);
+        this.timers.menu = window.setTimeout(() => this.hideMenu(), u.setup.timeout * 1000);
         this.timers.load = window.setTimeout(() => this.loadPage(), 500);
     }
     showMenu() {
@@ -313,6 +323,7 @@ export class GlassMfd {
     /** Merge new values into the state and redraw. */
     set(patch) {
         const s = (this.state = { ...this.state, ...patch });
+        this.pages.utility.util.tick(s.groundspeed, Date.now());
         const page = this.page;
         const under = this.groupPage;
         this.surround.setRadios(s.radios, s.cdiSource === "NAV1" ? 1 : s.cdiSource === "NAV2" ? 2 : null);
@@ -408,14 +419,9 @@ export class GlassMfd {
         const which = nav ? `nav${this.surround.sel.nav}` : `com${this.surround.sel.com}`;
         this.change({ radios: { ...r, [which]: { ...r[which], standby: freq } } });
     }
-    // Surround.updateHeaderData, MFD half: the default fields GS, DTK, TRK, ETE.
+    // Surround.updateHeaderData, MFD half: FG1000's GS, DTK, TRK, ETE, or the fields AUX - SYSTEM SETUP picks.
     updateHeader(s) {
-        const fields = [
-            ["GS", `${Math.round(s.groundspeed)}kts`],
-            ["DTK", s.dtk === null ? "---°" : deg3(s.dtk)],
-            ["TRK", deg3(s.track)],
-            ["ETE", s.ete === null ? "--:--" : ete(s.ete)],
-        ];
+        const fields = this.ui.setup.dataBar.map((f) => [f, dataBar(f, s, Date.now(), this.ui.setup)]);
         fields.forEach(([label, value], i) => {
             this.surround.p.text(`Header${i + 1}Label`, label);
             this.surround.p.text(`Header${i + 1}Value`, value);
@@ -433,9 +439,27 @@ export class GlassMfd {
         this.eis.tf("RPMPointer", { rot: (clamp(e.rpm, 0, 3000) / 3000) * 260 });
     }
 }
-// ETE as Surround.updateHeaderData formats it: m:ss under an hour, h:mm over.
-export function ete(sec) {
-    const s = Math.max(0, Math.round(sec));
-    const p2 = (n) => String(n).padStart(2, "0");
-    return s < 3600 ? `${Math.floor(s / 60)}:${p2(s % 60)}` : `${Math.floor(s / 3600)}:${p2(Math.floor(s / 60) % 60)}`;
+export { ete } from "./aux-pages.js";
+/** AUX - SYSTEM SETUP in the AUX page group's tab menu, after GPS STATUS (Pilot's Guide; FG1000's menu has no such
+ * line). The box grows up a line, as the NRST group's taller box does. */
+function addSystemSetupTab(raw) {
+    const gps = raw.el("GPSStatus");
+    const box = raw.el("AuxPageGroup")?.querySelector("rect");
+    if (!gps || !box)
+        return;
+    const LINE = 16.13;
+    box.setAttribute("y", String(Number(box.getAttribute("y")) - LINE));
+    box.setAttribute("height", String(Number(box.getAttribute("height")) + LINE));
+    for (const id of ["TripPlanning", "Utility", "GPSStatus"]) {
+        for (const e of [raw.el(id), ...raw.el(id).querySelectorAll("tspan")])
+            e.setAttribute("y", String(Number(e.getAttribute("y")) - LINE));
+    }
+    const t = gps.cloneNode(true);
+    for (const e of [t, ...t.querySelectorAll("tspan")]) {
+        e.removeAttribute("id");
+        e.setAttribute("y", String(Number(e.getAttribute("y")) + LINE));
+    }
+    t.id = "SystemSetup";
+    t.querySelector("tspan").textContent = "SYSTEM SETUP";
+    gps.after(t);
 }
