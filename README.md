@@ -135,6 +135,15 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
 - **ADVISORY:** the last PFD softkey reads ADVISORY, lit, while a message in `alerts` is unread, and ALERTS once the window has shown it. The trainer flashes it; here it is lit steadily.
 - **CDI label** names the station type: GPS, VOR1, LOC1, VOR2 or LOC2, from the NAV radio's active frequency (FG1000: NAV1, NAV2). The course box reads DTK on GPS and CRS on a NAV radio. `cdiLabel` and `isLocalizer` are exported from `glass-cockpit-web/radio`.
 - **TMR/REF** is titled REFERENCES, with the timer and the minimums each on one row and the glide speed as GLIDE. The speed references start off (`vspeedsOn` all false); turn them on there, or set `vspeedsOn`.
+- **Failures:** `failed` flags instruments with FG1000's red X and yellow text. Set them as the trainer fails its units:
+
+  | Trainer failure | `failed` | Also |
+  | --- | --- | --- |
+  | AHRS (GRS) | `attitude` | |
+  | Air data (GDC) | `airspeed`, `altitude`, `vsi` | The baro box stays |
+  | GPS | none | Add a "GPS NAV LOST" message to `alerts` and set `cdiValid: false` on GPS |
+
+  `heading` flags the heading box (FG1000's flag; the trainer's magnetometer failure was not checked). FG1000's NO GPS POSITION flag is not used on the PFD.
 
 ## Navdata
 
@@ -235,7 +244,7 @@ EOF
 - MFD pages that need data this package has no source for: weather, terrain, XM, trip planning, GPS status, stored flight plans, user waypoints, nearest airspaces.
 - DIRECT TO's VNAV fields, approach suspend and missed-approach sequencing.
 - USER and AIRWAY waypoint lists.
-- Synthetic vision, the arc HSI, DME window, selected airspeed, autopilot annunciations, failure flags and the GPS course-to-intercept diamond.
+- Synthetic vision, the arc HSI, DME window, selected airspeed, autopilot annunciations and the GPS course-to-intercept diamond.
 - Map terrain and airways.
 
 FG1000 renders in Liberation Sans Narrow, which is not bundled. Without that font installed, some narrow labels fall back to a wider font.

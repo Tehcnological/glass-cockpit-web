@@ -8,6 +8,7 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 - PFD: the ALERTS key reads ADVISORY while a message is unread.
 - PFD: the CDI label reads VOR1, LOC1, VOR2 or LOC2, and the course box DTK on GPS. `cdiLabel` and `isLocalizer` in `glass-cockpit-web/radio`.
 - Changed: the PFD's speed references start off, as the trainer has them. A host that relied on the bugs showing by default sets `vspeedsOn`. TMR/REF follows the trainer's REFERENCES layout.
+- PFD: `failed` shows FG1000's failure flags for attitude, airspeed, altitude, vertical speed and heading.
 - ALT knob: the selected altitude stays on 100 ft steps, even when the host set an odd value. The demo slider steps 100 ft.
 - `glass-cockpit-web/navdata`: NASR and CIFP transformations (`buildNasr`, `parseCifp`, `near`, `approachName`) moved from instrumentready.com, unchanged output. A separate export; the displays don't load it.
 - Community docs: CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, NOTICE, issue and PR templates. README reorganised.

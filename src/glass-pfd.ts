@@ -83,7 +83,14 @@ export interface PfdState {
   /** Messages for the ALERTS window. */ alerts: string[];
   /** Which speed references (options.vspeeds) show on the tape, set in TMR/REF. */ vspeedsOn: Record<VSpeed, boolean>;
   /** Barometric minimums, feet (TMR/REF); null is off. */ minimums: number | null;
+  /**
+   * Failed instruments, flagged with FG1000's red X and yellow text. As the trainer shows them: an AHRS failure flags
+   * `attitude` only; an air data failure flags `airspeed`, `altitude` and `vsi` together.
+   */
+  failed: Partial<Record<Failure, boolean>>;
 }
+
+export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading";
 
 export interface PfdOptions extends DisplayOptions {
   /** Called when a bezel input changes the state (heading bug, course, baro, selected altitude, radios, CDI source). */
@@ -98,7 +105,7 @@ const DEFAULTS: PfdState = {
   cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null,
   radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], activeLeg: 1, airports: [], magVar: 0, wind: null,
   xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
-  vspeedsOn: { Vglide: false, Vr: false, Vx: false, Vy: false }, minimums: null, // v13 trainer: references start off
+  vspeedsOn: { Vglide: false, Vr: false, Vx: false, Vy: false }, minimums: null, failed: {}, // v13 trainer: references start off
 };
 
 type Menu = "top" | "inset" | "pfd" | "wind" | "synvis" | "hsi" | "altunit" | "xpdr" | "code";
@@ -108,8 +115,11 @@ const VSPEEDS: VSpeed[] = ["Vglide", "Vr", "Vx", "Vy"];
 const TMR_FIELDS = ["time", "dir", "action", "Vglide", "Vr", "Vx", "Vy", "minimums", "minalt"] as const;
 const FONT = `font-family="'Liberation Sans',Arial,sans-serif" font-size="18"`;
 
-// Parts of the FG1000 PFD this port does not drive.
-const HIDDEN = ["Failures", "GSPD", "PFD-Multilines", "Annunciation", "DME1", "SelectedALT-meters", "SelectedSPD-bug", "SelectedSPD-bg", "SelectedSPD-text", "SelectedSPD-symbol"];
+// FG1000's failure flags, in its Failures group, by the instrument they cover.
+const FAILURES: [Failure, string][] = [["attitude", "NoAttitude"], ["airspeed", "NoASI"], ["altitude", "NoAlt"], ["vsi", "NoVS"], ["heading", "NoHDG"]];
+
+// Parts of the FG1000 PFD this port does not drive. L_NoGPS: the v13 trainer's PFD shows a GPS failure only as an alert.
+const HIDDEN = ["L_NoGPS", "GSPD", "PFD-Multilines", "Annunciation", "DME1", "SelectedALT-meters", "SelectedSPD-bug", "SelectedSPD-bg", "SelectedSPD-text", "SelectedSPD-symbol"];
 
 // Tape clipping, as "rect(top, right, bottom, left)" in screen coordinates.
 const CLIPS: Record<string, [number, number, number, number]> = {
@@ -177,6 +187,11 @@ export class GlassPfd {
     bug.parentNode!.parentNode!.appendChild(this.minBug); // outside SelectedALT, which hides with no selected altitude
     this.clock = setInterval(() => this.tick(), 1000);
     for (const id of HIDDEN) this.p.show(id, false);
+    // FG1000 raises the failure flags with a z-index; in SVG they come first, so move them over the instruments.
+    const flags = this.p.el("Failures");
+    flags?.parentNode?.appendChild(flags);
+    const typo = screen.querySelector('[id="tspan6977"]'); // FG1000 spells it ATTIUDE
+    if (typo) typo.textContent = "ATTITUDE FAIL";
     for (const [id, r] of Object.entries(CLIPS)) this.p.clip(id, r);
     // Autopilot annunciations start blank, as Surround.new() leaves them.
     for (const id of ["APLateralArmed", "APLateralActive", "APVerticalArmed", "APVerticalActive", "APVerticalReference", "APStatus"]) {
@@ -443,6 +458,7 @@ export class GlassPfd {
     this.p.text("HDG-text", deg3(s.heading));
     this.p.tf("Heading-bug", { rot: s.headingBug });
     this.p.text("SelectedHDG-text", deg3(s.headingBug));
+    for (const [f, id] of FAILURES) this.p.show(id, !!s.failed[f]);
     this.setCDISource(s.cdiSource, cdiLabel(s.cdiSource, s.radios));
     this.p.text("SelectedCRS-text", deg3(s.course), s.cdiSource === "GPS" ? MAGENTA : GREEN);
     this.p.text("SelectedCRS-bgtext", s.cdiSource === "GPS" ? "DTK" : "CRS"); // v13 trainer: DTK on GPS (FG1000: always CRS)

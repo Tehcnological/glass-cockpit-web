@@ -86,7 +86,13 @@ export interface PfdState {
     /** Messages for the ALERTS window. */ alerts: string[];
     /** Which speed references (options.vspeeds) show on the tape, set in TMR/REF. */ vspeedsOn: Record<VSpeed, boolean>;
     /** Barometric minimums, feet (TMR/REF); null is off. */ minimums: number | null;
+    /**
+     * Failed instruments, flagged with FG1000's red X and yellow text. As the trainer shows them: an AHRS failure flags
+     * `attitude` only; an air data failure flags `airspeed`, `altitude` and `vsi` together.
+     */
+    failed: Partial<Record<Failure, boolean>>;
 }
+export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading";
 export interface PfdOptions extends DisplayOptions {
     /** Called when a bezel input changes the state (heading bug, course, baro, selected altitude, radios, CDI source). */
     onChange?: (patch: Partial<PfdState>) => void;
