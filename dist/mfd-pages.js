@@ -1167,8 +1167,10 @@ class ProceduresPage extends MfdPage {
         this.m.close();
     }
     draw() {
-        this.p.show("Menu", this.view === "menu");
-        this.p.show("Select", this.view !== "menu");
+        // NOT APPROVED FOR GPS shows over the view it was asked from.
+        const under = this.view === "ask" ? this.pending?.from ?? "select" : this.view;
+        this.p.show("Menu", under === "menu");
+        this.p.show("Select", under === "select");
         this.p.show("Ask", this.view === "ask");
         for (let i = 0; i < MENU.length; i++) {
             // The trainer draws available items cyan and the rest grey.

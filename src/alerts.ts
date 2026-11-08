@@ -5,3 +5,8 @@ export function alertsKey(alerts: readonly string[], seen: readonly string[]): {
   const unread = alerts.some((a) => !seen.includes(a));
   return { label: unread ? "ADVISORY" : "ALERTS", unread };
 }
+
+/** The messages read: all of them while the ALERTS window is open; a message removed is forgotten, so it is unread if posted again. */
+export function seenAlerts(alerts: readonly string[], seen: readonly string[], open: boolean): string[] {
+  return open ? [...alerts] : seen.filter((m) => alerts.includes(m));
+}

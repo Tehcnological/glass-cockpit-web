@@ -12,7 +12,7 @@ import { RADIOS, Surround, type Radios } from "./surround.js";
 import { adjust, bezelInput, type Input } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type MapGeometry, type MapPoint } from "./map.js";
 import { bearingDistance, bestApproach, latLon, nearest, nrstFreq, planName, routePoint, type Airport } from "./nav.js";
-import { alertsKey } from "./alerts.js";
+import { alertsKey, seenAlerts } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
 import { BLANK as blank, CYAN, Highlighter, ListView, NS, dimKey, esc, key as k, screenBox, type Key } from "./ui.js";
 
@@ -280,8 +280,7 @@ export class GlassPfd {
   private menu(): Key[] {
     const u = this.ui;
     const s = this.state;
-    // Messages are read while the window shows them.
-    if (u.window === "ALERTS") u.alertsSeen = [...s.alerts];
+    u.alertsSeen = seenAlerts(s.alerts, u.alertsSeen, u.window === "ALERTS");
     const a = alertsKey(s.alerts, u.alertsSeen);
     // shortcut: the trainer flashes ADVISORY; it is lit steadily here, flash once there is a blink timer.
     const alerts = k(a.label, () => this.openWindow("ALERTS"), u.window === "ALERTS" || a.unread);
