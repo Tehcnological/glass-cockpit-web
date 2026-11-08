@@ -20,6 +20,9 @@ import type { Airport, Procedure, Station } from "./nav.js";
 import { BLANK, Highlighter, NS, dimKey, key, type Key } from "./ui.js";
 import { PAGE_GROUPS, makePages, type Checklist, type Mfd, type MfdPage, type MfdUi, type Pages } from "./mfd-pages.js";
 
+/** The pan info bar's text size, px. */
+const PAN_FONT = 18;
+
 export interface Engine {
   rpm: number;
   /** Gallons per hour. */ fuelFlow: number;
@@ -232,7 +235,7 @@ export class GlassMfd {
       case "JOYSTICK_PRESS":
         // v13 trainer: the push starts pan mode on the full navigation map; again ends it and recenters the map.
         if (this.overlay || this.groupPage.navMap !== "full") return;
-        this.ui.pan = this.ui.pan ? null : panStart(this.state);
+        this.ui.pan = this.ui.pan ? null : panStart(this.state, this.panView().up);
         return this.set({});
       case "JOYSTICK_HORIZONTAL":
       case "JOYSTICK_VERTICAL": {
@@ -347,7 +350,7 @@ export class GlassMfd {
     const u = this.ui;
     this.closeOverlay();
     this.groupPage.show(false);
-    u.pan = null;
+    if (u.shown[0] !== u.group || u.shown[1] !== u.page) u.pan = null; // the page group menu reloads the same page too
     u.shown = [u.group, u.page];
     u.menu = "top";
     this.groupPage.show(true);
@@ -378,8 +381,9 @@ export class GlassMfd {
       this.nav.tf("Legend", { tx: mode === "partial" ? MAP_PARTIAL.w - MAP_FULL.w : 0 });
       this.nav.text("RangeDisplay", rangeLabel(s.range));
       this.nav.text("OrientationDisplay", s.orientation);
-      const center = (mode === "full" ? this.ui.pan?.center : null) ?? base.center() ?? undefined;
-      drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
+      const pan = mode === "full" ? this.ui.pan : null;
+      const center = pan?.center ?? base.center() ?? undefined;
+      drawMap(mode === "full" ? this.map : this.mapPartial, { ...s, center, up: pan?.up }, mode === "full" ? MAP_FULL : MAP_PARTIAL, this.ui.dcltr);
     }
     this.drawPan(mode === "full");
     this.frame.textContent = base.frame();
@@ -389,7 +393,8 @@ export class GlassMfd {
 
   private panView(): PanView {
     const s = this.state;
-    return { w: MAP_FULL.w, h: MAP_FULL.h, scale: MAP_FULL.px / s.range, up: s.orientation === "HDG UP" ? s.heading : 0, lat: s.lat };
+    const up = this.ui.pan?.up ?? (s.orientation === "HDG UP" ? s.heading : 0);
+    return { w: MAP_FULL.w, h: MAP_FULL.h, scale: MAP_FULL.px / s.range, up, lat: s.lat, bar: PAN_FONT * 2.7 };
   }
 
   private panInfo() {
@@ -403,7 +408,7 @@ export class GlassMfd {
     const pan = shown ? this.ui.pan : null;
     this.panLayer.style.display = pan ? "inline" : "none";
     if (!pan) return;
-    this.panLayer.innerHTML = panMarkup(pan, this.panInfo(), MAP_FULL, 18);
+    this.panLayer.innerHTML = panMarkup(pan, this.panInfo(), MAP_FULL, PAN_FONT);
   }
 
   // The softkeys: the page's own, or a menu shared by the pages (EIS engineMenu, NavigationMap mapMenu).

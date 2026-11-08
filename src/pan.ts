@@ -13,12 +13,14 @@ const MARGIN = 10;
 /** A point within this many pixels of the pointer is the one it names. */
 const NEAR = 6;
 
-/** `center`: the map's center; `x`, `y`: the pointer, in pixels from the map window's center. */
-export interface Pan { center: LatLon; x: number; y: number }
-/** The map window: its size, pixels per nm, the map's up direction (degrees true) and the aircraft's latitude. */
-export interface PanView { w: number; h: number; scale: number; up: number; lat: number }
+/** `center`: the map's center; `x`, `y`: the pointer, in pixels from the map window's center; `up`: the map's rotation,
+ * held while panning so a heading-up map does not turn under the pointer. */
+export interface Pan { center: LatLon; x: number; y: number; up: number }
+/** The map window: its size, pixels per nm, the map's up direction (degrees true), the aircraft's latitude, and the height
+ * the info bar covers at its top. */
+export interface PanView { w: number; h: number; scale: number; up: number; lat: number; bar?: number }
 
-export const panStart = (here: LatLon): Pan => ({ center: here, x: 0, y: 0 });
+export const panStart = (here: LatLon, up = 0): Pan => ({ center: here, x: 0, y: 0, up });
 
 /** Screen offset from the map's center to lat/lon, the inverse of drawMap's projection. */
 function unproject(c: LatLon, x: number, y: number, v: PanView): LatLon {
@@ -37,17 +39,17 @@ function project(c: LatLon, p: LatLon, v: PanView): [number, number] {
 
 /** One joystick click: `dx`, `dy` are -1, 0 or 1 (right, down positive). */
 export function panMove(p: Pan, dx: number, dy: number, v: PanView): Pan {
-  const [mx, my] = [v.w / 2 - MARGIN, v.h / 2 - MARGIN];
+  const [mx, my, top] = [v.w / 2 - MARGIN, v.h / 2 - MARGIN, -v.h / 2 + (v.bar ?? 0) + MARGIN];
   const [x, y] = [p.x + dx * PAN_STEP, p.y + dy * PAN_STEP];
-  const [cx, cy] = [Math.max(-mx, Math.min(mx, x)), Math.max(-my, Math.min(my, y))];
+  const [cx, cy] = [Math.max(-mx, Math.min(mx, x)), Math.max(top, Math.min(my, y))];
   const center = x === cx && y === cy ? p.center : unproject(p.center, x - cx, y - cy, v);
-  return { center, x: cx, y: cy };
+  return { ...p, center, x: cx, y: cy };
 }
 
 export const panPoint = (p: Pan, v: PanView): LatLon => unproject(p.center, p.x, p.y, v);
 
 /** RANGE while panning: the map recenters on the pointer (Pilot's Guide, Weather Data Link page; NXi on every map). */
-export const panTarget = (p: Pan, v: PanView): Pan => ({ center: panPoint(p, v), x: 0, y: 0 });
+export const panTarget = (p: Pan, v: PanView): Pan => ({ ...p, center: panPoint(p, v), x: 0, y: 0 });
 
 /** The pointer and the info bar across the top of the map window `m`, as SVG, text `font` px high. Drawn here, not the trainer's. */
 export function panMarkup(p: Pan, info: ReturnType<typeof panInfo>, m: MapGeometry, font: number): string {

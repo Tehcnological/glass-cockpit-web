@@ -29,6 +29,7 @@ export interface MapData {
   lon: number;
   /** Map range, nm from the aircraft to the edge of the map's short side. */ range: number;
   orientation: "NORTH UP" | "HDG UP";
+  /** The map's rotation, degrees, in place of the orientation's: pan mode holds it still. */ up?: number;
   points: MapPoint[];
   airspaces: Airspace[];
   /** Flight plan in order: ids of `points`, or points of its own (approach fixes). */ route: (string | MapPoint)[];
@@ -80,7 +81,7 @@ export function mapGroup(screen: SVGGElement, before: Element, m: MapGeometry): 
 
 /** Draws the map into `g`, which must be in screen coordinates (see `mapGroup`). */
 export function drawMap(g: SVGGElement, s: MapData, m: MapGeometry, declutter = 0): void {
-  const up = s.orientation === "HDG UP" ? s.heading : 0;
+  const up = s.up ?? (s.orientation === "HDG UP" ? s.heading : 0);
   const scale = m.px / s.range;
 const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer] && declutter <= DECLUTTER[layer];
   const cos = Math.cos((s.lat * Math.PI) / 180);

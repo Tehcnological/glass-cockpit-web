@@ -10,7 +10,7 @@ export const PAN_STEP = 12;
 const MARGIN = 10;
 /** A point within this many pixels of the pointer is the one it names. */
 const NEAR = 6;
-export const panStart = (here) => ({ center: here, x: 0, y: 0 });
+export const panStart = (here, up = 0) => ({ center: here, x: 0, y: 0, up });
 /** Screen offset from the map's center to lat/lon, the inverse of drawMap's projection. */
 function unproject(c, x, y, v) {
     const rad = (v.up * Math.PI) / 180;
@@ -26,15 +26,15 @@ function project(c, p, v) {
 }
 /** One joystick click: `dx`, `dy` are -1, 0 or 1 (right, down positive). */
 export function panMove(p, dx, dy, v) {
-    const [mx, my] = [v.w / 2 - MARGIN, v.h / 2 - MARGIN];
+    const [mx, my, top] = [v.w / 2 - MARGIN, v.h / 2 - MARGIN, -v.h / 2 + (v.bar ?? 0) + MARGIN];
     const [x, y] = [p.x + dx * PAN_STEP, p.y + dy * PAN_STEP];
-    const [cx, cy] = [Math.max(-mx, Math.min(mx, x)), Math.max(-my, Math.min(my, y))];
+    const [cx, cy] = [Math.max(-mx, Math.min(mx, x)), Math.max(top, Math.min(my, y))];
     const center = x === cx && y === cy ? p.center : unproject(p.center, x - cx, y - cy, v);
-    return { center, x: cx, y: cy };
+    return { ...p, center, x: cx, y: cy };
 }
 export const panPoint = (p, v) => unproject(p.center, p.x, p.y, v);
 /** RANGE while panning: the map recenters on the pointer (Pilot's Guide, Weather Data Link page; NXi on every map). */
-export const panTarget = (p, v) => ({ center: panPoint(p, v), x: 0, y: 0 });
+export const panTarget = (p, v) => ({ ...p, center: panPoint(p, v), x: 0, y: 0 });
 /** The pointer and the info bar across the top of the map window `m`, as SVG, text `font` px high. Drawn here, not the trainer's. */
 export function panMarkup(p, info, m, font) {
     const [x, y, k] = [m.cx + p.x, m.cy + p.y, font / 18];

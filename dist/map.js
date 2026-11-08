@@ -35,7 +35,7 @@ export function mapGroup(screen, before, m) {
 }
 /** Draws the map into `g`, which must be in screen coordinates (see `mapGroup`). */
 export function drawMap(g, s, m, declutter = 0) {
-    const up = s.orientation === "HDG UP" ? s.heading : 0;
+    const up = s.up ?? (s.orientation === "HDG UP" ? s.heading : 0);
     const scale = m.px / s.range;
     const shown = (layer) => s.range <= LAYER_RANGE[layer] && declutter <= DECLUTTER[layer];
     const cos = Math.cos((s.lat * Math.PI) / 180);

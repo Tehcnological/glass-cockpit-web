@@ -48,6 +48,7 @@ const CLIPS = {
 const MAGENTA = "#ff00ff";
 // The turn rate band's arc: its center, and the radii its ticks span (clear of the heading box).
 const TURN = { cx: 459.5, cy: 586.5, r0: 136, r1: 152 };
+const INSET_PAN_FONT = 12;
 const GREEN = "#00ff00";
 export class GlassPfd {
     options;
@@ -655,12 +656,12 @@ export class GlassPfd {
         drawMap(this.inset, { ...s, range: u.insetRange, orientation: "NORTH UP", center: u.pan?.center }, this.insetGeom, u.dcltr);
         if (u.pan) {
             const named = [...s.points, ...s.route.filter((r) => typeof r !== "string")];
-            this.panLayer.innerHTML = panMarkup(u.pan, panInfo(u.pan, this.panView(), s, named, s.magVar), this.insetGeom, 12);
+            this.panLayer.innerHTML = panMarkup(u.pan, panInfo(u.pan, this.panView(), s, named, s.magVar), this.insetGeom, INSET_PAN_FONT);
         }
     }
     panView() {
         const g = this.insetGeom;
-        return { w: g.w, h: g.h, scale: g.px / this.ui.insetRange, up: 0, lat: this.state.lat };
+        return { w: g.w, h: g.h, scale: g.px / this.ui.insetRange, up: 0, lat: this.state.lat, bar: INSET_PAN_FONT * 2.7 };
     }
     // NearestAirportsPFD: three rows of the 25 nearest, scrolled with the FMS knob; ENT shows the selected airport.
     updateNrst() {

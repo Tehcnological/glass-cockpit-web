@@ -7,8 +7,16 @@ import { panInfo, panMove, panPoint, panStart, panTarget, PAN_STEP } from "../di
 const view = { w: 400, h: 300, scale: 100, up: 0, lat: 0 };
 const here = { lat: 0, lon: 0 };
 
-test("pan starts with the pointer on the aircraft", () => {
-  assert.deepEqual(panStart(here), { center: here, x: 0, y: 0 });
+test("pan starts with the pointer on the aircraft, holding the map's rotation", () => {
+  assert.deepEqual(panStart(here), { center: here, x: 0, y: 0, up: 0 });
+  assert.equal(panStart(here, 270).up, 270, "a heading-up map stays still while panning");
+});
+
+test("the pointer stops below the info bar", () => {
+  let p = panStart(here);
+  for (let i = 0; i < 100; i++) p = panMove(p, 0, -1, { ...view, bar: 48 });
+  assert.ok(p.y >= -150 + 48, "not under the bar");
+  assert.ok(p.center.lat > 0, "the map moved north");
 });
 
 test("the joystick moves the pointer a step a click", () => {

@@ -30,6 +30,7 @@ export interface MapData {
     lon: number;
     /** Map range, nm from the aircraft to the edge of the map's short side. */ range: number;
     orientation: "NORTH UP" | "HDG UP";
+    /** The map's rotation, degrees, in place of the orientation's: pan mode holds it still. */ up?: number;
     points: MapPoint[];
     airspaces: Airspace[];
     /** Flight plan in order: ids of `points`, or points of its own (approach fixes). */ route: (string | MapPoint)[];
