@@ -75,6 +75,9 @@ export declare function profileView(alt: number, range: number): {
     step: number;
     bottom: number;
 } | null;
+/** The points drawn as symbols: a layer's by its range and declutter level, airway fixes past their range (still
+ * decluttered), and the route's and a previewed procedure's always. A previewed fix already on the map draws once. */
+export declare function symbolPoints(s: MapData, declutter?: number): MapPoint[];
 /** Map window in screen pixels: clip box, aircraft position, and pixels per `range`. */
 export interface MapGeometry {
     x: number;

@@ -114,3 +114,13 @@ test("trip statistics: odometers, average and maximum groundspeed, and their res
   u.reset("all", 0);
   assert.deepEqual([u.odom, u.maxGs], [0, 0]);
 });
+
+test("trip average groundspeed leaves out taxiing", () => {
+  const u = new Utility(0);
+  let t = 0;
+  u.tick(0, t);
+  for (let i = 0; i < 10; i++) u.tick(8, (t += 60_000)); // 10 min taxi at 8 kt
+  for (let i = 0; i < 60; i++) u.tick(110, (t += 60_000)); // an hour at 110 kt
+  assert.equal(u.avgGs(), 110);
+  assert.ok(Math.abs(u.trip - (110 + 8 / 6)) < 1e-9, "the trip odometer still counts the taxi");
+});

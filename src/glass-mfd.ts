@@ -156,7 +156,7 @@ export class GlassMfd {
     this.pages = makePages(this.api(), screen);
     this.clock = setInterval(() => {
       this.pages.utility.util.tick(this.state.groundspeed, Date.now());
-      if (this.page.live) this.set({});
+      if (this.page.live || this.groupPage.live) this.set({}); // still under the PAGE MENU
     }, 1000);
     if (options.bezel) this.unbezel = bezelInput(svg, (i) => this.input(i));
     this.loadPage();
@@ -560,13 +560,15 @@ function addSystemSetupTab(raw: Page) {
   const LINE = 16.13;
   box.setAttribute("y", String(Number(box.getAttribute("y")) - LINE));
   box.setAttribute("height", String(Number(box.getAttribute("height")) + LINE));
+  // Only elements with their own y move; a tspan without one follows its text.
+  const shift = (e: Element, d: number) => e.hasAttribute("y") && e.setAttribute("y", String(Number(e.getAttribute("y")) + d));
   for (const id of ["TripPlanning", "Utility", "GPSStatus"]) {
-    for (const e of [raw.el(id)!, ...raw.el(id)!.querySelectorAll("tspan")]) e.setAttribute("y", String(Number(e.getAttribute("y")) - LINE));
+    for (const e of [raw.el(id)!, ...raw.el(id)!.querySelectorAll("tspan")]) shift(e, -LINE);
   }
   const t = gps.cloneNode(true) as SVGTextElement;
   for (const e of [t, ...t.querySelectorAll("tspan")]) {
     e.removeAttribute("id");
-    e.setAttribute("y", String(Number(e.getAttribute("y")) + LINE));
+    shift(e, LINE);
   }
   t.id = "SystemSetup";
   t.querySelector("tspan")!.textContent = "SYSTEM SETUP";
