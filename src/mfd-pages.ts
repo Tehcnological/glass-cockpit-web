@@ -3,7 +3,7 @@
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
-import { approachPatch, asWaypoint, bearingDistance, gpsApproved, latLon, loadedApproach, nearest, planName, routePoint, vtfPatch, type Airport, type Procedure } from "./nav.js";
+import { approachPatch, asWaypoint, bearingDistance, gpsApproved, latLon, loadedApproach, nearest, planName, routePoint, vtfInboundKept, vtfPatch, type Airport, type Procedure } from "./nav.js";
 import { BLANK, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, firstRow, key, type Key } from "./ui.js";
 import { firstOption, fplMenu, stepMenu, type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
@@ -718,7 +718,15 @@ const findPoint = (s: MfdState, id: string): MapPoint | undefined =>
 class FlightPlanPage extends MapPage {
   // PAGE MENU (v13 trainer's options): Invert, Delete and Remove Approach work here; the rest are dim.
   pageMenu(): MenuOption[] {
-    return fplMenu(this.s.route, this.s.activeLeg).map(({ label, patch }) => ({ label, act: patch && (() => this.m.change(patch)) }));
+    // Each option's change is worked out again from the state when ENT carries it out (the host may have moved on).
+    const now = (label: string) => fplMenu(this.s.route, this.s.activeLeg).find((o) => o.label === label)?.patch;
+    return fplMenu(this.s.route, this.s.activeLeg).map(({ label, patch }) => ({
+      label,
+      act: patch && (() => {
+        const p = now(label);
+        if (p) this.m.change(p);
+      }),
+    }));
   }
 
   private rows = new ListView(this.p, ["Header", "Leg", "DTK", "DIS", "ALT"], 11, "Leg", false, { trough: "ScrollTrough", thumb: "ScrollThumb" });
@@ -751,7 +759,7 @@ class FlightPlanPage extends MapPage {
     const route = [...s.route];
     route.splice(at, 0, s.points.includes(p) || p.type === "APT" ? p.id : asWaypoint(p));
     const activeLeg = at <= s.activeLeg && s.route.length ? s.activeLeg + 1 : s.activeLeg;
-    this.m.change({ route, activeLeg, vtf: s.vtf && route[activeLeg] === s.route[s.activeLeg] });
+    this.m.change({ route, activeLeg, vtf: s.vtf && vtfInboundKept(at, s.activeLeg, true) });
     this.rows.sel = at;
   }
 
@@ -766,8 +774,8 @@ class FlightPlanPage extends MapPage {
     if (!this.crsr || at >= s.route.length) return;
     const route = s.route.filter((_, i) => i !== at);
     const activeLeg = clamp(at < s.activeLeg ? s.activeLeg - 1 : s.activeLeg, 0, Math.max(0, route.length - 1));
-    // Vector-to-final ends when its fix is deleted.
-    this.m.change({ route, activeLeg, vtf: s.vtf && route[activeLeg] === s.route[s.activeLeg] });
+    // Vector-to-final ends when its fix, or the one its leg starts at, is deleted.
+    this.m.change({ route, activeLeg, vtf: s.vtf && vtfInboundKept(at, s.activeLeg, false) });
   }
 
   draw() {

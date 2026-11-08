@@ -98,3 +98,10 @@ export function asWaypoint(p) {
     const { approach: _a, role: _r, ...w } = p;
     return w;
 }
+/**
+ * Whether vector-to-final survives a flight plan edit at `at` (`inserted`, or deleted) with the final approach fix active at
+ * `activeLeg`: the map draws its leg from the entry before the fix, so an edit there or to the fix itself ends it.
+ */
+export function vtfInboundKept(at, activeLeg, inserted) {
+    return inserted ? at !== activeLeg : at < activeLeg - 1 || at > activeLeg;
+}
