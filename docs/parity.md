@@ -47,9 +47,9 @@ Garmin art, screenshots, data or manual text is copied.
 | FMS dual knob | Outer moves the cursor, inner changes the field or opens WPT entry; with no cursor the MFD outer/inner select page group/page | Done on the ported pages |
 | FMS push (CRSR) | Cursor on and off | Done on the ported pages |
 | Keyboard typing | Not on the real unit (NXi takes a keypad: letters, digits, BKSP, SPC). Wanted here for waypoint entry | Missing (later) |
-| Audio panel | GMA 1347 between the units: COM/NAV audio keys, MKR, intercom, and the red DISPLAY BACKUP (reversionary) button. The trainer has none; its Options menu toggles reversionary mode. FG1000's GMA1347 has all 21 keys with LEDs, both volume knobs and the red knob; its texture face is 128 x 512 px. FG1000 does not wire reversionary mode | Partial: no panel (audio only); a round red DISPLAY BACKUP button (`display-backup.ts`, in the demo between the units). Reversionary mode itself is missing |
+| Audio panel | GMA 1347 between the units: COM/NAV audio keys, MKR, intercom, and the red DISPLAY BACKUP (reversionary) button. The trainer has none; its Options menu toggles reversionary mode. FG1000's GMA1347 has all 21 keys with LEDs, both volume knobs and the red knob; its texture face is 128 x 512 px. FG1000 does not wire reversionary mode | Partial: no panel (audio only); a round red DISPLAY BACKUP button (`display-backup.ts`, in the demo between the units) that puts both units in reversionary mode |
 | Autopilot keys (MFD bezel) | Trainer: GFC 700 keys in the MFD's left column (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN). FG1000's 2D bezel has none; its 3D GDU-1044B texture has their labels, and fgdata has the GFC700 logic | Missing (art direction needed) |
-| Reversionary mode | Trainer: the PFD with the engine strip down the left; softkeys ENGINE, INSET, PFD, OBS, CDI, DME, XPDR, IDENT, TMR/REF, NRST, ALERTS | Missing (later) |
+| Reversionary mode | Trainer and Pilot's Guide: the PFD with the engine strip down the left, OAT under TAS, the inset map lower right; softkeys ENGINE, INSET, PFD, OBS, CDI, DME, XPDR, IDENT, TMR/REF, NRST, ALERTS | Done (`reversionary`; the host shows a PFD in the MFD's place). Missing: the failed display's red NAV/COM fields |
 
 ## PFD softkeys (trainer layout, followed)
 

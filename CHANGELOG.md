@@ -4,6 +4,7 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 
 ## Unreleased
 
+- PFD: reversionary mode (Pilot's Guide), new state `reversionary` and `engine`: the engine strip down the left, OAT under TAS, the inset map in the lower right, and ENGINE (LEAN, SYSTEM) on the first softkey. The demo's DISPLAY BACKUP button puts both units in it, a second PFD over the MFD. The engine strip's drawing and softkeys moved to `eis.ts`, shared with the MFD.
 - MFD: AUX - TRIP PLANNING (AUTO or MANUAL, REM or a leg: trip, fuel, sunrise and sunset, density altitude and true airspeed), AUX - GPS STATUS (position, time, altitude, groundspeed and track; accuracy, RAIM and SBAS grey) and AUX - SYSTEM STATUS (LRUs in; airframe and database grey), from the Pilot's Guide. The sums are in `trip-planning.ts`.
 - MFD: AUX - UTILITY's scheduler: ten One-time, Periodic or Event messages typed with the FMS knobs (`scheduler.ts`). New MFD option `onScheduler(message)` hands one to the host when it comes due; the demo adds it to the PFD's `alerts`.
 - MFD: MAP SETUP's Airways group (AIRWAYS and the low and high airway ranges) and Profile group (grey). `shownAirways` takes the ranges; `AIRWAY_RANGE` exported from `map.ts`; `map-setup.ts` holds the groups.

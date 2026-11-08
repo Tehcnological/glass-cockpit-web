@@ -1,3 +1,4 @@
+import type { Engine } from "./glass-mfd.js";
 import { type DisplayOptions } from "./display.js";
 import { type Radios } from "./surround.js";
 import { type Airspace, type LatLon, type MapPoint } from "./map.js";
@@ -97,6 +98,13 @@ export interface PfdState {
      * `attitude` only; an air data failure flags `airspeed`, `altitude` and `vsi` together.
      */
     failed: Partial<Record<Failure, boolean>>;
+    /**
+     * Reversionary mode (Pilot's Guide; FG1000 does not wire it): the engine strip down the left, `engine` in it, OAT under
+     * TAS, the inset map in the lower right and ENGINE on the first softkey. The host sets it on both units' places (the
+     * MFD's taken by a second PFD) when DISPLAY BACKUP is pushed or a display fails.
+     */
+    reversionary: boolean;
+    /** For the engine strip in reversionary mode (see the MFD's). */ engine: Engine;
 }
 /** A change `onChange` reports. */
 export type PfdChange = Partial<PfdState>;
@@ -130,6 +138,9 @@ export declare class GlassPfd {
     readonly svg: SVGSVGElement;
     private state;
     /** In an unusual attitude as of the last set(). */ private ua;
+    private eis;
+    private eisBack;
+    /** Where reversionary mode moves OAT and the inset map. */ private rev;
     private p;
     private surround;
     /** Removes the bezel's window listener. */ private unbezel;
@@ -185,6 +196,7 @@ export declare class GlassPfd {
     private updateFlightPlan;
     private updateXpdr;
     private updateWind;
+    private updateReversionary;
     private updateInset;
     private panView;
     private updateNrst;

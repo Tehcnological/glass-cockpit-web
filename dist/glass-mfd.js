@@ -7,10 +7,11 @@
 // NavigationMapStyles.nas) and the ownship icon from FG1000/Icons/APSmodel.svg.
 import NAV_MAP from "./svg/nav-map.js";
 import EIS from "./svg/eis.js";
+import { drawEis, engineKeys } from "./eis.js";
 import SURROUND from "./svg/surround-mfd.js";
 import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay } from "./display.js";
-import { Page, clamp, mod } from "./page.js";
+import { Page, mod } from "./page.js";
 import { panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget } from "./pan.js";
 import { AIRWAY_RANGE, drawMap, mapGroup, mapUp, profileView, rangeLabel, shownAirways, stepRange } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
@@ -27,12 +28,6 @@ const DEFAULTS = {
     engine: { rpm: 0, fuelFlow: 0, oilPressure: 0, oilTemp: 0, egt: 0, vacuum: 0, fuelLeft: 0, fuelRight: 0, volts: 0, engineHours: 0 },
     radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, cdiSource: "NAV1", bearings: {}, checklists: [],
 };
-// EIS.new: pointer name, min, max, travel in px (PFD.PointerElement).
-const POINTERS = [
-    ["FuelFlowPointer", "fuelFlow", 0, 20], ["OilPressurePointer", "oilPressure", 0, 115], ["OilTempPointer", "oilTemp", 0, 245],
-    ["EGTPointer", "egt", 0, 1], ["EGTCylinder", "egt", 0, 1], ["VacPointer", "vacuum", 3, 7],
-    ["LeftFuelPointer", "fuelLeft", 0, 30], ["RightFuelPointer", "fuelRight", 0, 30],
-];
 // Constants.nas MAP_FULL and MAP_PARTIAL: header 56 px, footer 25 px, engine strip 150 px, data display 300 px; the
 // map's range is 689/2 px (NavMap.nas) either way.
 const MAP_FULL = { x: 150, y: 56, w: 874, h: 687, cx: 587, cy: 399.5, px: 344.5 };
@@ -347,7 +342,7 @@ export class GlassMfd {
         this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit), keys.map((k) => !!k.dim));
         this.surround.setPageTitle(page.title); // a page's softkeys may change its title (the airport page's APR)
         this.updateHeader(s);
-        this.updateEIS(s.engine);
+        drawEis(this.eis, s.engine);
         // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO and
         // WAYPOINT ENTRY are windows over the page, which stays drawn.
         const base = page === this.pages.directTo || page === this.pages.waypointEntry || page === this.pages.pageMenu || page === this.pages.mapSetup || page === this.pages.fplTool ? under : page;
@@ -397,18 +392,13 @@ export class GlassMfd {
     softkeys() {
         const u = this.ui;
         const to = (m) => () => (u.menu = m);
-        const eis = () => [key("ENGINE", to("engine"), u.menu === "engine"), key("LEAN", to("lean"), u.menu === "lean"), key("SYSTEM", to("system"), u.menu === "system")];
         const fill = (k) => [...k, ...Array(12).fill(BLANK)].slice(0, 12);
-        // v13 trainer layouts: BACK in the eleventh slot, LEAN's and SYSTEM's keys where the trainer has them (FG1000 packs
-        // them after SYSTEM), and dim keys for data GCW has no source for.
+        // v13 trainer layouts: BACK in the eleventh slot, and dim keys for data GCW has no source for.
         switch (u.menu) {
-            // shortcut: the engine strip has only its ENGINE page (as FG1000); LEAN and SYSTEM change the softkeys only.
             case "engine":
-                return fill([...eis(), BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, key("BACK", to("top"))]);
             case "lean":
-                return fill([...eis(), BLANK, key("CYL SLCT"), key("ASSIST"), BLANK, BLANK, BLANK, BLANK, key("BACK", to("engine"))]);
             case "system":
-                return fill([...eis(), BLANK, BLANK, BLANK, key("RST FUEL"), key("GAL REM"), BLANK, BLANK, key("BACK", to("engine"))]);
+                return fill([...engineKeys(u.menu, to), key("BACK", to(u.menu === "engine" ? "top" : "engine"))]);
             case "map": {
                 // shortcut: no traffic data; TRAFFIC switches only its setting.
                 const layer = (n) => key(n, () => (u.layers[n] = !u.layers[n]), u.layers[n]);
@@ -483,17 +473,6 @@ export class GlassMfd {
             this.surround.p.text(`Header${i + 1}Label`, label);
             this.surround.p.text(`Header${i + 1}Value`, value);
         });
-    }
-    // EIS.updateData
-    updateEIS(e) {
-        this.eis.text("RPMDisplay", String(Math.round(e.rpm)));
-        this.eis.text("MBusVolts", e.volts.toFixed(1));
-        this.eis.text("EBusVolts", e.volts.toFixed(1)); // FG1000 shows the main bus on both
-        this.eis.text("EngineHours", e.engineHours.toFixed(1));
-        for (const [name, key, min, max] of POINTERS)
-            this.eis.tf(name, { tx: ((clamp(e[key], min, max) - min) / (max - min)) * 135 });
-        // PFD.RotatingElement: 0-3000 RPM over 260°, about the needle's hub (its Inkscape transform center).
-        this.eis.tf("RPMPointer", { rot: (clamp(e.rpm, 0, 3000) / 3000) * 260 });
     }
 }
 export { ete } from "./aux-pages.js";

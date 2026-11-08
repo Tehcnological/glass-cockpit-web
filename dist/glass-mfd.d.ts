@@ -107,6 +107,5 @@ export declare class GlassMfd {
     private airways;
     private drawProfile;
     private updateHeader;
-    private updateEIS;
 }
 export { ete } from "./aux-pages.js";
