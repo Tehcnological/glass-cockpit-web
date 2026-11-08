@@ -1,7 +1,7 @@
 // Navigation data the pages show, and the arithmetic they share. The host supplies the data (instrumentready.com uses
 // FAA NASR and CIFP); FlightGear reads its own navigation database instead.
 import { mod } from "./page.js";
-import type { MapPoint } from "./map.js";
+import type { LatLon, MapPoint } from "./map.js";
 
 export interface Runway { /** "07L-25R" */ id: string; /** Feet. */ length: number; /** Feet. */ width: number; /** e.g. "CONC", "ASPH" */ surface: string; /** e.g. "MED", "HIGH" */ lights?: string }
 /** A frequency and what it is for, e.g. { use: "TOWER", freq: "118.700" }. */
@@ -118,4 +118,21 @@ export function gpsApproved(name: string): boolean {
 /** Vector-to-final makes the final approach fix active; an approach without one starts at its first leg. */
 export function vtfLeg(legs: { role?: string }[]): number {
   return Math.max(0, legs.findIndex((l) => l.role === "FAF"));
+}
+
+/**
+ * Vector-to-final with the approach's fixes from `route[start]`: the final approach fix is active, its leg on the final
+ * course. With no fix before the FAF to draw that leg from (or no FAF), it goes direct from the aircraft at `here`.
+ */
+export function vtfPatch(start: number, legs: { role?: string }[], here: LatLon): { activeLeg: number; directFrom: LatLon | null; vtf: true } {
+  const i = vtfLeg(legs);
+  return { activeLeg: start + i, directFrom: i > 0 ? null : here, vtf: true };
+}
+
+/** PROC's change to the flight plan: the approach `pts` after the en route waypoints, loaded, activated or vectors-to-final. */
+export function approachPatch(enroute: (string | MapPoint)[], pts: MapPoint[], mode: "load" | "activate" | "vectors", here: LatLon) {
+  const route = [...enroute, ...pts];
+  if (mode === "load") return { route, vtf: false };
+  if (mode === "activate") return { route, activeLeg: enroute.length, directFrom: here, vtf: false };
+  return { route, ...vtfPatch(enroute.length, pts, here) };
 }

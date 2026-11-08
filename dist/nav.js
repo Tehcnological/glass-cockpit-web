@@ -67,3 +67,20 @@ export function gpsApproved(name) {
 export function vtfLeg(legs) {
     return Math.max(0, legs.findIndex((l) => l.role === "FAF"));
 }
+/**
+ * Vector-to-final with the approach's fixes from `route[start]`: the final approach fix is active, its leg on the final
+ * course. With no fix before the FAF to draw that leg from (or no FAF), it goes direct from the aircraft at `here`.
+ */
+export function vtfPatch(start, legs, here) {
+    const i = vtfLeg(legs);
+    return { activeLeg: start + i, directFrom: i > 0 ? null : here, vtf: true };
+}
+/** PROC's change to the flight plan: the approach `pts` after the en route waypoints, loaded, activated or vectors-to-final. */
+export function approachPatch(enroute, pts, mode, here) {
+    const route = [...enroute, ...pts];
+    if (mode === "load")
+        return { route, vtf: false };
+    if (mode === "activate")
+        return { route, activeLeg: enroute.length, directFrom: here, vtf: false };
+    return { route, ...vtfPatch(enroute.length, pts, here) };
+}

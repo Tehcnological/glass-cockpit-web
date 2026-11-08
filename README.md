@@ -86,7 +86,7 @@ How the pages work:
 - **DIRECT TO:** opens on the selected waypoint with ACTIVATE? highlighted, so ENT goes direct; the inner knob enters another.
 - **WAYPOINT ENTRY and DIRECT TO:** turning the inner knob left before typing opens the FPL, NRST and RECENT lists; the outer knob scrolls a list and ENT takes the waypoint.
 - **PROC:** opens the PROCEDURES menu (see below). SELECT APPROACH opens on the destination's approaches. Pick one, a transition, then LOAD? or ACTIVATE?. Its fixes join the flight plan after the en route waypoints.
-- **Softkeys:** ENGINE (LEAN, SYSTEM), MAP (layers, airways, terrain and traffic switches), DCLTR, CHKLIST, and each page's own keys.
+- **Softkeys:** ENGINE (LEAN, SYSTEM), MAP (traffic, profile and airway switches; the data keys are dim), DCLTR, CHKLIST, and each page's own keys.
 - **CLR held:** goes to the navigation map.
 
 ### Bezel controls
@@ -108,7 +108,7 @@ On both units:
 - **NAV and COM volume** set `navVolume` and `comVolume` (0 to 1) and show the level for 2 s; NAV push toggles `navIdent`.
 - **RANGE** works the MFD map and the PFD inset.
 
-Every PFD softkey works:
+Every PFD softkey that is not dim works:
 
 - **INSET:** DCLTR, range.
 - **PFD:** BRG1/BRG2 cycle OFF, NAV1, NAV2, GPS, ADF over `bearings`; WIND; ALT UNIT meters and hPa; STD BARO; DFLTS.
@@ -145,7 +145,7 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
 
   `heading` flags the heading box (FG1000's flag; the trainer's magnetometer failure was not checked). FG1000's NO GPS POSITION flag is not used on the PFD.
 - **DME:** PFD > DME shows the DME window left of the HSI: the NAV radio, its active frequency and the distance from `bearings` (dashes without one). The top-row DME key opens DME TUNING, where the small FMS knob switches NAV1 and NAV2. No HOLD.
-- **PROC** opens a PROCEDURES menu: ACTIVATE VECTOR-TO-FINAL, ACTIVATE APPROACH and ACTIVATE MISSED APPROACH (grey until an approach is loaded), SELECT APPROACH, and SELECT ARRIVAL and SELECT DEPARTURE (always grey, not ported). ACTIVATE? on an approach the GPS may not fly (anything but RNAV (GPS) and GPS approaches) asks NOT APPROVED FOR GPS, YES or NO; NO goes back without loading. ACTIVATE with the VECTORS transition, or ACTIVATE VECTOR-TO-FINAL, makes the final approach fix active with no leg from the aircraft, and sets the MFD's `vtf` (reported through `onChange`) so a host can label the PFD's active leg, as the trainer does: `{ from: "vtf 356°", to: "TWOFA faf" }`. The PFD flight plan tags approach fixes in lowercase: `faf`, `map`. `gpsApproved` and `vtfLeg` are exported for hosts.
+- **PROC** opens a PROCEDURES menu: ACTIVATE VECTOR-TO-FINAL, ACTIVATE APPROACH and ACTIVATE MISSED APPROACH (grey until an approach is loaded), SELECT APPROACH, and SELECT ARRIVAL and SELECT DEPARTURE (always grey, not ported). ACTIVATE? on an approach the GPS may not fly (anything but RNAV (GPS) and GPS approaches) asks NOT APPROVED FOR GPS, YES or NO; NO goes back without loading. ACTIVATE with the VECTORS transition, or ACTIVATE VECTOR-TO-FINAL, makes the final approach fix active with no leg from the aircraft (direct from the aircraft when the approach has no fix before its FAF), and sets the MFD's `vtf` (reported through `onChange`) so a host can label the PFD's active leg, as the trainer does: `{ from: "vtf 356°", to: "TWOFA faf" }`. The PFD flight plan tags approach fixes in lowercase: `faf`, `map`. `gpsApproved` and `vtfLeg` are exported for hosts.
 
 ## Navdata
 

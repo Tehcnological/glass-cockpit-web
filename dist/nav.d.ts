@@ -1,4 +1,4 @@
-import type { MapPoint } from "./map.js";
+import type { LatLon, MapPoint } from "./map.js";
 export interface Runway {
     id: string; /** Feet. */
     length: number; /** Feet. */
@@ -79,3 +79,31 @@ export declare function gpsApproved(name: string): boolean;
 export declare function vtfLeg(legs: {
     role?: string;
 }[]): number;
+/**
+ * Vector-to-final with the approach's fixes from `route[start]`: the final approach fix is active, its leg on the final
+ * course. With no fix before the FAF to draw that leg from (or no FAF), it goes direct from the aircraft at `here`.
+ */
+export declare function vtfPatch(start: number, legs: {
+    role?: string;
+}[], here: LatLon): {
+    activeLeg: number;
+    directFrom: LatLon | null;
+    vtf: true;
+};
+/** PROC's change to the flight plan: the approach `pts` after the en route waypoints, loaded, activated or vectors-to-final. */
+export declare function approachPatch(enroute: (string | MapPoint)[], pts: MapPoint[], mode: "load" | "activate" | "vectors", here: LatLon): {
+    route: (string | MapPoint)[];
+    vtf: boolean;
+    activeLeg?: undefined;
+    directFrom?: undefined;
+} | {
+    route: (string | MapPoint)[];
+    activeLeg: number;
+    directFrom: LatLon;
+    vtf: boolean;
+} | {
+    activeLeg: number;
+    directFrom: LatLon | null;
+    vtf: true;
+    route: (string | MapPoint)[];
+};

@@ -3,7 +3,7 @@
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, rangeLabel } from "./map.js";
-import { bearingDistance, gpsApproved, latLon, nearest, planName, routePoint, vtfLeg } from "./nav.js";
+import { approachPatch, bearingDistance, gpsApproved, latLon, nearest, planName, routePoint, vtfPatch } from "./nav.js";
 import { BLANK, IdEntry, ListView, NS, dimKey, firstRow, key } from "./ui.js";
 // Surround.PAGE_GROUPS
 export const PAGE_GROUPS = [
@@ -1122,7 +1122,7 @@ class ProceduresPage extends MfdPage {
         if (!a)
             return;
         if (this.item === 0)
-            this.m.change({ activeLeg: a.start + vtfLeg(a.pts), directFrom: null, vtf: true });
+            this.m.change(vtfPatch(a.start, a.pts, { lat: this.s.lat, lon: this.s.lon }));
         else if (this.item === 1)
             this.m.change({ activeLeg: a.start, directFrom: { lat: this.s.lat, lon: this.s.lon }, vtf: false });
         else {
@@ -1146,13 +1146,7 @@ class ProceduresPage extends MfdPage {
             .filter((l, i) => i === 0 || l.fix !== legs[i - 1].fix)
             .map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, role: l.role }));
         const enroute = s.route.filter((r) => typeof r === "string" || s.points.includes(r));
-        const route = [...enroute, ...pts];
-        if (!activate)
-            this.m.change({ route });
-        else if (name === "VECTORS")
-            this.m.change({ route, activeLeg: enroute.length + vtfLeg(pts), directFrom: null, vtf: true });
-        else
-            this.m.change({ route, activeLeg: enroute.length, directFrom: { lat: s.lat, lon: s.lon }, vtf: false });
+        this.m.change(approachPatch(enroute, pts, !activate ? "load" : name === "VECTORS" ? "vectors" : "activate", { lat: s.lat, lon: s.lon }));
         this.m.close();
     }
     draw() {
