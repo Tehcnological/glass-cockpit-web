@@ -6,6 +6,8 @@ Standing instructions for Claude Code in this repo. The local folder is `glass-p
 
 A browser glass cockpit (PFD, MFD, bezel) ported to TypeScript from FlightGear's FG1000, plus the Vue components instrumentready.com uses (`vue/`). Consumer: `Tehcnological/instrumentready.com`, which installs it as `github:Tehcnological/glass-cockpit-web`. Read README.md for the API and NOTICE.md for what came from FlightGear.
 
+GCW owns the FAA NASR/CIFP transformations (`src/navdata.ts`, the separate `glass-cockpit-web/navdata` export, never imported by the displays). instrumentready.com owns the downloads, the cycle and the Phoenix cut.
+
 ## Hard constraints
 
 - TypeScript. GPL-2.0-or-later, as FlightGear is. Contributions come in under the same license; no copyright assignment.

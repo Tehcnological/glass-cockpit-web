@@ -4,6 +4,7 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 
 ## Unreleased
 
+- `glass-cockpit-web/navdata`: NASR and CIFP transformations (`buildNasr`, `parseCifp`, `near`, `approachName`) moved from instrumentready.com, unchanged output. A separate export; the displays don't load it.
 - Community docs: CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, NOTICE, issue and PR templates. README reorganised.
 - GitHub Actions CI: type check, unit tests, stale `dist/` check, install from git.
 
