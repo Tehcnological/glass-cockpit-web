@@ -90,7 +90,7 @@ Garmin art, screenshots, data or manual text is copied.
 | FPL | Active flight plan | Partial: insert, delete, activate leg, PAGE MENU; no VNV, no airways, no stored plans |
 | FPL | Flight plan catalog, stored plans | Missing |
 | LST | Checklists | Done |
-| NRST | Airports | Partial: no RNWY, FREQ, APR, LD APR softkeys |
+| NRST | Airports | Partial: no dashed line to the selected airport on the map |
 | NRST | Intersections, NDB, VOR | Partial: VOR's FREQ key missing |
 | NRST | Frequencies | Done |
 | NRST | User waypoints, airspaces | Missing / No data |
@@ -102,7 +102,7 @@ Garmin art, screenshots, data or manual text is copied.
 | Root | ENGINE, MAP, DCLTR, SHW CHRT, CHKLIST | Done (SHW CHRT No data) |
 | MAP | TRAFFIC, PROFILE, TOPO, TERRAIN, AIRWAYS, PRECIP, METAR, LEGEND, BACK | Partial: PROFILE and AIRWAYS missing; the rest No data |
 | ENGINE, LEAN, SYSTEM | CYL SLCT, ASSIST, RST FUEL, GAL REM (+/- 1, 10 GAL) | Partial: keys present; GAL REM adjust not checked |
-| Nearest airports | APT, RNWY, FREQ, APR, LD APR | Missing |
+| Nearest airports | APT, RNWY, FREQ, APR, LD APR | Done |
 | Procedures page | DP, STAR, APR, GO BACK | Missing |
 
 ## Page menus (MENU)
@@ -119,7 +119,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Airport information | View Destination Airport, Show Directory/Departure/Arrival/Approach/Weather Page, View NOTAMs, Chart Mode On | Missing |
 | Approach loading (PROC) | Load Approach, Load & Activate Approach | Done through PROC |
 | User waypoint information | Create New User Waypoint, Delete User Waypoint, Rename User Waypoint, Delete All User Waypoints, Waypoint Setup (temporary or normal), Use Present Position | Missing |
-| Nearest airports | Select Airport/Runway/Frequency/Approach Window, Load Approach | Missing (with the RNWY/FREQ/APR softkeys) |
+| Nearest airports | Select Airport/Runway/Frequency/Approach Window, Load Approach | Done |
 | Nearest VOR | Select VOR Window, Select Frequency Window | Missing |
 | Nearest airspaces | Select Alerts Window | Missing / No data |
 | Trip planning | Flight Plan Mode, Waypoints Mode, Auto Mode, Manual Mode | Missing |

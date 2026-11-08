@@ -39,6 +39,17 @@ export class ProcFlow {
     this.entry.cancel();
   }
 
+  /** LD APR (Nearest Airports): SELECT APPROACH on `name` at `airport`, at its transitions (LOAD? with only one).
+   * False when there is no procedure data for it. */
+  loadApproach(airport: string, name: string): boolean {
+    const i = this.h.s().procedures.filter((p) => p.airport === airport).findIndex((p) => p.name === name);
+    if (i < 0) return false;
+    [this.airport, this.view, this.apr, this.trans, this.pending] = [airport, "select", i, 0, null];
+    this.entry.cancel();
+    this.grp = this.transitions().length > 1 ? "TRANS" : "LOAD";
+    return true;
+  }
+
   procs(): Procedure[] {
     return this.h.s().procedures.filter((p) => p.airport === this.airport);
   }

@@ -124,6 +124,8 @@ declare class ProceduresPage extends MfdPage {
     private flow;
     constructor(m: Mfd, screen: SVGGElement, after: Element);
     open(): void;
+    /** LD APR: SELECT APPROACH on `name` at `airport`, at its transitions. */
+    loadApproach(airport: string, name: string): void;
     keys(): Key[];
     toggleCrsr(): void;
     fms(outer: boolean, d: number): boolean;

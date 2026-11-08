@@ -38,6 +38,9 @@ export declare class ProcFlow {
     constructor(h: ProcHost, entry?: Speller);
     /** Opens on the PROCEDURES menu. SELECT APPROACH opens on the destination: the last airport in the flight plan, else the nearest. */
     open(): void;
+    /** LD APR (Nearest Airports): SELECT APPROACH on `name` at `airport`, at its transitions (LOAD? with only one).
+     * False when there is no procedure data for it. */
+    loadApproach(airport: string, name: string): boolean;
     procs(): Procedure[];
     transitions(): string[];
     private loaded;

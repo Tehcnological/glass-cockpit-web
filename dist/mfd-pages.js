@@ -189,7 +189,10 @@ class TrafficPage extends MfdPage {
     }
 }
 // NearestAirports: the airport list, then the selected airport's runways, frequencies and approaches.
+// Pilot's Guide: LD APR (with an approach under the cursor) or the menu's Load Approach opens PROC's SELECT APPROACH on
+// it, at its transitions; ENT on the airport list moves to the next airport.
 class NearestAirportsPage extends MfdPage {
+    procs;
     navMap = "partial";
     grp = "APT";
     rwy = 0;
@@ -202,9 +205,29 @@ class NearestAirportsPage extends MfdPage {
     get apt() {
         return this.list()[this.apts.sel]?.item;
     }
+    constructor(m, name, screen, procs) {
+        super(m, name, screen);
+        this.procs = procs;
+    }
+    /** LD APR's action: the approach under the cursor, when PROC has its procedure. */
+    loadApr() {
+        const [a, name] = [this.apt, this.apt?.approaches[this.apprs.sel]];
+        if (!this.crsr || this.grp !== "APR" || !a || !name || !this.s.procedures.some((p) => p.airport === a.id && p.name === name))
+            return undefined;
+        return () => {
+            const p = this.procs();
+            this.m.open(p);
+            p.loadApproach(a.id, name);
+        };
+    }
     keys() {
         const g = (label, grp) => key(label, () => this.select(grp), this.crsr && this.grp === grp);
-        return this.m.topKeys({ 4: g("APT", "APT"), 5: g("RNWY", "RNWY"), 6: g("FREQ", "FREQ"), 7: g("APR", "APR") });
+        const ld = this.loadApr();
+        return this.m.topKeys({ 4: g("APT", "APT"), 5: g("RNWY", "RNWY"), 6: g("FREQ", "FREQ"), 7: g("APR", "APR"), 8: ld ? key("LD APR", ld) : dimKey("LD APR") });
+    }
+    pageMenu() {
+        const w = (label, grp) => ({ label, act: () => this.select(grp) });
+        return [w("Select Airport Window", "APT"), w("Select Runway Window", "RNWY"), w("Select Frequency Window", "FREQ"), w("Select Approach Window", "APR"), { label: "Load Approach", act: this.loadApr() }];
     }
     select(grp) {
         this.crsr = true;
@@ -233,6 +256,9 @@ class NearestAirportsPage extends MfdPage {
         const f = freqList(this.apt)[this.freqs.sel];
         if (this.crsr && this.grp === "FREQ" && f)
             this.m.tune(Number(f.Freq));
+        // Pilot's Guide: ENT also moves to the next airport.
+        else if (this.crsr && this.grp === "APT" && this.apts.move(1, this.list().length))
+            [this.rwy, this.freqs.sel, this.apprs.sel] = [0, 0, 0];
     }
     selected() {
         return this.crsr ? this.apt?.id ?? null : null;
@@ -1064,6 +1090,11 @@ class ProceduresPage extends MfdPage {
         this.flow.open();
         this.crsr = true;
     }
+    /** LD APR: SELECT APPROACH on `name` at `airport`, at its transitions. */
+    loadApproach(airport, name) {
+        this.flow.loadApproach(airport, name);
+        this.crsr = true;
+    }
     keys() {
         return this.m.topKeys();
     }
@@ -1319,7 +1350,7 @@ export function makePages(m, screen) {
         switch (name) {
             case "NavigationMap": return new NavigationMapPage(m, name, screen, () => mapSetup);
             case "TrafficMap": return new TrafficPage(m, name, screen);
-            case "NearestAirports": return new NearestAirportsPage(m, name, screen);
+            case "NearestAirports": return new NearestAirportsPage(m, name, screen, () => procedures);
             case "NearestVOR": return new NearestNavPage(m, name, screen, "VOR");
             case "NearestNDB": return new NearestNavPage(m, name, screen, "NDB");
             case "NearestIntersections": return new NearestNavPage(m, name, screen, "FIX");
