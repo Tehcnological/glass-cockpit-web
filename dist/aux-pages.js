@@ -42,8 +42,11 @@ export function airportMatches(a, s) {
 }
 /** A data bar field's value; BRG and DIS are to the active waypoint, FOB and END from the fuel gauges. */
 export function dataBar(f, s, now, setup) {
-    const to = routePoint(s.route[s.activeLeg] ?? "", s.points, s.airports);
-    const bd = to && bearingDistance(s.lat, s.lon, to.lat, to.lon);
+    // Only BRG and DIS look up the active waypoint.
+    const toActive = () => {
+        const to = routePoint(s.route[s.activeLeg] ?? "", s.points, s.airports);
+        return to && bearingDistance(s.lat, s.lon, to.lat, to.lon);
+    };
     const fob = s.engine.fuelLeft + s.engine.fuelRight;
     switch (f) {
         case "GS": return `${Math.round(s.groundspeed)}kts`;
@@ -51,8 +54,14 @@ export function dataBar(f, s, now, setup) {
         case "TRK": return deg3(s.track);
         case "ETE": return s.ete === null ? "--:--" : ete(s.ete);
         case "ETA": return s.ete === null ? "--:--" : clockText(now + s.ete * 1000, setup, false);
-        case "BRG": return bd ? deg3(bd.brg - s.magVar) : "___°";
-        case "DIS": return bd ? `${bd.dist.toFixed(1)}nm` : "___nm";
+        case "BRG": {
+            const bd = toActive();
+            return bd ? deg3(bd.brg - s.magVar) : "___°";
+        }
+        case "DIS": {
+            const bd = toActive();
+            return bd ? `${bd.dist.toFixed(1)}nm` : "___nm";
+        }
         case "TKE": return s.dtk === null ? "___°" : `${Math.round(Math.abs(mod(s.track - s.dtk + 180, 360) - 180))}°`;
         case "FOB": return `${Math.round(fob)}gl`;
         case "END": return s.engine.fuelFlow > 0 ? hms((fob / s.engine.fuelFlow) * 3600).slice(0, 5) : "--:--";
@@ -121,7 +130,9 @@ export class Utility {
     depReset = 0;
     /** Nautical miles. */ odom = 0;
     /** Nautical miles. */ trip = 0;
-    tripHours = 0;
+    /** Distance and time at or over lift-off groundspeed, for TRIP AVG GS (taxiing left out). */
+    airNm = 0;
+    airHours = 0;
     /** Knots. */ maxGs = 0;
     last = null;
     constructor(power) {
@@ -177,7 +188,7 @@ export class Utility {
         return this.start(this.depFrom, this.depReset);
     }
     avgGs() {
-        return this.tripHours > 0 ? Math.round(this.trip / this.tripHours) : 0;
+        return this.airHours > 0 ? Math.round(this.airNm / this.airHours) : 0;
     }
     /** Takes a groundspeed sample. shortcut: a gap of over a minute between samples is not flown. */
     tick(gs, now) {
@@ -187,8 +198,8 @@ export class Utility {
         if (h > 0 && h <= 1 / 60) {
             this.odom += gs * h;
             this.trip += gs * h;
-            if (gs > 0)
-                this.tripHours += h;
+            if (gs >= LIFT_OFF)
+                [this.airNm, this.airHours] = [this.airNm + gs * h, this.airHours + h];
         }
         this.maxGs = Math.max(this.maxGs, gs);
         this.last = now;
@@ -200,7 +211,7 @@ export class Utility {
         if (what === "departure" || what === "all")
             this.depReset = now;
         if (what === "trip" || what === "all")
-            [this.trip, this.tripHours] = [0, 0];
+            [this.trip, this.airNm, this.airHours] = [0, 0, 0];
         if (what === "odom" || what === "all")
             this.odom = 0;
         if (what === "max" || what === "all")

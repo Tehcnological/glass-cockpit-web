@@ -104,7 +104,25 @@ export interface PfdOptions extends DisplayOptions {
     onChange?: (patch: PfdChange) => void;
     /** IAS box turns red above this. */ vne?: number;
     /** Speed references, switched on and off in TMR/REF. */ vspeeds?: Partial<Record<VSpeed, number>>;
+    /** The airspeed tape's color strip, knots (default: the 172S's). */ speedRanges?: SpeedRanges;
 }
+/** Speed range strip limits, knots: flaps operating vso to vfe (white), normal vs1 to vno (green), caution vno to vne
+ * (yellow), vne up (red); under vso is red for low speed awareness. */
+export interface SpeedRanges {
+    vso: number;
+    vs1: number;
+    vfe: number;
+    vno: number;
+    vne: number;
+}
+/** Cessna 172S, KIAS. */
+export declare const SPEEDS_172S: SpeedRanges;
+/** The turn rate trend vector for a rate in deg/s: an arc to the heading 6 seconds ahead, clamped to the band, and
+ * the arrowhead the Pilot's Guide shows past 4 deg/s, where the prediction is no longer valid. */
+export declare function turnVector(rate: number): {
+    arc: string;
+    arrow: string;
+};
 export declare class GlassPfd {
     private options;
     readonly svg: SVGSVGElement;
@@ -116,6 +134,10 @@ export declare class GlassPfd {
     private fpl;
     private fplRows;
     private turnTrend;
+    private turnArrow;
+    /** The pitch ladder's window shape, and the fixed matrices updateAI uses to keep it still on the screen: from the
+     * horizon's coordinates to the ladder's, and from the screen to the horizon's parent. */
+    private ladder;
     private minBug;
     private inset;
     private insetGeom;
@@ -167,6 +189,8 @@ export declare class GlassPfd {
     private drawWindow;
     private updateLeg;
     private updateAI;
+    private speedStrip;
+    private ladderWindow;
     private updateFD;
     private updateIAS;
     private updateVSI;

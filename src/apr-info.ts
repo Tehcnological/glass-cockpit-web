@@ -38,9 +38,10 @@ export class AprInfo {
     return p ? approachPoints(p, this.transitions(c)[this.trans]) : [];
   }
 
-  // The large knob's stops; the minimum altitude only with minimums on.
-  private order(): Grp[] {
-    return this.baro === null ? ["APT", "APR", "TRANS", "MIN", "SEQ"] : ["APT", "APR", "TRANS", "MIN", "MINALT", "SEQ"];
+  // The large knob's stops, as ENT's: transitions only when the approach has some, the minimum altitude only with minimums on.
+  private order(c: AprCtx): Grp[] {
+    return (["APT", "APR", "TRANS", "MIN", "MINALT", "SEQ"] as Grp[]).filter((g) =>
+      (g !== "TRANS" || this.transitions(c).length > 0) && (g !== "MINALT" || this.baro !== null));
   }
 
   fms(c: AprCtx, outer: boolean, d: number) {
@@ -49,7 +50,7 @@ export class AprInfo {
       else this.entry.inner(d);
       return;
     }
-    const o = this.order();
+    const o = this.order(c);
     if (outer) this.grp = o[clamp(o.indexOf(this.grp) + (d > 0 ? 1 : -1), 0, o.length - 1)];
     else if (this.grp === "APR") [this.apr, this.trans, this.seq] = [clamp(this.apr + d, 0, Math.max(0, (c.airport?.approaches.length ?? 1) - 1)), 0, 0];
     else if (this.grp === "TRANS") [this.trans, this.seq] = [clamp(this.trans + d, 0, Math.max(0, this.transitions(c).length - 1)), 0];

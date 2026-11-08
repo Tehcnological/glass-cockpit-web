@@ -67,7 +67,9 @@ Two callbacks let a host follow the controls:
 
 DIRECT TO and PROC open windows where NRST opens, and work as the MFD's do (see below): DIRECT TO needs `points` and `airports`, PROC `procedures`.
 
-FG1000 draws the turn rate scale above the compass rose but never moves anything on it; `turnRate` (degrees per second) draws a magenta trend vector there, the heading 6 seconds ahead, as the real unit does.
+FG1000 draws the turn rate scale above the compass rose but never moves anything on it; `turnRate` (degrees per second) draws a magenta trend vector there, the heading 6 seconds ahead, as the real unit does, with an arrowhead past 4°/s. `turnVector(rate)` returns its path data.
+
+The airspeed tape's color strip comes from the `speedRanges` option, knots: `{ vso, vs1, vfe, vno, vne }`, white from `vso` to `vfe`, green from `vs1` to `vno`, yellow to `vne`, red above, and red under `vso` for low speed awareness. It defaults to the 172S's (`SPEEDS_172S`: 40, 48, 85, 129, 163). Its `vne` also turns the IAS box red when `vne` is not set.
 
 ### MFD
 
@@ -153,7 +155,10 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
 - **NEAREST AIRPORTS LD APR** (Pilot's Guide; FG1000 has none): with an approach under the cursor, LD APR or the PAGE MENU's Load Approach opens PROC's SELECT APPROACH on it at its transitions (LOAD? when it has one); it is grey when `procedures` has no such approach. The PAGE MENU also selects the airport, runway, frequency and approach windows, and ENT on the airport list moves to the next airport.
 - **PFD DIRECT TO and PROC** (FG1000 has neither): windows in the NRST window's place, laid out as the trainer's, sharing the MFD's flow. DIRECT TO and PROC again close them.
 - **Long press:** holding COM ⇄ or CLR for 2 s acts as on the real unit (FG1000: a separate key binding); COM ⇄ tunes 121.5, where FG1000 tunes 121.00.
-- **Attitude and turn rate** (Pilot's Guide): the pitch ladder stops below the roll pointer and slip/skid bar instead of running through them, and the turn rate band has ticks at half-standard and standard rate each side, with the trend vector drawn through them. FG1000 draws the band alone.
+- **Pitch ladder:** shown inside a semicircle just under the roll pointer and slip/skid bar, down to the top of the heading box, fixed on the screen (FG1000: a rectangle from y 70, through the pointer, to 370). Red chevrons pointing to the horizon from 50° nose up and 30° nose down (Pilot's Guide); FG1000 has none, so their shape and spacing are this package's own.
+- **Airspeed tape:** the color-coded speed range strip along its right edge (Pilot's Guide); FG1000's tape has none. Where the flap range overlaps the normal range, white takes the inner half.
+- **Heading box:** 17.2 px higher than FG1000's, sitting on the turn rate band instead of over its top.
+- **Attitude and turn rate** (Pilot's Guide): the turn rate band has ticks at half-standard and standard rate each side, with the trend vector drawn through them. FG1000 draws the band alone.
 - **Bezel shading:** FG1000's fascia shades its left column darker than its right (an extra overlay and a fainter edge strip); here both match the right.
 - **Colors:** the cursor and selectable text are full cyan (FG1000: a paler #80ffff), and the page group window shows the selected page in cyan and the rest in white (FG1000: lilac and grey).
 

@@ -75,6 +75,20 @@ export function profileView(alt: number, range: number) {
   return { nm, ticks, step, bottom: Math.max(0, Math.floor(alt / step) * step - step) };
 }
 
+/** The points drawn as symbols: a layer's by its range and declutter level, airway fixes past their range (still
+ * decluttered), and the route's and a previewed procedure's always. A previewed fix already on the map draws once. */
+export function symbolPoints(s: MapData, declutter = 0): MapPoint[] {
+  const byId = new Map(s.points.map((p) => [p.id, p]));
+  const route = s.route.map((r) => (typeof r === "string" ? byId.get(r) : r)).filter((p): p is MapPoint => !!p);
+  const preview = s.preview ?? [];
+  const pinned = new Set([...route, ...preview].map((p) => p.id));
+  const onAirway = new Set((s.airways ?? []).flatMap((a) => a.points));
+  const extra = route.filter((r) => !byId.has(r.id));
+  const drawn = new Set([...byId.keys(), ...extra.map((p) => p.id)]);
+  return [...s.points, ...extra, ...preview.filter((p) => !drawn.has(p.id))].filter((p) =>
+    pinned.has(p.id) || (declutter <= DECLUTTER[p.type] && (s.range <= LAYER_RANGE[p.type] || onAirway.has(p.id))));
+}
+
 /** Map window in screen pixels: clip box, aircraft position, and pixels per `range`. */
 export interface MapGeometry { x: number; y: number; w: number; h: number; cx: number; cy: number; px: number }
 
@@ -164,14 +178,12 @@ const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer]
     out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${i === s.activeLeg ? "#ff00ff" : "#ffffff"}" stroke-width="2"/>`;
   }
   // Airways: low grey (the roads' shade), high green (Pilot's Guide); their fixes show at any range.
-  const onAirway = new Set<string>();
   for (const a of s.airways ?? []) {
     for (let i = 1; i < a.points.length; i++) {
       const [p, q] = [byId.get(a.points[i - 1]), byId.get(a.points[i])];
       if (!p || !q) continue;
       const [[x1, y1], [x2, y2]] = [xy(p), xy(q)];
       out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${a.type === "LO" ? "#808080" : "#00c000"}" stroke-width="2"/>`;
-      onAirway.add(p.id).add(q.id);
     }
   }
   const preview = s.preview ?? [];
@@ -184,9 +196,8 @@ const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer]
     const [[x1, y1], [x2, y2]] = [xy(s.directFrom), xy(route[0])];
     out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ff00ff" stroke-width="2"/>`;
   }
-  for (const p of [...s.points, ...route.filter((r) => !byId.has(r.id)), ...preview]) {
+  for (const p of symbolPoints(s, declutter)) {
     const [x, y] = xy(p);
-    if (!shown(p.type) && !route.includes(p) && !onAirway.has(p.id)) continue;
     if (x < m.x - 150 || x > m.x + m.w + 150 || y < m.y - 150 || y > m.y + m.h + 150) continue;
     const active = route[s.activeLeg]?.id === p.id;
     out += `<g transform="translate(${x} ${y})">${SYMBOLS[p.type](p.id, active)}</g>`;
@@ -200,7 +211,8 @@ const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer]
   const [ax, ay] = xy(s);
   // Profile View's path: a white box along the track as far and wide as the profile looks, with its distance marks.
   if (s.profilePath) {
-    const a = (((s.track ?? s.heading) + (s.magVar ?? 0) - up) * Math.PI) / 180;
+    // Along the track when moving; standing still, the track means nothing, so the heading.
+    const a = (((s.groundspeed && s.track !== undefined ? s.track : s.heading) + (s.magVar ?? 0) - up) * Math.PI) / 180;
     const [f, r] = [[Math.sin(a), -Math.cos(a)], [Math.cos(a), Math.sin(a)]];
     const [len, half] = [s.profilePath.nm * scale, (s.profilePath.width / 2) * scale];
     const at = (d: number, side: number) => `${ax + f[0] * d + r[0] * side},${ay + f[1] * d + r[1] * side}`;

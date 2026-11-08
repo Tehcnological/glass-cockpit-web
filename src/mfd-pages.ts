@@ -258,7 +258,9 @@ class NearestAirportsPage extends MfdPage {
 
   private list() {
     // AUX - SYSTEM SETUP's Nearest Airport criteria: runway surface and length.
-    return nearest(this.s.airports.filter((a) => airportMatches(a, this.m.ui.setup)), this.s.lat, this.s.lon, this.s.magVar);
+    const l = nearest(this.s.airports.filter((a) => airportMatches(a, this.m.ui.setup)), this.s.lat, this.s.lon, this.s.magVar);
+    this.apts.sel = Math.min(this.apts.sel, Math.max(0, l.length - 1)); // the criteria may have shortened the list
+    return l;
   }
 
   private get apt(): Airport | undefined {

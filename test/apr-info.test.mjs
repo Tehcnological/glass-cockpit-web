@@ -89,3 +89,13 @@ test("spelling an airport: ENT returns it and starts over on its approaches", ()
   a.clr();
   assert.ok(!a.entry.editing, "CLR cancels the spelling");
 });
+
+test("the large knob skips TRANSITIONS when the approach has none", () => {
+  const bare = { airport, procedures: [{ airport: "KAAA", name: "ILS OR LOC RWY 36", transitions: {}, legs }] };
+  const a = info();
+  a.ent(bare);
+  a.fms(bare, true, 1);
+  assert.equal(a.grp, "MIN");
+  a.fms(bare, true, -1);
+  assert.equal(a.grp, "APR");
+});

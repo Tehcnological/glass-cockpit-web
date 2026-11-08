@@ -55,7 +55,9 @@ export declare class Utility {
     private depReset;
     /** Nautical miles. */ odom: number;
     /** Nautical miles. */ trip: number;
-    private tripHours;
+    /** Distance and time at or over lift-off groundspeed, for TRIP AVG GS (taxiing left out). */
+    private airNm;
+    private airHours;
     /** Knots. */ maxGs: number;
     private last;
     constructor(power: number);
