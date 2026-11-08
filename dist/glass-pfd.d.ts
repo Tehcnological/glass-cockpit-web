@@ -71,6 +71,7 @@ export interface PfdState {
     /** Flight plan, for the inset map and the FPL window: ids of `points` or `airports`, or points of its own. */
     route: (string | MapPoint)[];
     /** Set by DIRECT TO and PROC: where the direct leg to the active waypoint starts, for the inset map. */ directFrom: LatLon | null;
+    /** Vector-to-final is active (PROC): `directFrom` is its intercept, not a direct-to, so Cancel Direct-To NAV is dim. */ vtf: boolean;
     /** Index into `route` of the active waypoint. */ activeLeg: number;
     /** Airports the NRST window lists, nearest first after sorting here. */ airports: Airport[];
     /** Approaches the PROC window can load, for the airports in `airports`. */ procedures: Procedure[];
@@ -95,10 +96,8 @@ export interface PfdState {
      */
     failed: Partial<Record<Failure, boolean>>;
 }
-/** A change `onChange` reports: PFD state, plus the MFD's `vtf` when the flight plan changes. */
-export type PfdChange = Partial<PfdState> & {
-    vtf?: boolean;
-};
+/** A change `onChange` reports. */
+export type PfdChange = Partial<PfdState>;
 export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading";
 export interface PfdOptions extends DisplayOptions {
     /** Called when a bezel input changes the state (heading bug, course, baro, selected altitude, radios, CDI source). */

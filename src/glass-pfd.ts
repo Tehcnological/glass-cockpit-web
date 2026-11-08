@@ -79,6 +79,7 @@ export interface PfdState {
   /** Flight plan, for the inset map and the FPL window: ids of `points` or `airports`, or points of its own. */
   route: (string | MapPoint)[];
   /** Set by DIRECT TO and PROC: where the direct leg to the active waypoint starts, for the inset map. */ directFrom: LatLon | null;
+  /** Vector-to-final is active (PROC): `directFrom` is its intercept, not a direct-to, so Cancel Direct-To NAV is dim. */ vtf: boolean;
   /** Index into `route` of the active waypoint. */ activeLeg: number;
   /** Airports the NRST window lists, nearest first after sorting here. */ airports: Airport[];
   /** Approaches the PROC window can load, for the airports in `airports`. */ procedures: Procedure[];
@@ -97,8 +98,8 @@ export interface PfdState {
   failed: Partial<Record<Failure, boolean>>;
 }
 
-/** A change `onChange` reports: PFD state, plus the MFD's `vtf` when the flight plan changes. */
-export type PfdChange = Partial<PfdState> & { vtf?: boolean };
+/** A change `onChange` reports. */
+export type PfdChange = Partial<PfdState>;
 
 export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading";
 
@@ -113,7 +114,7 @@ const DEFAULTS: PfdState = {
   pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
   baro: 29.92, oat: 15, heading: 0, turnRate: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
   cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null,
-  radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], directFrom: null, activeLeg: 1, airports: [], procedures: [], magVar: 0, wind: null,
+  radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], directFrom: null, vtf: false, activeLeg: 1, airports: [], procedures: [], magVar: 0, wind: null,
   xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
   vspeedsOn: { Vglide: false, Vr: false, Vx: false, Vy: false }, minimums: null, failed: {}, // v13 trainer: references start off
 };
@@ -363,8 +364,7 @@ export class GlassPfd {
 
   /** Apply a change the pilot made and report it. */
   private change(patch: PfdChange) {
-    const { vtf: _v, ...own } = patch;
-    this.set(own);
+    this.set(patch);
     this.options.onChange?.(patch);
   }
 
