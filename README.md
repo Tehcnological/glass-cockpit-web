@@ -69,6 +69,8 @@ DIRECT TO and PROC open windows where NRST opens, and work as the MFD's do (see 
 
 FG1000 draws the turn rate scale above the compass rose but never moves anything on it; `turnRate` (degrees per second) draws a magenta trend vector there, the heading 6 seconds ahead, as the real unit does, with an arrowhead past 4°/s. `turnVector(rate)` returns its path data.
 
+Past +30° or -20° pitch, or 65° bank, the PFD declutters as the Pilot's Guide describes unusual attitudes (FG1000 only removes the command bars): the OAT, wind, inset map, heading and course readouts, baro setting, selected altitude, glideslope and vertical deviation, transponder and clock, autopilot annunciations, and the TMR/REF, NRST, flight plan, PROC, DIRECT TO and setup windows go, and the INSET, PFD, XPDR, IDENT, TMR/REF and NRST softkeys dim. The attitude, airspeed, altitude, vertical speed and HSI stay, with bearing information, the DME window and ALERTS. Everything returns as the attitude recovers. `unusualAttitude(pitch, roll)` gives the test.
+
 The airspeed tape's color strip comes from the `speedRanges` option, knots: `{ vso, vs1, vfe, vno, vne }`, white from `vso` to `vfe`, green from `vs1` to `vno`, yellow to `vne`, red above, and red under `vso` for low speed awareness. It defaults to the 172S's (`SPEEDS_172S`: 40, 48, 85, 129, 163). Its `vne` also turns the IAS box red when `vne` is not set.
 
 ### MFD

@@ -106,6 +106,8 @@ export interface PfdOptions extends DisplayOptions {
     /** Speed references, switched on and off in TMR/REF. */ vspeeds?: Partial<Record<VSpeed, number>>;
     /** The airspeed tape's color strip, knots (default: the 172S's). */ speedRanges?: SpeedRanges;
 }
+/** Pilot's Guide, Unusual Attitudes: past +30° or -20° pitch, or past 65° bank. */
+export declare function unusualAttitude(pitch: number, roll: number): boolean;
 /** Speed range strip limits, knots: flaps operating vso to vfe (white), normal vs1 to vno (green), caution vno to vne
  * (yellow), vne up (red); under vso is red for low speed awareness. */
 export interface SpeedRanges {

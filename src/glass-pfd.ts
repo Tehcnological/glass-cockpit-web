@@ -135,6 +135,16 @@ const FONT = `font-family="'Liberation Sans',Arial,sans-serif" font-size="18"`;
 const FAILURES: [Failure, string][] = [["attitude", "NoAttitude"], ["airspeed", "NoASI"], ["altitude", "NoAlt"], ["vsi", "NoVS"], ["heading", "NoHDG"]];
 
 // Parts of the FG1000 PFD this port does not drive. L_NoGPS: the v13 trainer's PFD shows a GPS failure only as an alert.
+/** Pilot's Guide, Unusual Attitudes: past +30° or -20° pitch, or past 65° bank. */
+export function unusualAttitude(pitch: number, roll: number): boolean {
+  return pitch > 30 || pitch < -20 || Math.abs(roll) > 65;
+}
+// What the PFD removes in an unusual attitude (Pilot's Guide): what set() otherwise always shows, and what it decides
+// each time. Traffic, the VNV target altitude and an MDA/DH readout are not drawn here, so not listed.
+const UA_ALWAYS = ["OAT", "XPDR-TIME", "SelectedHDG", "SelectedCRS", "BARO", "VDI"];
+const UA_SOMETIMES = ["SelectedALT", "SelectedALT-bug", "SelectedALT-meters", "WindData", "GS-ILS", "GS-type", "PFD-Map", "PFD-Map-bg", "PFD-Map-bg-1"];
+/** The autopilot annunciations in the header. */
+const AFCS = ["APLateralArmed", "APLateralActive", "APVerticalArmed", "APVerticalActive", "APVerticalReference", "APStatus"];
 const HIDDEN = ["L_NoGPS", "GSPD", "PFD-Multilines", "Annunciation", "SelectedALT-meters", "SelectedSPD-bug", "SelectedSPD-bg", "SelectedSPD-text", "SelectedSPD-symbol"];
 
 // Tape clipping, as "rect(top, right, bottom, left)" in screen coordinates.
@@ -272,9 +282,7 @@ export class GlassPfd {
     this.p.el("HDG")?.setAttribute("transform", `translate(0 ${-HDG_LIFT})`);
     this.speedStrip(options.speedRanges ?? SPEEDS_172S);
     // Autopilot annunciations start blank, as Surround.new() leaves them.
-    for (const id of ["APLateralArmed", "APLateralActive", "APVerticalArmed", "APVerticalActive", "APVerticalReference", "APStatus"]) {
-      this.surround.p.text(`Header${id}`, "");
-    }
+    for (const id of AFCS) this.surround.p.text(`Header${id}`, "");
     if (options.bezel) this.unbezel = bezelInput(svg, (i) => this.input(i));
     // FG1000 draws the turn rate scale but never drives it; the trend vector is drawn here.
     const scale = this.p.el("turnrate-indicator")!;
@@ -440,18 +448,22 @@ export class GlassPfd {
     const alerts = k(a.label, () => this.openWindow("ALERTS"), u.window === "ALERTS" || a.unread);
     const back = (to: Menu) => k("BACK", () => this.go(to));
     const toggle = (set: Record<string, boolean>, name: string) => k(name, () => (set[name] = !set[name]), set[name]);
-    switch (u.menu) {
+    // Pilot's Guide: in an unusual attitude the removed items' softkeys are disabled. The top level shows, dimmed where
+    // they are; the submenu comes back as the attitude recovers.
+    const ua = unusualAttitude(s.pitch, s.roll);
+    const off = (key: Key) => (ua ? dimKey(key.label) : key);
+    switch (ua ? "top" : u.menu) {
       case "top": {
         const cdi: CdiSource[] = ["GPS", "NAV1", "NAV2"];
         // v13 trainer: OBS is dim with no flight plan (FG1000 always offers it); while on, it stays so it can be turned off.
         return [
-          blank, k("INSET", () => { u.inset = true; this.go("inset"); }), blank, k("PFD", () => this.go("pfd")),
+          blank, off(k("INSET", () => { u.inset = true; this.go("inset"); })), blank, off(k("PFD", () => this.go("pfd"))),
           s.route.length || s.obs ? k("OBS", () => this.change({ obs: !s.obs }), s.obs) : dimKey("OBS"),
           // PFDInstrumentsController.incrCDISource: GPS, NAV1, NAV2.
           k("CDI", () => this.change({ cdiSource: cdi[(cdi.indexOf(s.cdiSource) + 1) % 3] })),
-          k("DME", () => this.openWindow("DME"), u.window === "DME"), k("XPDR", () => this.go("xpdr")), k("IDENT", () => this.ident()),
-          k("TMR/REF", () => this.openWindow("TMR/REF"), u.window === "TMR/REF"),
-          k("NRST", () => this.openWindow("NRST"), u.window === "NRST"), alerts,
+          k("DME", () => this.openWindow("DME"), u.window === "DME"), off(k("XPDR", () => this.go("xpdr"))), off(k("IDENT", () => this.ident())),
+          off(k("TMR/REF", () => this.openWindow("TMR/REF"), u.window === "TMR/REF")),
+          off(k("NRST", () => this.openWindow("NRST"), u.window === "NRST")), alerts,
         ];
       }
       case "inset":
@@ -693,6 +705,18 @@ export class GlassPfd {
     this.updateNrst();
     this.updateFlightPlan(s);
     this.drawWindow();
+    // Unusual attitude declutter, undone as the attitude recovers. Bearing information, the DME window and ALERTS stay
+    // (Pilot's Guide: the Bearing Information, Alerts and Annunciation windows can be displayed).
+    const ua = unusualAttitude(s.pitch, s.roll);
+    for (const id of UA_ALWAYS) this.p.show(id, !ua);
+    for (const id of AFCS) this.surround.p.show(`Header${id}`, !ua);
+    this.win.style.display = ua && this.ui.window !== "ALERTS" && this.ui.window !== "DME" ? "none" : "";
+    if (ua) {
+      for (const id of UA_SOMETIMES) this.p.show(id, false);
+      for (const g of [this.inset, this.panLayer]) g.style.display = "none";
+      for (const id of ["Group", "Info"]) this.nrst.show(id, false);
+      this.fpl.show("Group", false);
+    }
   }
 
   // setFlightPlan / updateFlightPlan: the flight plan window, shown by FPL while there is a flight plan. The arrow marks
@@ -999,8 +1023,8 @@ export class GlassPfd {
   }
 
   private updateFD({ fd, pitch, roll }: PfdState) {
-    // Command bars disappear beyond -20/+30 pitch or 65 bank.
-    const on = !!fd && pitch >= -20 && pitch <= 30 && Math.abs(roll) <= 65;
+    // Command bars disappear in an unusual attitude.
+    const on = !!fd && !unusualAttitude(pitch, roll);
     this.p.show("FlightDirector", on);
     if (fd && on) this.p.tf("FlightDirector", { ty: -(fd.pitch - pitch) * 6.849, rot: -(roll - fd.roll), center: [459, 282.8] });
   }
