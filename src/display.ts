@@ -16,7 +16,13 @@ export function buildDisplay(container: HTMLElement, pages: string[], label: str
   container.innerHTML = `<svg xmlns="${NS}" viewBox="${bezel ? "1 132 1407 918" : "0 0 1024 768"}" role="img"></svg>`;
   const svg = container.querySelector("svg")!;
   svg.setAttribute("aria-label", label);
-  if (bezel) svg.innerHTML = BEZEL;
+  if (bezel) {
+    svg.innerHTML = BEZEL;
+    // fascia.svg shades its two side columns unevenly: the left has an extra black overlay and a fainter edge strip, so
+    // it reads darker than the right. Match the left to the right.
+    (svg.querySelector("#rect8520") as SVGElement | null)?.style.setProperty("display", "none");
+    (svg.querySelector("#path12557") as SVGElement | null)?.style.setProperty("opacity", "0.29");
+  }
   const screen = svg.appendChild(document.createElementNS(NS, "g"));
   if (bezel) screen.setAttribute("transform", "translate(187 177)");
   screen.innerHTML = `<rect width="1024" height="768" fill="#000"/>${pages.map((p) => `<g>${p}</g>`).join("")}`;

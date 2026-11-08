@@ -13,8 +13,16 @@
 <form id="f"></form>
 <script type="module">
   import { GlassPfd, GlassMfd } from "./dist/glass-pfd.js";
-  const pfd = new GlassPfd(document.getElementById("pfd"), { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 } });
-  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true });
+  // The two units share their knobs and flight plan, as a real G1000's do: a change on one is set on the other, and the
+  // sliders follow. RANGE and the map stay each unit's own.
+  const SHARED = ["headingBug", "course", "baro", "selectedAlt", "radios", "navVolume", "comVolume", "navIdent", "route", "activeLeg", "directFrom", "vtf"];
+  const share = (to) => (patch) => {
+    for (const [k, v] of Object.entries(patch)) if (f.elements[k]?.type === "range") (f.elements[k].value = v), (f.elements[k].nextElementSibling.value = v);
+    const p = Object.fromEntries(Object.entries(patch).filter(([k]) => SHARED.includes(k)));
+    if (Object.keys(p).length) to().set(p);
+  };
+  const pfd = new GlassPfd(document.getElementById("pfd"), { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share(() => mfd) });
+  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true, onChange: share(() => pfd) });
   // Made-up points for the demo, not real navigation data.
   const points = [
     { id: "KAAA", type: "APT", lat: 33.40, lon: -112.00 }, { id: "ABC", type: "VOR", lat: 33.50, lon: -111.85 },
@@ -41,11 +49,15 @@
     pfd.set({ ...s, alerts: f.alert.checked ? ["DEMO - A sample message."] : [],
       failed: { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked }, cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 } });
     mfd.set({
-      heading: s.heading, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
-      orientation: f.hdgUp.checked ? "HDG UP" : "NORTH UP", points, airports, procedures, route: ["ABC", "WPONE", "KAAA"], activeLeg: 1,
+      heading: s.heading, headingBug: s.headingBug, course: s.course, selectedAlt: s.selectedAlt, alt: s.alt, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
+      orientation: f.hdgUp.checked ? "HDG UP" : "NORTH UP",
       engine: { rpm: s.rpm, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 },
     });
   };
   f.addEventListener("input", update);
+  // Set once, so the sliders don't undo flight plan changes.
+  const plan = { route: ["ABC", "WPONE", "KAAA"], activeLeg: 1 };
+  mfd.set({ points, airports, procedures, ...plan });
+  pfd.set(plan);
   update();
 </script>

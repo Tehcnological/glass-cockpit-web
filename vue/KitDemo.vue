@@ -12,6 +12,8 @@ const props = defineProps<{ nav: Pick<MfdState, "points" | "airspaces" | "airpor
 const vspeeds = { Vglide: 68, Vr: 55, Vx: 62, Vy: 74 };
 const mfd = reactive<Partial<MfdState>>({
   ...props.nav, lat: 33.4, lon: -111.9, range: 10, dtk: 270, ete: 151, route: ["KIWA", "PXR", "KPHX"], activeLeg: 1, directFrom: null, magVar: 10,
+  // Shared by both units' ALT knobs.
+  selectedAlt: 4000,
   // NAV1 on Phoenix VOR, NAV2 on Stanfield; shared by the PFD and MFD.
   radios: { nav1: { active: 115.6, standby: 113.3, id: "" }, nav2: { active: 114.8, standby: 110.5, id: "" }, com1: { active: 120.9, standby: 121.5 }, com2: { active: 118.3, standby: 132.45 } },
   engine: { rpm: 2400, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 },

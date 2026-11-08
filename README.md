@@ -138,6 +138,7 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
 - **VSI** scale reads 1 and 2 (thousand fpm) and stops at ±2000 fpm (FG1000: ±4000). The readout shows from 100 fpm, rounded to 50 fpm as the NXi G1000 does; the trainer could not be climbed to check.
 - **MENU** on the PFD opens the PFD SETUP MENU (brightness, shown on AUTO; not ported), or with the flight plan window open its PAGE MENU. On the MFD it opens the page's PAGE MENU: on the navigation map, Declutter works; on the flight plan page, Invert Flight Plan, Delete Flight Plan and Remove Approach work. Other options are listed grey, and the other pages have no menu yet. The FMS knob moves the cursor over the options that work, ENT carries one out, and CLR, MENU again or pushing the FMS knob closes it.
 - **FPL and PROC again:** on the MFD, FPL again goes back to the page shown before it, and PROC again closes the PROCEDURES window.
+- **Bezel shading:** FG1000's fascia shades its left column darker than its right (an extra overlay and a fainter edge strip); here both match the right.
 - **Colors:** the cursor and selectable text are full cyan (FG1000: a paler #80ffff), and the page group window shows the selected page in cyan and the rest in white (FG1000: lilac and grey).
 
 - **Softkey layouts** follow the trainer: DME on the PFD's top row and PFD menu; WX LGND, PRECIP and METAR in the inset menu; DCLTR, SHW CHRT and CHKLIST in the last three MFD slots; BACK in the eleventh slot of the ENGINE, LEAN, SYSTEM and MAP menus; LEAN's CYL SLCT and ASSIST and SYSTEM's RST FUEL and GAL REM where the trainer has them.
@@ -258,6 +259,7 @@ EOF
 - USER and AIRWAY waypoint lists.
 - Synthetic vision, the arc HSI, DME HOLD, selected airspeed, autopilot annunciations and the GPS course-to-intercept diamond.
 - Map terrain and airways.
+- The audio panel (and its reversionary mode button), and typing waypoint names on the keyboard.
 - PAGE MENU on pages other than the navigation map and flight plan, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice); the PFD's PROC window.
 
 FG1000 renders in Liberation Sans Narrow, which is not bundled. Without that font installed, some narrow labels fall back to a wider font.
