@@ -75,6 +75,11 @@ export class FplTool {
 
   /** The FMS knob: the small one picks a value (spells, on Closest Point), the large one moves (ATK: by 10 nm). */
   // shortcut: ATK's distance changes by 1 nm (small) or 10 nm (large), not digit by digit; upgrade if a lesson needs it.
+  /** Whether the small knob would spell (Closest Point's waypoint; keyboard typing goes there). */
+  typing() {
+    return this.name === "Closest Point Of FPL";
+  }
+
   fms(_s: ToolState, outer: boolean, d: number) {
     if (this.name === "Closest Point Of FPL") {
       if (outer) this.entry.outer(d);

@@ -32,6 +32,10 @@ export class AprInfo {
     order(c) {
         return ["APT", "APR", "TRANS", "MIN", "MINALT", "SEQ"].filter((g) => (g !== "TRANS" || this.transitions(c).length > 0) && (g !== "MINALT" || this.baro !== null));
     }
+    /** Whether the small knob would spell the airport (keyboard typing goes there). */
+    typing() {
+        return this.entry.editing || this.grp === "APT";
+    }
     fms(c, outer, d) {
         if (this.entry.editing || (this.grp === "APT" && !outer)) {
             if (outer)

@@ -115,6 +115,8 @@ With `bezel: true`, the mouse works the controls as FlightGear's FG1000 window d
 | Click an arrow beside a knob | Turns the knob one detent, left counterclockwise. On a dual knob the upper pair turns the outer ring and the lower pair the inner knob. Holding an arrow keeps turning. RANGE uses the - and + printed beside it. |
 | Click the joystick's arrows | Moves the pan pointer: up, down, left, right and the four diagonals. Holding keeps moving it. |
 
+The keyboard works the display last clicked (not on the real unit or in FG1000; NXi takes its keypad the same way): a letter or digit types into the identifier under the cursor and moves on, Backspace clears back, Enter is ENT and Escape is CLR. It types where the small FMS knob would spell: DIRECT TO, waypoint entry, the WPT pages, PROC and Closest Point Of FPL, on both units. Bezel inputs report a typed key as `{ control: "CHAR", value: <character code> }`, 8 for Backspace; `keyInput` maps a key event.
+
 A fast spin of the wheel turns HDG and CRS 5° a notch; a slow one turns 1°. Every knob pushes, ALT included (its push does nothing).
 
 On both units:
@@ -294,7 +296,7 @@ EOF
 - USER and AIRWAY waypoint lists.
 - Synthetic vision, the arc HSI, DME HOLD, selected airspeed, autopilot annunciations and the GPS course-to-intercept diamond.
 - Map terrain (and Profile View's terrain and winds) and airway labels.
-- The audio panel (the demo has its DISPLAY BACKUP button only), and typing waypoint names on the keyboard.
+- The audio panel (the demo has its DISPLAY BACKUP button only), and typing the scheduler's messages on the keyboard.
 - PAGE MENU on pages other than the navigation map, flight plan and DIRECT TO, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice).
 - The autopilot keys the trainer's MFD bezel has (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN), the engine strip's LEAN and SYSTEM pages and its invalid flags, the MFD's red COM/NAV fields (`failed` is the PFD's), and the map's range ring and measure bearing/distance in pan mode.
 

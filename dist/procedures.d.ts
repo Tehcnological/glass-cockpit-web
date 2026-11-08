@@ -49,6 +49,8 @@ export declare class ProcFlow {
      * and SELECT DEPARTURE are not ported. */
     enabled(i: number): boolean;
     private confirm;
+    /** Whether the small knob would spell the airport (keyboard typing goes there). */
+    typing(): boolean;
     fms(outer: boolean, d: number): void;
     ent(): void;
     clr(): void;

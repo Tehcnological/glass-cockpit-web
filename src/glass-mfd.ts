@@ -18,7 +18,7 @@ import { RADIOS, Surround } from "./surround.js";
 import type { CdiSource } from "./glass-pfd.js";
 import { adjust, bezelInput, type Input, type Knobs } from "./bezel.js";
 import type { Airport, Procedure, Station } from "./nav.js";
-import { BLANK, Highlighter, NS, dimKey, key, type Key } from "./ui.js";
+import { BLANK, Highlighter, IdEntry, NS, dimKey, key, type Key } from "./ui.js";
 import { dataBar, setupDefaults } from "./aux-pages.js";
 import { PAGE_GROUPS, makePages, type Checklist, type Mfd, type MfdPage, type MfdUi, type Pages } from "./mfd-pages.js";
 
@@ -220,6 +220,16 @@ export class GlassMfd {
         if (page.crsr && page.fms(i.control === "FMS_OUTER", i.value > 0 ? 1 : -1)) return this.set({});
         if (this.overlay) return;
         return this.pageMenu(i.control === "FMS_OUTER", i.value);
+      case "CHAR":
+        // A typed key: one clockwise turn of the small knob, which the identifier under the cursor takes as the key.
+        if (!page.crsr || !page.typing()) return;
+        IdEntry.typed = String.fromCharCode(i.value);
+        try {
+          page.fms(false, 1);
+        } finally {
+          IdEntry.typed = null; // never left for a later turn of the knob
+        }
+        return this.set({});
       case "FMS_CRSR":
         page.toggleCrsr();
         return this.set({});

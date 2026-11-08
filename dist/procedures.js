@@ -64,6 +64,10 @@ export class ProcFlow {
         this.pending = { act, from: this.view === "menu" ? "menu" : "select" };
         [this.view, this.yes] = ["ask", true];
     }
+    /** Whether the small knob would spell the airport (keyboard typing goes there). */
+    typing() {
+        return this.view === "select" && (this.entry.editing || this.grp === "APT");
+    }
     fms(outer, d) {
         if (this.view === "menu") {
             for (let i = this.item + d; i >= 0 && i < PROC_MENU.length; i += d) {

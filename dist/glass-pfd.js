@@ -273,6 +273,20 @@ export class GlassPfd {
             case "FMS_OUTER":
             case "FMS_INNER":
                 return this.fms(i.control === "FMS_OUTER", i.value > 0 ? 1 : -1);
+            case "CHAR": {
+                // A typed key: one clockwise turn of the small knob, which the identifier under the cursor takes as the key.
+                const on = u.window === "DTO" ? this.dtoEntry.editing || !u.dto.act : u.window === "PROC" ? this.proc.typing() : u.window === "TOOL" && this.tool.typing();
+                if (!on)
+                    return;
+                IdEntry.typed = String.fromCharCode(i.value);
+                try {
+                    this.fms(false, 1);
+                }
+                finally {
+                    IdEntry.typed = null; // never left for a later turn of the knob
+                }
+                return;
+            }
             case "MENU":
                 // v13 trainer: MENU shows the PFD SETUP MENU, or with the flight plan window open its PAGE MENU; MENU again
                 // closes it (the trainer then opens its DEMO MODE page, a simulator setting, not ported).

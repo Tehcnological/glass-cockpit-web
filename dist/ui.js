@@ -123,6 +123,9 @@ export class IdEntry {
     p;
     size;
     name;
+    /** A key typed on the computer keyboard (a letter, a digit, or "" for Backspace), taken by the next inner turn in
+     * place of turning: it goes in at the cursor, which moves on. Not on the real unit; NXi takes its keypad this way. */
+    static typed = null;
     chars = null;
     pos = 0;
     constructor(p, size, name = "ID") {
@@ -137,6 +140,18 @@ export class IdEntry {
         if (!this.chars) {
             this.chars = Array(this.size).fill("_");
             this.pos = 0;
+        }
+        const t = IdEntry.typed;
+        if (t !== null) {
+            IdEntry.typed = null;
+            if (t !== "")
+                [this.chars[this.pos], this.pos] = [t, Math.min(this.pos + 1, this.size - 1)];
+            else {
+                if (this.pos > 0 && this.chars[this.pos] === "_")
+                    this.pos--;
+                this.chars[this.pos] = "_";
+            }
+            return;
         }
         const c = this.chars[this.pos];
         const i = c === "_" ? (d > 0 ? 0 : CHARSET.length - 1) : mod(CHARSET.indexOf(c) + (d > 0 ? 1 : -1), CHARSET.length);

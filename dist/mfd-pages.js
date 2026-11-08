@@ -87,6 +87,10 @@ export class MfdPage {
     fms(_outer, _d) {
         return false;
     }
+    /** Whether the small FMS knob, turned clockwise now, would spell an identifier (keyboard typing goes there). */
+    typing() {
+        return false;
+    }
     toggleCrsr() {
         this.crsr = !this.crsr;
     }
@@ -454,6 +458,9 @@ class NavInfoPage extends MapPage {
             this.entry.outer(d);
         return true;
     }
+    typing() {
+        return true;
+    }
     ent() {
         if (!this.entry.editing)
             return;
@@ -606,6 +613,9 @@ class AirportInfoPage extends MapPage {
         this.entry.cancel();
         this.apr.clr();
         this.apr.grp = "APT";
+    }
+    typing() {
+        return this.view === "APR" ? this.apr.typing() : this.entry.editing || this.grp === "ID";
     }
     fms(outer, d) {
         if (this.view === "APR") {
@@ -1015,6 +1025,9 @@ class WaypointEntryPage extends MapPage {
             this.entry.inner(d);
         return true;
     }
+    typing() {
+        return !this.sub.open;
+    }
     ent() {
         if (this.sub.open) {
             const id = this.sub.value();
@@ -1121,6 +1134,9 @@ class DirectToPage extends MapPage {
             this.entry.inner(d);
         return true;
     }
+    typing() {
+        return !this.sub.open && (this.entry.editing || !this.onActivate);
+    }
     pick(id) {
         if (!id)
             return;
@@ -1226,6 +1242,9 @@ class ProceduresPage extends MfdPage {
     }
     toggleCrsr() {
         this.crsr = true;
+    }
+    typing() {
+        return this.flow.typing();
     }
     fms(outer, d) {
         this.flow.fms(outer, d);
@@ -1427,6 +1446,9 @@ export class FplToolPage extends MfdPage {
         this.tool.open(name, this.s, sel);
         this.crsr = true;
         return this;
+    }
+    typing() {
+        return this.tool.typing();
     }
     fms(outer, d) {
         this.tool.fms(this.s, outer, d);

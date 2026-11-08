@@ -11,9 +11,9 @@ export type Control =
   | "ALT_OUTER" | "ALT_INNER" | "ALT_PRESS" | "COM_VOL" | "COM_VOL_TOGGLE" | "COM_FREQ_TRANSFER" | "COM_FREQ_TRANSFER_HOLD"
   | "COM_OUTER" | "COM_INNER" | "COM_TOGGLE" | "CRS" | "BARO" | "CRS_CENTER" | "RANGE" | "JOYSTICK_PRESS"
   | "JOYSTICK_HORIZONTAL" | "JOYSTICK_VERTICAL" | "DTO" | "FPL" | "CLR" | "CLR_HOLD" | "MENU" | "PROC" | "ENT"
-  | "FMS_OUTER" | "FMS_INNER" | "FMS_CRSR" | "SOFTKEY";
+  | "FMS_OUTER" | "FMS_INNER" | "FMS_CRSR" | "SOFTKEY" | "CHAR";
 
-/** One bezel input: a knob turned (value +1 a detent clockwise, -1 counterclockwise; HDG and CRS 5 on a fast wheel spin), a push (1), or a softkey (1 to 12). */
+/** One bezel input: a knob turned (value +1 a detent clockwise, -1 counterclockwise; HDG and CRS 5 on a fast wheel spin), a push (1), a softkey (1 to 12), or a key typed on the computer keyboard (CHAR: its character code, 8 for Backspace). */
 export interface Input { control: Control; value: number }
 
 /** Values the knobs change on either unit. The MFD does not draw them but its knobs turn them, as on the real unit. */
@@ -195,10 +195,27 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void):
     const control = e.shiftKey ? s.shiftClick : s.click;
     if (control) fire(s, control);
   });
+  // Keys go to the display last clicked (it takes focus).
+  svg.setAttribute("tabindex", "0");
+  svg.addEventListener("keydown", (e) => {
+    const i = keyInput(e);
+    if (!i) return;
+    e.preventDefault();
+    onInput(i);
+  });
   return () => {
     stop();
     window.removeEventListener("pointerup", stop);
   };
+}
+
+/** A key typed on a focused display: a letter or digit (upper case) or Backspace types into the identifier under the
+ * cursor, Enter is ENT and Escape is CLR. Not on the real unit (NXi's keypad works the same way). */
+export function keyInput(e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey">): Input | null {
+  if (e.ctrlKey || e.metaKey || e.altKey) return null;
+  if (/^[a-z0-9]$/i.test(e.key)) return { control: "CHAR", value: e.key.toUpperCase().charCodeAt(0) };
+  const k: Record<string, Input> = { Backspace: { control: "CHAR", value: 8 }, Enter: { control: "ENT", value: 1 }, Escape: { control: "CLR", value: 1 } };
+  return k[e.key] ?? null;
 }
 
 // NAV and COM bands in whole MHz (Constants.nas). Frequencies are worked in kHz to keep them exact.
