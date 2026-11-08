@@ -116,6 +116,8 @@ declare class ProceduresPage extends MfdPage {
     private view;
     private item;
     private yes;
+    /** The activation NOT APPROVED FOR GPS asks about, and the view NO goes back to. */
+    private pending;
     private grp;
     private apr;
     private trans;
@@ -125,9 +127,9 @@ declare class ProceduresPage extends MfdPage {
     open(): void;
     private procs;
     private transitions;
-    /** The loaded approach: its fixes are the route's own points, after the en route waypoints (see `load`). */
     private loaded;
     private enabled;
+    private confirm;
     keys(): Key[];
     toggleCrsr(): void;
     fms(outer: boolean, d: number): boolean;
