@@ -29,7 +29,7 @@ function draw(s: FlightState) {
     heading: s.heading, turnRate: s.turnRate * 3, headingBug: s.headingBug, course: s.course, from: s.from, gs: s.gs,
     cdiDots: s.cdi * 2, // the PFD's CDI is two dots each side
     bearings: { ...nav?.bearings, ...(s.adf !== null && { ADF: { id: "", bearing: s.heading + s.adf } }) },
-    ...pickKeys(m, ["lat", "lon", "points", "airspaces", "route", "activeLeg", "airports", "magVar", "selectedAlt"]),
+    ...pickKeys(m, ["lat", "lon", "points", "airspaces", "route", "activeLeg", "directFrom", "airports", "procedures", "magVar", "selectedAlt"]),
     ...nav && { radios: nav.radios },
   });
   mfd?.set({ heading: s.heading, headingBug: s.headingBug, course: s.course, baro: s.baro, alt: s.alt, track: s.heading, groundspeed: s.ias, ...m, ...nav });

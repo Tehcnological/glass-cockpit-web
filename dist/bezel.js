@@ -134,9 +134,9 @@ export function bezelInput(svg, onInput) {
         const s = spot(e);
         if (e.button !== 0)
             return;
+        held = false; // a long press released off the bezel never got its click: don't swallow this gesture's
         if (s?.shiftClick && !s.arrow) {
             stop();
-            held = false;
             const control = s.shiftClick;
             timer = window.setTimeout(() => ((held = true), fire(s, control)), HOLD);
             return;

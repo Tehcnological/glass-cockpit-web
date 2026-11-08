@@ -1,6 +1,6 @@
 import { type DisplayOptions } from "./display.js";
 import { type Radios } from "./surround.js";
-import { type Airspace, type MapPoint } from "./map.js";
+import { type Airspace, type LatLon, type MapPoint } from "./map.js";
 import { type Airport, type Procedure } from "./nav.js";
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
 export type { Checklist } from "./mfd-pages.js";
@@ -70,6 +70,7 @@ export interface PfdState {
     airspaces: Airspace[];
     /** Flight plan, for the inset map and the FPL window: ids of `points` or `airports`, or points of its own. */
     route: (string | MapPoint)[];
+    /** Set by DIRECT TO and PROC: where the direct leg to the active waypoint starts, for the inset map. */ directFrom: LatLon | null;
     /** Index into `route` of the active waypoint. */ activeLeg: number;
     /** Airports the NRST window lists, nearest first after sorting here. */ airports: Airport[];
     /** Approaches the PROC window can load, for the airports in `airports`. */ procedures: Procedure[];
@@ -94,9 +95,8 @@ export interface PfdState {
      */
     failed: Partial<Record<Failure, boolean>>;
 }
-/** A change `onChange` reports: PFD state, plus the MFD's `directFrom` and `vtf` when the PAGE MENU changes the flight plan. */
+/** A change `onChange` reports: PFD state, plus the MFD's `vtf` when the flight plan changes. */
 export type PfdChange = Partial<PfdState> & {
-    directFrom?: import("./map.js").LatLon | null;
     vtf?: boolean;
 };
 export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading";
