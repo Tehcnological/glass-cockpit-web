@@ -48,7 +48,9 @@ jobs:
           cd "$(mktemp -d)"
           npm init -y > /dev/null
           npm install --no-audit --no-fund "git+file://$GITHUB_WORKSPACE#$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
-          node --input-type=module -e "const { GlassPfd, GlassMfd } = await import('glass-cockpit-web'); const { tuneNav } = await import('glass-cockpit-web/radio'); for (const f of [GlassPfd, GlassMfd, tuneNav]) if (typeof f !== 'function') throw new Error('a public export is missing');"
+          node --input-type=module -e "const { GlassPfd, GlassMfd } = await import('glass-cockpit-web'); const { tuneNav } = await import('glass-cockpit-web/radio'); for (const f of [GlassPfd, GlassMfd, tuneNav]) if (typeof f !== 'function') throw new Error('a public export is missing'); const n = await import('glass-cockpit-web/navdata'); for (const f of [n.buildNasr, n.parseCifp, n.near, n.approachName]) if (typeof f !== 'function') throw new Error('a navdata export is missing');"
+          # The displays must not pull in the build-time navdata code.
+          if grep -q navdata node_modules/glass-cockpit-web/dist/glass-pfd.js; then echo "::error::the main entry references navdata"; exit 1; fi
           test -f node_modules/glass-cockpit-web/vue/Glass.vue
           test -f node_modules/glass-cockpit-web/vue/Steam.vue
           test -f node_modules/glass-cockpit-web/vue/KitDemo.vue

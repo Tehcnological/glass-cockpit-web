@@ -16,6 +16,7 @@ For training and simulation only. Not for navigation or flight use.
 
 - [Install](#install)
 - [Use](#use): [PFD](#pfd), [MFD](#mfd), [Bezel controls](#bezel-controls), [Map](#map)
+- [Navdata](#navdata)
 - [Vue](#vue)
 - [Demo](#demo)
 - [Develop](#develop)
@@ -36,6 +37,7 @@ npm install github:Tehcnological/glass-cockpit-web
 | --- | --- |
 | `glass-cockpit-web` | `GlassPfd`, `GlassMfd` and their types |
 | `glass-cockpit-web/radio` | `tuneNav`, which tunes NAV1 and NAV2 to the nearest VOR on the frequency |
+| `glass-cockpit-web/navdata` | Build-time FAA NASR and CIFP transformations: `buildNasr`, `parseCifp`, `near`, `approachName` (see [Navdata](#navdata)). The displays never load it |
 | `glass-cockpit-web/vue/*` | The Vue components (see [Vue](#vue)); `vue` is an optional peer dependency |
 
 ## Use
@@ -124,6 +126,25 @@ FlightGear draws the map from its own navigation database. Here the map shows on
 
 `airspaces` takes Class B, C and D outlines. FG1000 draws none, so they follow the sectional chart: B solid blue, C solid magenta, D dashed blue, shown up to 150 nm.
 
+## Navdata
+
+`glass-cockpit-web/navdata` turns the FAA's public domain NASR and CIFP files into the data the displays take. It runs at build time, in Node or anywhere else, and has no dependencies. Fetching and unpacking the files is the host's job: instrumentready.com downloads each 28-day cycle and reads the CSVs with `csv-parse`, the zips with `fflate`, and the airspace shapefile with `shapefile` and `simplify-js`.
+
+| Function | Takes | Returns |
+| --- | --- | --- |
+| `buildNasr(cycle, csv, airspace)` | The NASR CSV rows by file (`NAV_BASE`, `FIX_BASE`, `APT_BASE`, `APT_RWY`, `FRQ`, `ILS_BASE`), as objects of column name to value; Class B, C and D airspace records the host built | `Nasr`: navaids, fixes, public-use airports, ARTCC/FSS/weather frequencies, airspace |
+| `parseCifp(text)` | The CIFP file `FAACIFP18` (ARINC 424) as text | `Cifp["procedures"]`: approaches with transitions, legs, altitudes and fix roles |
+| `near(nasr, cifp, lat, lon, range)` | The two above, a position and a range in nm | `{ points, airspaces, airports, stations, procedures }` for `set()`. VORs, NDBs and stations reach 200 nm, as the NRST pages do |
+| `approachName(id)` | A CIFP approach id such as `R08-Y` | The chart name, `RNAV (GPS) Y RWY 08` |
+
+```js
+import { near } from "glass-cockpit-web/navdata";
+
+mfd.set({ lat: 33.4, lon: -111.9, ...near(nasr, cifp, 33.4, -111.9, 40) });
+```
+
+Keep the output small for the client: `near` once at build time, and ship only its result. The data is not for navigation.
+
 ## Vue
 
 [`vue/`](vue/) holds the Vue components [instrumentready.com](https://instrumentready.com) uses, driven by one `FlightState` ([`vue/state.ts`](vue/state.ts)). Import them as `glass-cockpit-web/vue/Glass.vue`. They are shipped as source, so the site's own Vue build compiles them.
@@ -164,7 +185,9 @@ Layout:
 | `src/mfd-pages.ts`, `src/page.ts` | MFD pages and how they find their SVG elements |
 | `src/map.ts`, `src/nav.ts` | The navigation map, the navigation data types and shared arithmetic |
 | `src/radio.ts` | NAV tuning to VORs, including `tuneNav` |
+| `src/navdata.ts` | The `navdata` export: NASR and CIFP transformations, build time only |
 | `test/` | Unit tests (`node --test`) |
+| `test/fixtures/` | Real NASR rows from cycle 2026-10-29 and the records instrumentready.com built from them, for `buildNasr` |
 | `vue/` | Vue components |
 
 ## CI
@@ -174,7 +197,7 @@ Layout:
 1. `npm ci`
 2. `npm test`: `tsc`, then the unit tests in `test/`
 3. Deletes `dist/` and the generated `src/svg/`, runs `npm run build` and fails if the result differs from what is committed
-4. Installs the commit from git, as a site does, then imports `GlassPfd`, `GlassMfd` and `tuneNav` and checks for the files in `vue/`
+4. Installs the commit from git, as a site does, then imports `GlassPfd`, `GlassMfd`, `tuneNav` and the four `navdata` functions, fails if the main entry references `navdata`, and checks for the files in `vue/`
 
 A new push to a PR cancels that PR's older run. There are no path filters on purpose: a required check whose workflow is filtered out never reports, and its PR waits forever.
 
