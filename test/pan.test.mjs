@@ -1,7 +1,7 @@
 // Map pan mode (joystick), as on the v13 trainer.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { panInfo, panMove, panPoint, panStart, panTarget, PAN_STEP } from "../dist/pan.js";
+import { panInfo, panMarkup, panMove, panPoint, panStart, panTarget, PAN_STEP } from "../dist/pan.js";
 
 // 100 px a nm, north up, a 400 x 300 px map.
 const view = { w: 400, h: 300, scale: 100, up: 0, lat: 0 };
@@ -52,4 +52,17 @@ test("a range change recenters the map on the pointer", () => {
   const t = panTarget(p, view);
   assert.deepEqual([t.x, t.y], [0, 0]);
   assert.deepEqual(t.center, panPoint(p, view));
+});
+
+test("the pointer names the closest point, not the first listed", () => {
+  const p = { center: here, x: 0, y: 0 };
+  const far = { id: "FAR", lat: 0.04 / 60, lon: 0 }; // 4 px away, listed first
+  const on = { id: "ON", lat: 0, lon: 0 };
+  assert.equal(panInfo(p, view, here, [far, on], 0).label, "ON");
+});
+
+test("the info bar escapes identifiers", () => {
+  const info = { label: "<x>&", dis: "1.0NM", brg: "090°", lat: 0, lon: 0 };
+  const svg = panMarkup({ center: here, x: 0, y: 0 }, info, { x: 0, y: 0, w: 200, h: 100, cx: 100, cy: 50 }, 18);
+  assert.ok(!svg.includes("<x>") && svg.includes("&#60;x&#62;&#38;"));
 });

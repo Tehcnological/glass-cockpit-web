@@ -3,6 +3,7 @@
 // DOM-free so the tests can run it.
 import { bearingDistance, latLon } from "./nav.js";
 import { deg3 } from "./page.js";
+import { esc } from "./ui.js";
 const NM_PER_DEG = 60;
 /** Pixels the pointer moves for one joystick click. */
 export const PAN_STEP = 12;
@@ -42,16 +43,19 @@ export function panMarkup(p, info, m, font) {
     const [pad, l1, l2] = [font * 0.55, m.y + font * 1.1, m.y + font * 2.3];
     return `<path d="M${x} ${y}l0 ${22 * k}l${6 * k} ${-6 * k}l${6 * k} ${11 * k}l${4 * k} ${-2 * k}l${-6 * k} ${-11 * k}l${9 * k} 0z" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>` +
         `<rect x="${m.x}" y="${m.y}" width="${m.w}" height="${font * 2.7}" fill="#000000" stroke="#808080" stroke-width="2"/>` +
-        t(m.x + pad, l1, info.label) + t(m.x + pad, l2, `${info.dis}  ${info.brg}`) +
+        t(m.x + pad, l1, esc(info.label)) + t(m.x + pad, l2, `${info.dis}  ${info.brg}`) +
         t(m.x + m.w - pad, l1, latLon(info.lat, "N", "S"), "end") + t(m.x + m.w - pad, l2, latLon(info.lon, "E", "W"), "end");
 }
 /** The info bar: the point under the pointer (or MAP POINTER), its distance and magnetic bearing from the aircraft, lat/lon. */
 export function panInfo(p, v, here, points, magVar) {
     const at = panPoint(p, v);
-    const under = points.find((q) => {
+    let [under, best] = [undefined, NEAR];
+    for (const q of points) {
         const [x, y] = project(p.center, q, v);
-        return Math.hypot(x - p.x, y - p.y) <= NEAR;
-    });
+        const d = Math.hypot(x - p.x, y - p.y);
+        if (d <= best)
+            [under, best] = [q, d];
+    }
     const { brg, dist } = bearingDistance(here.lat, here.lon, at.lat, at.lon);
     const dis = dist < 0.1 ? `${Math.round(dist * 6076.12)}FT` : dist < 100 ? `${dist.toFixed(1)}NM` : `${Math.round(dist)}NM`;
     return { label: under?.id ?? "MAP POINTER", dis, brg: deg3(brg - magVar), lat: at.lat, lon: at.lon };
