@@ -149,6 +149,25 @@ export declare function directToPatch(s: Plan & LatLon, p: MapPoint): {
     vtf: boolean;
 };
 /**
+ * The Direct-to window's Cancel Direct-To NAV (Pilot's Guide): the plan resumes on the leg closest to the aircraft; a
+ * direct-to that replaced the plan leaves nothing to fly. Null (dim) with no direct-to, or on vector-to-final.
+ */
+export declare function cancelDirectTo(s: Plan & LatLon & {
+    activeLeg: number;
+    directFrom: LatLon | null;
+    vtf?: boolean;
+}): {
+    route: never[];
+    activeLeg: number;
+    directFrom: null;
+    vtf: boolean;
+} | {
+    activeLeg: number;
+    directFrom: null;
+    vtf: boolean;
+    route?: undefined;
+} | null;
+/**
  * Vector-to-final after a waypoint is inserted or deleted at `at`, with the final approach fix active at `activeLeg`. Its
  * intercept may start at any approach fix before the FAF or at the aircraft (see `vtfPatch`), so an edit at or before the
  * FAF ends it and its intercept, and the active leg is drawn as an ordinary one; an edit after the FAF keeps it.

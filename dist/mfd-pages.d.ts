@@ -109,6 +109,7 @@ declare class DirectToPage extends MapPage {
     center(): MapPoint | null;
     keys(): Key[];
     toggleCrsr(): void;
+    pageMenu(): MenuOption[];
     fms(outer: boolean, d: number): boolean;
     private pick;
     ent(): void;
@@ -135,7 +136,9 @@ export declare class PageMenuPage extends MfdPage {
     constructor(m: Mfd, screen: SVGGElement, after: Element);
     get title(): string;
     /** Shows `options` for the page titled `title`, the cursor on the first available option. */
-    open(options: MenuOption[], title: string): void;
+    /** The window the menu was opened over (DIRECT TO); CLR goes back to it. */
+    private back;
+    open(options: MenuOption[], title: string, back?: MfdPage | null): void;
     fms(_outer: boolean, d: number): boolean;
     ent(): void;
     clr(): void;

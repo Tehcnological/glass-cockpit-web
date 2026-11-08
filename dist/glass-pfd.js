@@ -13,7 +13,7 @@ import { adjust, bezelInput } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
 import { ProcFlow, PROC_MENU } from "./procedures.js";
 import { panInfo, panMarkup, panMove, panStart, panTarget } from "./pan.js";
-import { bearingDistance, bestApproach, directToPatch, findPoint, latLon, nearest, nrstFreq, planName, routePoint } from "./nav.js";
+import { bearingDistance, bestApproach, directToPatch, cancelDirectTo, findPoint, latLon, nearest, nrstFreq, planName, routePoint } from "./nav.js";
 import { alertsKey, seenAlerts } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
 import { BLANK as blank, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key as k, screenBox } from "./ui.js";
@@ -78,6 +78,7 @@ export class GlassPfd {
         timer: { up: true, running: false, base: 0, since: 0 },
         /** The messages the ALERTS window has shown. */ alertsSeen: [],
         /** PFD > DME shows the DME window; DME TUNING picks its NAV radio. */ dme: false, dmeSource: "NAV1",
+        /** The window the PAGE MENU belongs to. */ menuOf: "FPL",
         /** DIRECT TO: the waypoint, and whether the cursor is on ACTIVATE? (else on the identifier). */ dto: { id: null, act: false },
         /** Pan mode on the inset map (joystick push), or null. */ pan: null,
     };
@@ -210,10 +211,13 @@ export class GlassPfd {
             case "MENU":
                 // v13 trainer: MENU shows the PFD SETUP MENU, or with the flight plan window open its PAGE MENU; MENU again
                 // closes it (the trainer then opens its DEMO MODE page, a simulator setting, not ported).
+                // Pilot's Guide: in the DIRECT TO window MENU shows that window's menu.
                 if (u.window === "SETUP" || u.window === "MENU")
-                    u.window = null;
-                else if (u.fpl)
+                    u.window = u.window === "MENU" && u.menuOf === "DTO" ? "DTO" : null;
+                else if (u.window === "DTO" || u.fpl) {
+                    u.menuOf = u.window === "DTO" ? "DTO" : "FPL";
                     [u.window, u.cursor] = ["MENU", firstOption(this.pageMenu().map((o) => !!o.patch))];
+                }
                 else
                     u.window = "SETUP";
                 return this.set({});
@@ -246,6 +250,8 @@ export class GlassPfd {
                     this.dtoEntry.cancel();
                 else if (u.window === "PROC")
                     this.proc.clr();
+                else if (u.window === "MENU" && u.menuOf === "DTO")
+                    u.window = "DTO";
                 else if (u.window)
                     u.window = null;
                 return this.set({});
@@ -271,7 +277,7 @@ export class GlassPfd {
             case "FPL":
                 // PFDInstrumentsController.handleFPL: shows or hides the flight plan window.
                 u.fpl = !u.fpl;
-                if (!u.fpl && u.window === "MENU")
+                if (!u.fpl && u.window === "MENU" && u.menuOf === "FPL")
                     u.window = null;
                 return this.set({});
         }
@@ -398,8 +404,10 @@ export class GlassPfd {
         return nearest(s.airports, s.lat, s.lon, s.magVar).map((n) => ({ ...n, a: n.item }));
     }
     // FMS knob in a window: the outer ring moves the cursor, the inner changes the field (NRST: both scroll the list).
-    /** The flight plan's PAGE MENU options; those without `patch` are dim. */
+    /** The PAGE MENU options, the flight plan's or the DIRECT TO window's; those without `patch` are dim. */
     pageMenu() {
+        if (this.ui.menuOf === "DTO")
+            return [{ label: "Cancel Direct-To NAV", patch: cancelDirectTo(this.state) }];
         return fplMenu(this.state.route, this.state.activeLeg);
     }
     fms(outer, d) {

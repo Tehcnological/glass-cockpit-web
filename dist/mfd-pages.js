@@ -3,7 +3,7 @@
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, rangeLabel } from "./map.js";
-import { asWaypoint, bearingDistance, directToPatch, findPoint, latLon, nearest, planName, routePoint, vtfEdit } from "./nav.js";
+import { asWaypoint, bearingDistance, cancelDirectTo, directToPatch, findPoint, latLon, nearest, planName, routePoint, vtfEdit } from "./nav.js";
 import { BLANK, CYAN, IdEntry, ListView, NS, dimKey, firstRow, key } from "./ui.js";
 import { firstOption, fplMenu, stepMenu } from "./page-menu.js";
 import { PROC_MENU, ProcFlow } from "./procedures.js";
@@ -920,6 +920,15 @@ class DirectToPage extends MapPage {
     toggleCrsr() {
         this.crsr = true;
     }
+    // Pilot's Guide: the Direct-to window's one option. Worked out again when ENT carries it out.
+    pageMenu() {
+        const act = () => {
+            const p = cancelDirectTo(this.s);
+            if (p)
+                this.m.change(p);
+        };
+        return [{ label: "Cancel Direct-To NAV", act: cancelDirectTo(this.s) ? act : undefined }];
+    }
     fms(outer, d) {
         if (this.sub.open)
             this.sub.fms(outer, d);
@@ -1113,8 +1122,10 @@ export class PageMenuPage extends MfdPage {
         return this.base;
     }
     /** Shows `options` for the page titled `title`, the cursor on the first available option. */
-    open(options, title) {
-        [this.options, this.base, this.crsr] = [options, title, true];
+    /** The window the menu was opened over (DIRECT TO); CLR goes back to it. */
+    back = null;
+    open(options, title, back = null) {
+        [this.options, this.base, this.crsr, this.back] = [options, title, true, back];
         this.at = firstOption(options.map((o) => !!o.act));
     }
     fms(_outer, d) {
@@ -1130,6 +1141,8 @@ export class PageMenuPage extends MfdPage {
     }
     clr() {
         this.m.close();
+        if (this.back)
+            this.m.open(this.back);
     }
     toggleCrsr() {
         this.m.close();

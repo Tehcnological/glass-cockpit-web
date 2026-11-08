@@ -13,7 +13,7 @@ import { adjust, bezelInput, type Input } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { ProcFlow, PROC_MENU } from "./procedures.js";
 import { panInfo, panMarkup, panMove, panStart, panTarget, type Pan, type PanView } from "./pan.js";
-import { bearingDistance, bestApproach, directToPatch, findPoint, latLon, nearest, nrstFreq, planName, routePoint, type Airport, type Procedure } from "./nav.js";
+import { bearingDistance, bestApproach, directToPatch, cancelDirectTo, findPoint, latLon, nearest, nrstFreq, planName, routePoint, type Airport, type Procedure } from "./nav.js";
 import { alertsKey, seenAlerts } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
 import { BLANK as blank, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key as k, screenBox, type Key } from "./ui.js";
@@ -174,6 +174,7 @@ export class GlassPfd {
     timer: { up: true, running: false, base: 0, since: 0 },
     /** The messages the ALERTS window has shown. */ alertsSeen: [] as string[],
     /** PFD > DME shows the DME window; DME TUNING picks its NAV radio. */ dme: false, dmeSource: "NAV1" as "NAV1" | "NAV2",
+    /** The window the PAGE MENU belongs to. */ menuOf: "FPL" as "FPL" | "DTO",
     /** DIRECT TO: the waypoint, and whether the cursor is on ACTIVATE? (else on the identifier). */ dto: { id: null as string | null, act: false },
     /** Pan mode on the inset map (joystick push), or null. */ pan: null as Pan | null,
   };
@@ -298,8 +299,12 @@ export class GlassPfd {
       case "MENU":
         // v13 trainer: MENU shows the PFD SETUP MENU, or with the flight plan window open its PAGE MENU; MENU again
         // closes it (the trainer then opens its DEMO MODE page, a simulator setting, not ported).
-        if (u.window === "SETUP" || u.window === "MENU") u.window = null;
-        else if (u.fpl) [u.window, u.cursor] = ["MENU", firstOption(this.pageMenu().map((o) => !!o.patch))];
+        // Pilot's Guide: in the DIRECT TO window MENU shows that window's menu.
+        if (u.window === "SETUP" || u.window === "MENU") u.window = u.window === "MENU" && u.menuOf === "DTO" ? "DTO" : null;
+        else if (u.window === "DTO" || u.fpl) {
+          u.menuOf = u.window === "DTO" ? "DTO" : "FPL";
+          [u.window, u.cursor] = ["MENU", firstOption(this.pageMenu().map((o) => !!o.patch))];
+        }
         else u.window = "SETUP";
         return this.set({});
       case "FMS_CRSR":
@@ -323,6 +328,7 @@ export class GlassPfd {
         if (u.window === "NRST" && u.nrstInfo) u.nrstInfo = false;
         else if (u.window === "DTO" && this.dtoEntry.editing) this.dtoEntry.cancel();
         else if (u.window === "PROC") this.proc.clr();
+        else if (u.window === "MENU" && u.menuOf === "DTO") u.window = "DTO";
         else if (u.window) u.window = null;
         return this.set({});
       case "DTO": {
@@ -346,7 +352,7 @@ export class GlassPfd {
       case "FPL":
         // PFDInstrumentsController.handleFPL: shows or hides the flight plan window.
         u.fpl = !u.fpl;
-        if (!u.fpl && u.window === "MENU") u.window = null;
+        if (!u.fpl && u.window === "MENU" && u.menuOf === "FPL") u.window = null;
         return this.set({});
     }
     const src = this.state.cdiSource;
@@ -478,8 +484,9 @@ export class GlassPfd {
   }
 
   // FMS knob in a window: the outer ring moves the cursor, the inner changes the field (NRST: both scroll the list).
-  /** The flight plan's PAGE MENU options; those without `patch` are dim. */
-  private pageMenu() {
+  /** The PAGE MENU options, the flight plan's or the DIRECT TO window's; those without `patch` are dim. */
+  private pageMenu(): { label: string; patch?: object | null }[] {
+    if (this.ui.menuOf === "DTO") return [{ label: "Cancel Direct-To NAV", patch: cancelDirectTo(this.state) }];
     return fplMenu(this.state.route, this.state.activeLeg);
   }
 

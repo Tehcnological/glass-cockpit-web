@@ -3,7 +3,7 @@
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, rangeLabel, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
-import { asWaypoint, bearingDistance, directToPatch, findPoint, latLon, nearest, planName, routePoint, vtfEdit, type Airport, type Procedure } from "./nav.js";
+import { asWaypoint, bearingDistance, cancelDirectTo, directToPatch, findPoint, latLon, nearest, planName, routePoint, vtfEdit, type Airport, type Procedure } from "./nav.js";
 import { BLANK, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, firstRow, key, type Key } from "./ui.js";
 import { firstOption, fplMenu, stepMenu, type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
@@ -990,6 +990,15 @@ class DirectToPage extends MapPage {
     this.crsr = true;
   }
 
+  // Pilot's Guide: the Direct-to window's one option. Worked out again when ENT carries it out.
+  pageMenu(): MenuOption[] {
+    const act = () => {
+      const p = cancelDirectTo(this.s);
+      if (p) this.m.change(p);
+    };
+    return [{ label: "Cancel Direct-To NAV", act: cancelDirectTo(this.s) ? act : undefined }];
+  }
+
   fms(outer: boolean, d: number) {
     if (this.sub.open) this.sub.fms(outer, d);
     else if (this.entry.editing) {
@@ -1183,8 +1192,11 @@ export class PageMenuPage extends MfdPage {
   }
 
   /** Shows `options` for the page titled `title`, the cursor on the first available option. */
-  open(options: MenuOption[], title: string) {
-    [this.options, this.base, this.crsr] = [options, title, true];
+  /** The window the menu was opened over (DIRECT TO); CLR goes back to it. */
+  private back: MfdPage | null = null;
+
+  open(options: MenuOption[], title: string, back: MfdPage | null = null) {
+    [this.options, this.base, this.crsr, this.back] = [options, title, true, back];
     this.at = firstOption(options.map((o) => !!o.act));
   }
 
@@ -1202,6 +1214,7 @@ export class PageMenuPage extends MfdPage {
 
   clr() {
     this.m.close();
+    if (this.back) this.m.open(this.back);
   }
 
   toggleCrsr() {

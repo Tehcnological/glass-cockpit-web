@@ -47,7 +47,7 @@ Garmin art, screenshots, data or manual text is copied.
 | FMS dual knob | Outer moves the cursor, inner changes the field or opens WPT entry; with no cursor the MFD outer/inner select page group/page | Done on the ported pages |
 | FMS push (CRSR) | Cursor on and off | Done on the ported pages |
 | Keyboard typing | Not on the real unit (NXi takes a keypad: letters, digits, BKSP, SPC). Wanted here for waypoint entry | Missing (later) |
-| Audio panel | GMA 1347 between the units: COM/NAV audio keys, MKR, intercom, and the red DISPLAY BACKUP (reversionary) button. The trainer has none; its Options menu toggles reversionary mode. FG1000 has a flat GMA1347 texture | Missing (later; reversionary on both units, art direction needed) |
+| Audio panel | GMA 1347 between the units: COM/NAV audio keys, MKR, intercom, and the red DISPLAY BACKUP (reversionary) button. The trainer has none; its Options menu toggles reversionary mode. FG1000's GMA1347 has all 21 keys with LEDs, both volume knobs and the red knob; its texture face is 128 x 512 px. FG1000 does not wire reversionary mode | Missing (art: FG1000 texture, scale or trace pending) |
 | Autopilot keys (MFD bezel) | Trainer: GFC 700 keys in the MFD's left column (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN). FG1000's 2D bezel has none; its 3D GDU-1044B texture has their labels, and fgdata has the GFC700 logic | Missing (art direction needed) |
 | Reversionary mode | Trainer: the PFD with the engine strip down the left; softkeys ENGINE, INSET, PFD, OBS, CDI, DME, XPDR, IDENT, TMR/REF, NRST, ALERTS | Missing (later) |
 
@@ -107,12 +107,25 @@ Garmin art, screenshots, data or manual text is copied.
 
 ## Page menus (MENU)
 
-| Page | Trainer options | Status |
+Options per page from the Pilot's Guide (trainer lists where read). "No data" means the option needs weather, traffic,
+terrain, charts, Iridium or a database GCW does not carry.
+
+| Page | Options | Status |
 | --- | --- | --- |
-| Navigation map | Map Setup, Declutter, Measure Bearing/Distance, Show Chart, Show Profile View | Partial: Declutter only |
-| Active flight plan (PFD and MFD) | 18 options | Partial: Invert, Delete, Remove Approach |
+| Navigation map | Map Setup (orientation, auto zoom, track vector, wind vector, nav range ring, fuel range, field of view, topo, airways, land, aviation, traffic, weather groups), Declutter, Measure Bearing/Distance, Show/Hide Profile View, Show Chart | Partial: Declutter only |
+| Active flight plan | Activate Leg, Load Waypoint, Store Flight Plan, Invert Flight Plan, Delete Flight Plan, Create ATK Offset Waypoint, Parallel Track, Closest Point of FPL, Collapse/Expand Airways, Hold At Wpt, Hold At Present Position, Remove Departure/Arrival/Approach, Enable/Cancel VNV, VNV Direct-To, Select VNV Profile Window | Partial: Invert, Delete, Remove Approach |
+| Flight plan catalog | Create New, Activate, Invert & Activate, Copy, Edit, Delete, Delete All | Missing (no stored plans) |
+| Direct-to window | Cancel Direct-To NAV, Clear Vertical Constraints | Partial: Cancel Direct-To NAV (no VNV) |
 | Airport information | View Destination Airport, Show Directory/Departure/Arrival/Approach/Weather Page, View NOTAMs, Chart Mode On | Missing |
-| Every other page | Not yet read off the trainer | Missing |
+| Approach loading (PROC) | Load Approach, Load & Activate Approach | Done through PROC |
+| User waypoint information | Create New User Waypoint, Delete User Waypoint, Rename User Waypoint, Delete All User Waypoints, Waypoint Setup (temporary or normal), Use Present Position | Missing |
+| Nearest airports | Select Airport/Runway/Frequency/Approach Window, Load Approach | Missing (with the RNWY/FREQ/APR softkeys) |
+| Nearest VOR | Select VOR Window, Select Frequency Window | Missing |
+| Nearest airspaces | Select Alerts Window | Missing / No data |
+| Trip planning | Flight Plan Mode, Waypoints Mode, Auto Mode, Manual Mode | Missing |
+| Utility | Reset Departure Time, Reset Flight Timer | Missing |
+| AUX GPS status | Set WPT to Present Position (RAIM prediction) | Missing |
+| Weather (XM, FIS-B, Connext), traffic, TAWS, terrain, Stormscope, Iridium phone and text | Product groups, legends, operate/standby/test, inhibit, show flight IDs, call and message actions | No data |
 
 ## Dialogs and flows
 
@@ -128,9 +141,21 @@ Garmin art, screenshots, data or manual text is copied.
 | Approach suspend (SUSP) and missed approach sequencing | Missing |
 | VNAV | Missing |
 
+## From the Line Maintenance Manual
+
+| Behavior | Status |
+| --- | --- |
+| DISPLAY BACKUP: one push puts both displays in reversionary mode (flight instruments and engine strip on each); a second push returns them | Missing (with the audio panel) |
+| A display that loses power sends the other into reversionary mode on its own; the failed side's COM/NAV fields flag invalid | Missing |
+| A failed sensor or unit red-X's its fields: attitude (AHRS), heading (AHRS or magnetometer), air data (ADC), COM/NAV 1 or 2 (GIA), transponder, engine data, OAT | Partial: `failed` flags attitude, airspeed, altitude, vertical speed and heading; not COM/NAV, transponder, engine or OAT |
+| Start-up: attitude, airspeed and altitude invalid for the first 40 to 60 s while the AHRS aligns | Missing |
+| GFC 700: AFCS and PFT annunciations above the airspeed tape; the autopilot cannot engage until the preflight test passes | Missing (with the autopilot) |
+| AUX SYSTEM STATUS: unit health and software versions on the MFD | Missing (Phase 3, AUX pages) |
+| System message advisories: about 150 messages in the Pilot's Guide appendix | Host data: GCW shows what the host posts |
+
 ## Not checked on the trainer yet
 
-Each needs a pass on the trainer before it is built: the PAGE MENU of every page other than the three above, the WPT
+Each needs a pass on the trainer before it is built: the page menus above against the trainer's lists, the WPT
 airport sub-pages, the AUX pages, the SUSP key and hold entry. Read the Pilot's Guide first.
 
 ## Phases

@@ -175,7 +175,7 @@ export class GlassMfd {
                 if (this.overlay === menu)
                     this.closeOverlay();
                 else if (page.pageMenu()) {
-                    menu.open(page.pageMenu(), page.title);
+                    menu.open(page.pageMenu(), page.title, this.overlay);
                     this.openOverlay(menu);
                 }
                 return this.set({});

@@ -139,7 +139,7 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
 
 - **Knob arrows:** as on the trainer, clicking beside a knob turns it, and holding keeps turning. Here small arrows (original, not the trainer's) sit above each knob: two pairs on the dual knobs (NAV, ALT, COM, CRS/BARO, FMS), upper for the outer ring and lower for the inner knob, one pair on HDG, and small ones on the volume knobs. RANGE turns on its printed - and +, and the joystick pans in eight directions. A faint glow shows an arrow under the pointer.
 - **VSI** scale reads 1 and 2 (thousand fpm) and stops at ±2000 fpm (FG1000: ±4000). The readout shows from 100 fpm, rounded to 50 fpm as the NXi G1000 does; the trainer could not be climbed to check.
-- **MENU** on the PFD opens the PFD SETUP MENU (brightness, shown on AUTO; not ported), or with the flight plan window open its PAGE MENU. On the MFD it opens the page's PAGE MENU: on the navigation map, Declutter works; on the flight plan page, Invert Flight Plan, Delete Flight Plan and Remove Approach work. Other options are listed grey, and the other pages have no menu yet. The FMS knob moves the cursor over the options that work, ENT carries one out, and CLR, MENU again or pushing the FMS knob closes it.
+- **MENU** on the PFD opens the PFD SETUP MENU (brightness, shown on AUTO; not ported), or with the flight plan window open its PAGE MENU, or in the DIRECT TO window that window's menu (Cancel Direct-To NAV: the flight plan resumes on the leg closest to the aircraft; CLR goes back to DIRECT TO). On the MFD it opens the page's PAGE MENU: on the navigation map, Declutter works; on the flight plan page, Invert Flight Plan, Delete Flight Plan and Remove Approach work; in DIRECT TO, Cancel Direct-To NAV. Other options are listed grey, and the other pages have no menu yet. The FMS knob moves the cursor over the options that work, ENT carries one out, and CLR, MENU again or pushing the FMS knob closes it.
 - **FPL and PROC again:** on the MFD, FPL again goes back to the page shown before it, and PROC again closes the PROCEDURES window.
 - **Pan mode** (FG1000 has none): the joystick push on the MFD navigation map and the PFD inset map, as the Pilot's Guide and the trainer describe. The pointer and bar are drawn here, not Garmin's.
 - **PFD DIRECT TO and PROC** (FG1000 has neither): windows in the NRST window's place, laid out as the trainer's, sharing the MFD's flow. DIRECT TO and PROC again close them.
@@ -267,7 +267,7 @@ EOF
 - Synthetic vision, the arc HSI, DME HOLD, selected airspeed, autopilot annunciations and the GPS course-to-intercept diamond.
 - Map terrain and airways.
 - The audio panel (and its reversionary mode button), and typing waypoint names on the keyboard.
-- PAGE MENU on pages other than the navigation map and flight plan, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice).
+- PAGE MENU on pages other than the navigation map, flight plan and DIRECT TO, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice).
 - The autopilot keys the trainer's MFD bezel has (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN), reversionary mode, and the map's range ring and measure bearing/distance in pan mode.
 
 FG1000 renders in Liberation Sans Narrow, which is not bundled. Without that font installed, some narrow labels fall back to a wider font.

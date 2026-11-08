@@ -4,6 +4,7 @@ Notable changes. The package is installed from GitHub, so a version here is the 
 
 ## Unreleased
 
+- PFD and MFD: MENU in DIRECT TO offers Cancel Direct-To NAV, which resumes the flight plan on the closest leg (Pilot's Guide).
 - Softkeys follow the G1000 trainer (v13.02, 172S): its layouts on the PFD and MFD menus, and dim keys for what is unavailable.
 - PFD: the ALERTS key reads ADVISORY while a message is unread.
 - PFD: the CDI label reads VOR1, LOC1, VOR2 or LOC2, and the course box DTK on GPS. `cdiLabel` and `isLocalizer` in `glass-cockpit-web/radio`.
