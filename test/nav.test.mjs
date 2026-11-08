@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { approachPatch, asWaypoint, gpsApproved, loadedApproach, vtfInboundKept, vtfLeg, vtfPatch } from "../dist/nav.js";
+import { approachPatch, asWaypoint, gpsApproved, loadedApproach, vtfEdit, vtfLeg, vtfPatch } from "../dist/nav.js";
 
 test("which approaches the GPS may fly", () => {
   for (const n of ["RNAV (GPS) Y RWY 08", "RNAV (GPS)-D"]) assert.equal(gpsApproved(n), true, n);
@@ -59,15 +59,13 @@ test("a fix copied into the flight plan by hand is an ordinary waypoint", () => 
   assert.equal(loadedApproach(["KAAA", w, a, faf]).start, 2);
 });
 
-test("vector-to-final ends when an edit changes the leg into its fix", () => {
-  // The FAF is active at index 3; its inbound leg starts at index 2.
-  assert.equal(vtfInboundKept(3, 3, true), false); // inserted just before the FAF
-  assert.equal(vtfInboundKept(2, 3, true), true); // before the fix the leg starts at
-  assert.equal(vtfInboundKept(4, 3, true), true); // after the FAF
-  assert.equal(vtfInboundKept(2, 3, false), false); // deleted the fix the leg starts at
-  assert.equal(vtfInboundKept(3, 3, false), false); // deleted the FAF
-  assert.equal(vtfInboundKept(1, 3, false), true);
-  assert.equal(vtfInboundKept(4, 3, false), true);
+test("an edit at or before the active FAF ends vector-to-final and its intercept", () => {
+  // The FAF is active at index 3; the intercept may start at any approach fix before it, or at the aircraft.
+  assert.deepEqual(vtfEdit(true, 3, 3), { vtf: false, directFrom: null }); // just before the FAF, or the FAF itself
+  assert.deepEqual(vtfEdit(true, 1, 3), { vtf: false, directFrom: null });
+  assert.deepEqual(vtfEdit(true, 4, 3), { vtf: true }); // after the FAF
+  // Without vector-to-final, a direct-to stays as it is.
+  assert.deepEqual(vtfEdit(false, 1, 3), { vtf: false });
 });
 
 test("vector-to-final keeps the final course past a waypoint entered before the FAF", () => {

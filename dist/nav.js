@@ -105,9 +105,12 @@ export function asWaypoint(p) {
     return w;
 }
 /**
- * Whether vector-to-final survives a flight plan edit at `at` (`inserted`, or deleted) with the final approach fix active at
- * `activeLeg`: the map draws its leg from the entry before the fix, so an edit there or to the fix itself ends it.
+ * Vector-to-final after a waypoint is inserted or deleted at `at`, with the final approach fix active at `activeLeg`. Its
+ * intercept may start at any approach fix before the FAF or at the aircraft (see `vtfPatch`), so an edit at or before the
+ * FAF ends it and its intercept, and the active leg is drawn as an ordinary one; an edit after the FAF keeps it.
  */
-export function vtfInboundKept(at, activeLeg, inserted) {
-    return inserted ? at !== activeLeg : at < activeLeg - 1 || at > activeLeg;
+export function vtfEdit(vtf, at, activeLeg) {
+    if (!vtf)
+        return { vtf: false };
+    return at > activeLeg ? { vtf: true } : { vtf: false, directFrom: null };
 }

@@ -3,7 +3,7 @@
 // cursor is on. Pages FG1000 has no data for show their title, their softkeys, and NO DATA.
 import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, rangeLabel } from "./map.js";
-import { approachPatch, asWaypoint, bearingDistance, gpsApproved, latLon, loadedApproach, nearest, planName, routePoint, vtfInboundKept, vtfPatch } from "./nav.js";
+import { approachPatch, asWaypoint, bearingDistance, gpsApproved, latLon, loadedApproach, nearest, planName, routePoint, vtfEdit, vtfPatch } from "./nav.js";
 import { BLANK, CYAN, IdEntry, ListView, NS, dimKey, firstRow, key } from "./ui.js";
 import { firstOption, fplMenu, stepMenu } from "./page-menu.js";
 // Surround.PAGE_GROUPS
@@ -694,7 +694,7 @@ class FlightPlanPage extends MapPage {
         const route = [...s.route];
         route.splice(at, 0, s.points.includes(p) || p.type === "APT" ? p.id : asWaypoint(p));
         const activeLeg = at <= s.activeLeg && s.route.length ? s.activeLeg + 1 : s.activeLeg;
-        this.m.change({ route, activeLeg, vtf: s.vtf && vtfInboundKept(at, s.activeLeg, true) });
+        this.m.change({ route, activeLeg, ...vtfEdit(s.vtf, at, s.activeLeg) });
         this.rows.sel = at;
     }
     ent() {
@@ -709,8 +709,7 @@ class FlightPlanPage extends MapPage {
             return;
         const route = s.route.filter((_, i) => i !== at);
         const activeLeg = clamp(at < s.activeLeg ? s.activeLeg - 1 : s.activeLeg, 0, Math.max(0, route.length - 1));
-        // Vector-to-final ends when its fix, or the one its leg starts at, is deleted.
-        this.m.change({ route, activeLeg, vtf: s.vtf && vtfInboundKept(at, s.activeLeg, false) });
+        this.m.change({ route, activeLeg, ...vtfEdit(s.vtf, at, s.activeLeg) });
     }
     draw() {
         const s = this.s;

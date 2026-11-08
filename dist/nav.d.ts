@@ -124,8 +124,12 @@ export declare function approachPatch(route0: Route, pts: MapPoint[], mode: "loa
 /** A fix entered by hand (WAYPOINT ENTRY, DIRECT TO) is an ordinary waypoint, even when picked from a loaded approach. */
 export declare function asWaypoint(p: MapPoint): MapPoint;
 /**
- * Whether vector-to-final survives a flight plan edit at `at` (`inserted`, or deleted) with the final approach fix active at
- * `activeLeg`: the map draws its leg from the entry before the fix, so an edit there or to the fix itself ends it.
+ * Vector-to-final after a waypoint is inserted or deleted at `at`, with the final approach fix active at `activeLeg`. Its
+ * intercept may start at any approach fix before the FAF or at the aircraft (see `vtfPatch`), so an edit at or before the
+ * FAF ends it and its intercept, and the active leg is drawn as an ordinary one; an edit after the FAF keeps it.
  */
-export declare function vtfInboundKept(at: number, activeLeg: number, inserted: boolean): boolean;
+export declare function vtfEdit(vtf: boolean, at: number, activeLeg: number): {
+    vtf: boolean;
+    directFrom?: null;
+};
 export {};
