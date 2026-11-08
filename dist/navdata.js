@@ -1,9 +1,43 @@
+/** Degrees east from lon1 to lon2, the short way, so the Aleutians measure right across 180. */
+const dLon = (lon1, lon2) => ((((lon2 - lon1) % 360) + 540) % 360) - 180;
 /** Distance in nm, flat-earth: fine for picking what is on a map a few hundred nm across. */
 function nm(lat1, lon1, lat2, lon2) {
-    const x = (lon2 - lon1) * Math.cos(((lat1 + lat2) / 2) * (Math.PI / 180));
+    const x = dLon(lon1, lon2) * Math.cos(((lat1 + lat2) / 2) * (Math.PI / 180));
     return Math.hypot(x, lat2 - lat1) * 60;
 }
-/** Map points, airspace, airports, frequencies and approaches near a position, in the shapes glass-cockpit-web takes. */
+/** Distance in nm from a position to the segment a-b, flat-earth as `nm`. */
+function toSegment(lat, lon, a, b) {
+    const k = Math.cos(lat * (Math.PI / 180));
+    const [ax, ay, dx, dy] = [dLon(lon, a.lon) * k, a.lat - lat, dLon(a.lon, b.lon) * k, b.lat - a.lat];
+    const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(ax + t * dx, ay + t * dy) * 60;
+}
+const navPoint = ([id, type, la, lo, freq, name, kind, city, state, magVar, cls]) => ({
+    id, type, lat: la, lon: lo, name, kind, city, region: state, magVar, cls, freq: type === "VOR" ? freq.toFixed(2) : String(freq),
+});
+const fixPoint = ([id, la, lo, state]) => ({ id, type: "FIX", lat: la, lon: lo, region: state });
+// Every navaid and fix by "type id", built once per record: near() runs as the aircraft moves.
+const byKey = new WeakMap();
+function pointsOf(data) {
+    let at = byKey.get(data);
+    if (!at) {
+        // shortcut: two navaids of one type sharing an id (distant two-letter NDBs) resolve to the first; none is on a V, T,
+        // J or Q route in cycle 2026-10-29. Resolve by state if one ever is.
+        at = new Map();
+        for (const n of data.navaids)
+            if (!at.has(`${n[1]} ${n[0]}`))
+                at.set(`${n[1]} ${n[0]}`, navPoint(n));
+        for (const f of data.fixes)
+            if (!at.has(`FIX ${f[0]}`))
+                at.set(`FIX ${f[0]}`, fixPoint(f));
+        byKey.set(data, at);
+    }
+    return at;
+}
+/**
+ * Map points, airspace, airports, frequencies, approaches and airways near a position, in the shapes glass-cockpit-web
+ * takes. An airway comes as the run of its segments within range, whole, and its points outside range join `points`.
+ */
 export function near(data, cifp, lat, lon, range) {
     const within = (r) => (la, lo) => nm(lat, lon, la, lo) <= r;
     const inRange = within(range);
@@ -25,18 +59,45 @@ export function near(data, cifp, lat, lon, range) {
     const points = [
         ...airports.map((a) => ({ id: a.id, type: "APT", lat: a.lat, lon: a.lon, name: a.name })),
         // The NRST pages list VORs and NDBs out to 200 nm.
-        ...data.navaids.filter((n) => within(Math.max(range, 200))(n[2], n[3])).map(([id, type, la, lo, freq, name, kind, city, state, magVar, cls]) => ({
-            id, type, lat: la, lon: lo, name, kind, city, region: state, magVar, cls, freq: type === "VOR" ? freq.toFixed(2) : String(freq),
-        })),
-        ...data.fixes.filter((f) => inRange(f[1], f[2])).map(([id, la, lo, state]) => ({ id, type: "FIX", lat: la, lon: lo, region: state })),
+        ...data.navaids.filter((n) => within(Math.max(range, 200))(n[2], n[3])).map(navPoint),
+        ...data.fixes.filter((f) => inRange(f[1], f[2])).map(fixPoint),
     ];
+    const airways = [];
+    if (data.airways?.length) {
+        const at = pointsOf(data);
+        const used = [];
+        for (const [id, type, pts] of data.airways) {
+            const ps = pts.map(([pid, t]) => at.get(`${t} ${pid}`));
+            let run = [];
+            for (let i = 1; i <= ps.length; i++) { // the pass past the end closes the last run
+                const [p, q] = [ps[i - 1], ps[i]];
+                if (p && q && toSegment(lat, lon, p, q) <= range) {
+                    if (!run.length)
+                        run.push(p);
+                    run.push(q);
+                }
+                else if (run.length) {
+                    airways.push({ id, type, points: run.map((r) => r.id) });
+                    used.push(...run);
+                    run = [];
+                }
+            }
+        }
+        // Added after the rest even when another point has the id (an airport, say), as the map takes an id's last point.
+        const have = new Set(points.map((p) => `${p.type} ${p.id}`));
+        for (const p of used) {
+            if (!have.has(`${p.type} ${p.id}`))
+                points.push(p);
+            have.add(`${p.type} ${p.id}`);
+        }
+    }
     const airspaces = data.airspace
         .filter(([, , , , rings]) => rings.some((r) => r.some(([la, lo]) => inRange(la, lo))))
         .map(([cls, , , , rings]) => ({ cls, rings }));
     // The NRST pages look up to 200 nm for centers and flight service.
     const stations = data.stations.filter((s) => within(Math.max(range, 200))(s[3], s[4]))
         .map(([type, id, name, la, lo, freq]) => ({ type, id, name, lat: la, lon: lo, freq }));
-    return { points, airspaces, airports, stations, procedures };
+    return { points, airspaces, airports, stations, procedures, airways };
 }
 // ARINC 424 approach types (route type of the final approach) as the charts name them.
 const TYPES = {
@@ -135,8 +196,8 @@ export function parseCifp(text) {
 }
 /**
  * NASR records from the 28-day subscription's CSV files: navaids (VOR, VOR/DME, VORTAC, NDB, NDB/DME) in service, fixes,
- * public-use airports with their frequencies, runways and details, and ARTCC, FSS and weather frequencies. Class B, C
- * and D airspace comes from a shapefile, so the host builds it and passes it in.
+ * public-use airports with their frequencies, runways and details, ARTCC, FSS and weather frequencies, and V, T, J and Q
+ * airways. Class B, C and D airspace comes from a shapefile, so the host builds it and passes it in.
  */
 export function buildNasr(cycle, csv, airspace) {
     const round = (v) => Math.round(Number(v) * 1e5) / 1e5;
@@ -220,5 +281,35 @@ export function buildNasr(cycle, csv, airspace) {
             stations.push(s);
         }
     }
-    return { cycle, navaids, fixes, airports, stations, airspace };
+    // Airways: Victor and T routes low, jet and Q routes high (AIM 5-3-4); colored, oceanic and helicopter (TK) routes are
+    // left out. Rows are taken by AWY_ID, AWY_LOCATION, POINT_SEQ, the FAA's order, whatever order they come in. An airway breaks where NASR marks a
+    // gap and where it names a point with no navaid or fix record here (border points, DME and TACAN points).
+    const navKeys = new Set(navaids.map((n) => `${n[0]} ${n[1]}`));
+    const fixIds = new Set(fixes.map((f) => f[0]));
+    const FIX_TYPES = new Set(["CN", "MR", "MW", "NRS", "RADAR", "RP", "VFR", "WP"]); // FROM_PT_TYPE's fix types; the rest are navaids
+    const airways = [];
+    let run = [];
+    let [id, loc] = ["", ""]; // the airway `run` is on; Alaska and the contiguous U.S. reuse ids
+    const close = () => {
+        if (run.length > 1)
+            airways.push([id, "VT".includes(id[0]) ? "LO" : "HI", run]);
+        run = [];
+    };
+    const seq = (csv.AWY_SEG_ALT ?? []).filter((r) => /^[VTJQ]\d+$/.test(r.AWY_ID)).sort((a, b) => a.AWY_ID.localeCompare(b.AWY_ID) || a.AWY_LOCATION.localeCompare(b.AWY_LOCATION) || Number(a.POINT_SEQ) - Number(b.POINT_SEQ));
+    for (const r of seq) {
+        if (r.AWY_ID !== id || r.AWY_LOCATION !== loc) {
+            close();
+            [id, loc] = [r.AWY_ID, r.AWY_LOCATION];
+        }
+        const t = r.FROM_PT_TYPE.trim();
+        const type = FIX_TYPES.has(t) ? "FIX" : NAV_TYPES[t];
+        if (type === "FIX" ? fixIds.has(r.FROM_POINT) : navKeys.has(`${r.FROM_POINT} ${type}`))
+            run.push([r.FROM_POINT, type]);
+        else
+            close();
+        if (r.AWY_SEG_GAP_FLAG === "Y")
+            close();
+    }
+    close();
+    return { cycle, navaids, fixes, airports, stations, airspace, airways };
 }

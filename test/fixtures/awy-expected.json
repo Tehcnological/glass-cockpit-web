@@ -1,0 +1,9 @@
+{
+ "source": "AIRWAY_STRING of J212, Q180, T310 and V461 (U.S. contiguous) in AWY_BASE.csv, NASR cycle 2026-10-29; awy-rows.json holds the same airways' AWY_SEG_ALT.csv rows and the NAV_BASE and FIX_BASE rows for their points that nasr-rows.json lacks",
+ "airways": [
+  ["J212", "HI", ["TFD", "BXK", "CULTS", "HRRBR", "CURIV", "DECAS", "PSP"]],
+  ["Q180", "HI", ["BXK", "SATRN", "WOBUG", "DMN", "EWM"]],
+  ["T310", "LO", ["TUS", "OBISE", "SULLI", "MESCA", "HOOVE", "NOCHI", "SSO", "SVC", "KEAPS", "TCS"]],
+  ["V461", "LO", ["GBN", "BXK"]]
+ ]
+}
