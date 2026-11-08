@@ -11,8 +11,7 @@ import SURROUND from "./svg/surround-mfd.js";
 import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay, type DisplayOptions } from "./display.js";
 import { Page, clamp, deg3, mod } from "./page.js";
-import { panInfo, panMove, panStart, type PanView } from "./pan.js";
-import { latLon } from "./nav.js";
+import { panInfo, panMarkup, panMove, panStart, panTarget, type PanView } from "./pan.js";
 import { drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import type { CdiSource } from "./glass-pfd.js";
@@ -189,7 +188,10 @@ export class GlassMfd {
         return this.set({});
       case "RANGE":
         // NavMap.handleRange: clockwise zooms out. Pages with their own ranges (traffic) take it first.
-        if (!page.range(i.value)) this.change({ range: stepRange(this.state.range, i.value) });
+        if (!page.range(i.value)) {
+          if (this.ui.pan && !this.overlay) this.ui.pan = panTarget(this.ui.pan, this.panView());
+          this.change({ range: stepRange(this.state.range, i.value) });
+        }
         return this.set({});
       case "FMS_OUTER":
       case "FMS_INNER":
@@ -401,16 +403,7 @@ export class GlassMfd {
     const pan = shown ? this.ui.pan : null;
     this.panLayer.style.display = pan ? "inline" : "none";
     if (!pan) return;
-    const m = MAP_FULL;
-    const info = this.panInfo();
-    const [x, y] = [m.cx + pan.x, m.cy + pan.y];
-    const t = (tx: number, ty: number, s: string, anchor = "start") =>
-      `<text x="${tx}" y="${ty}" text-anchor="${anchor}" fill="#ffffff" font-size="18" font-family="'Liberation Sans',Arial,sans-serif">${s}</text>`;
-    this.panLayer.innerHTML =
-      `<path d="M${x} ${y}l0 22l6 -6l6 11l4 -2l-6 -11l9 0z" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>` +
-      `<rect x="${m.x}" y="${m.y}" width="${m.w}" height="48" fill="#000000" stroke="#808080" stroke-width="2"/>` +
-      t(m.x + 10, m.y + 20, info.label) + t(m.x + 10, m.y + 42, `${info.dis}  ${info.brg}`) +
-      t(m.x + m.w - 10, m.y + 20, latLon(info.lat, "N", "S"), "end") + t(m.x + m.w - 10, m.y + 42, latLon(info.lon, "E", "W"), "end");
+    this.panLayer.innerHTML = panMarkup(pan, this.panInfo(), MAP_FULL, 18);
   }
 
   // The softkeys: the page's own, or a menu shared by the pages (EIS engineMenu, NavigationMap mapMenu).

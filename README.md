@@ -90,7 +90,7 @@ How the pages work:
 - **PROC:** opens the PROCEDURES menu (see below). SELECT APPROACH opens on the destination's approaches. Pick one, a transition, then LOAD? or ACTIVATE?. Its fixes join the flight plan after the en route waypoints.
 - **Softkeys:** ENGINE (LEAN, SYSTEM), MAP (traffic, profile and airway switches; the data keys are dim), DCLTR, CHKLIST, and each page's own keys.
 - **CLR held:** goes to the navigation map.
-- **Joystick push:** on the navigation map, pan mode: a pointer and an info bar (the point under the pointer, or MAP POINTER; distance and bearing from the aircraft; latitude and longitude). The joystick moves the pointer and scrolls the map at its edge. DIRECT TO takes the point under the pointer. Push again, or change page, to end it.
+- **Joystick push:** on the navigation map (and the PFD's inset map), pan mode: a pointer and an info bar (the point under the pointer, or MAP POINTER; distance and bearing from the aircraft; latitude and longitude). The joystick moves the pointer and scrolls the map at its edge. RANGE recenters the map on the pointer. DIRECT TO takes the point under the pointer. Push again, or change page, to end it.
 
 ### Bezel controls
 
@@ -141,7 +141,7 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
 - **VSI** scale reads 1 and 2 (thousand fpm) and stops at ±2000 fpm (FG1000: ±4000). The readout shows from 100 fpm, rounded to 50 fpm as the NXi G1000 does; the trainer could not be climbed to check.
 - **MENU** on the PFD opens the PFD SETUP MENU (brightness, shown on AUTO; not ported), or with the flight plan window open its PAGE MENU. On the MFD it opens the page's PAGE MENU: on the navigation map, Declutter works; on the flight plan page, Invert Flight Plan, Delete Flight Plan and Remove Approach work. Other options are listed grey, and the other pages have no menu yet. The FMS knob moves the cursor over the options that work, ENT carries one out, and CLR, MENU again or pushing the FMS knob closes it.
 - **FPL and PROC again:** on the MFD, FPL again goes back to the page shown before it, and PROC again closes the PROCEDURES window.
-- **Pan mode** (FG1000 has none): the joystick push on the MFD navigation map, with the trainer's info bar. The pointer and bar are drawn here, not the trainer's.
+- **Pan mode** (FG1000 has none): the joystick push on the MFD navigation map and the PFD inset map, as the Pilot's Guide and the trainer describe. The pointer and bar are drawn here, not Garmin's.
 - **PFD DIRECT TO and PROC** (FG1000 has neither): windows in the NRST window's place, laid out as the trainer's, sharing the MFD's flow. DIRECT TO and PROC again close them.
 - **Long press:** holding COM ⇄ or CLR for 2 s acts as on the real unit (FG1000: a separate key binding); COM ⇄ tunes 121.5, where FG1000 tunes 121.00.
 - **Bezel shading:** FG1000's fascia shades its left column darker than its right (an extra overlay and a fainter edge strip); here both match the right.

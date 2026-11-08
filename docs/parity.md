@@ -1,16 +1,18 @@
 # G1000 buttonology parity
 
 What every control does on every page, where it comes from, and where this package stands. The target is the original
-G1000 as Garmin's v13.02 trainer (Cessna 172S) shows it, in behavior and labels: full parity. NXi is a newer G1000 and is
-only a reference. No trainer art, screenshots, data or text is copied.
+G1000 in the Cessna Nav III (172S), in behavior and labels: full parity. NXi is a newer G1000 and is only a reference. No
+Garmin art, screenshots, data or manual text is copied.
 
 ## Sources, in order of authority
 
-1. **v13 trainer**, driven by hand: what it does wins. Findings are noted as "trainer".
-2. **NXi G1000** (Working Title, msfs-avionics-mirror): a newer software version, read for behavior only. Its license
+1. **Garmin's manuals**: the G1000 Pilot's Guide for Cessna Nav III (190-00498-08 Rev. A, system software 0563.30) and
+   the Nav III Line Maintenance Manual. Behavior read from them is noted as "Pilot's Guide".
+2. **v13 trainer** (Cessna NAVIII Trainer v13.02), driven by hand. Noted as "trainer".
+3. **NXi G1000** (Working Title, msfs-avionics-mirror): a newer software version, read for behavior only. Its license
    covers use inside MSFS, so none of its code is copied. Its softkey layouts differ from v13 (PFD Opt, Map/HSI, TFC Map)
    and are not followed.
-3. **FG1000** (FlightGear, GPL): the code this package is ported from, and the fallback.
+4. **FG1000** (FlightGear, GPL): the code and art this package is ported from, and the fallback.
 
 ## Status
 
@@ -34,19 +36,19 @@ only a reference. No trainer art, screenshots, data or text is copied.
 | COM dual knob / push | Tune standby; push: COM1/COM2 box | Done |
 | CRS/BARO / push | Course, baro; push: course to the station | Done |
 | RANGE | Map range, PFD inset or MFD map | Done |
-| Joystick push | Trainer: on the MFD map, a pointer at the aircraft and an info bar (point id or MAP POINTER, distance, bearing, lat/lon); again ends it and recenters | Done (MFD navigation map; NXi range ring and measure not ported) |
+| Joystick push | Pilot's Guide and trainer: the map pointer and an info bar (lat/lon, bearing and distance from the aircraft, ground elevation; the name of an object under it); again removes it and recenters. RANGE while panning recenters on the pointer. NXi: the PFD inset pans too | Partial: MFD navigation map and PFD inset. Missing: the flashing pointer, elevation, airspace info, ENT for waypoint info, the 60 s idle recenter, panning on the flight plan page |
 | Joystick 8 ways | Moves the pointer; at the map's edge the map scrolls | Done |
 | DIRECT TO | Direct-to window; again closes on the PFD | Done |
 | FPL | PFD: flight plan window toggles. MFD: FPL page, again goes back | Done |
-| CLR / hold | Back out; hold on the MFD: navigation map | Done (hold 2 s or Shift+click); PFD hold: to check in the manual |
+| CLR / hold | Back out; hold (MFD only, Pilot's Guide): navigation map | Done (hold 2 s or Shift+click) |
 | MENU | PAGE MENU for the page; PFD with no window: PFD SETUP MENU | Partial: nav map and FPL only (see Page menus) |
 | PROC | Procedures window; again closes | Done |
 | ENT | Accept | Done where a page uses it |
 | FMS dual knob | Outer moves the cursor, inner changes the field or opens WPT entry; with no cursor the MFD outer/inner select page group/page | Done on the ported pages |
 | FMS push (CRSR) | Cursor on and off | Done on the ported pages |
 | Keyboard typing | Not on the real unit (NXi takes a keypad: letters, digits, BKSP, SPC). Wanted here for waypoint entry | Missing (later) |
-| Audio panel | GMA 1347 between the units: COM/NAV audio keys, MKR, intercom, and the red DISPLAY BACKUP (reversionary) button. The trainer has none; its Options menu toggles reversionary mode | Missing (later; reversionary is the useful part) |
-| Autopilot keys (MFD bezel) | Trainer: GFC 700 keys in the MFD's left column (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN). FG1000's bezel has none | Missing |
+| Audio panel | GMA 1347 between the units: COM/NAV audio keys, MKR, intercom, and the red DISPLAY BACKUP (reversionary) button. The trainer has none; its Options menu toggles reversionary mode. FG1000 has a flat GMA1347 texture | Missing (later; reversionary on both units, art direction needed) |
+| Autopilot keys (MFD bezel) | Trainer: GFC 700 keys in the MFD's left column (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN). FG1000's 2D bezel has none; its 3D GDU-1044B texture has their labels, and fgdata has the GFC700 logic | Missing (art direction needed) |
 | Reversionary mode | Trainer: the PFD with the engine strip down the left; softkeys ENGINE, INSET, PFD, OBS, CDI, DME, XPDR, IDENT, TMR/REF, NRST, ALERTS | Missing (later) |
 
 ## PFD softkeys (trainer layout, followed)
@@ -129,13 +131,11 @@ only a reference. No trainer art, screenshots, data or text is copied.
 ## Not checked on the trainer yet
 
 Each needs a pass on the trainer before it is built: the PAGE MENU of every page other than the three above, the WPT
-airport sub-pages, the AUX pages, the SUSP key, hold entry, and CLR held on the PFD. The Cessna 172S G1000 Pilot's Guide
-is the next source for these.
+airport sub-pages, the AUX pages, the SUSP key and hold entry. Read the Pilot's Guide first.
 
 ## Phases
 
-1. **Controls that did nothing:** joystick pan mode, COM squelch, PFD DIRECT TO and PROC, long presses. Done, except CLR
-   held on the PFD.
+1. **Controls that did nothing:** joystick pan mode, COM squelch, PFD DIRECT TO and PROC, long presses. Done.
 2. **Page menus:** read each page's options off the trainer, then wire the ones this package can carry out.
 3. **Missing pages and softkeys:** WPT airport sub-pages, nearest airport RNWY/FREQ/APR/LD APR, MAP PROFILE and AIRWAYS,
    AUX system setup.

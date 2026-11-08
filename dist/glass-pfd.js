@@ -12,6 +12,7 @@ import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
 import { ProcFlow, PROC_MENU } from "./procedures.js";
+import { panInfo, panMarkup, panMove, panStart, panTarget } from "./pan.js";
 import { bearingDistance, bestApproach, directToPatch, findPoint, latLon, nearest, nrstFreq, planName, routePoint } from "./nav.js";
 import { alertsKey, seenAlerts } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
@@ -60,6 +61,7 @@ export class GlassPfd {
     minBug;
     inset;
     insetGeom;
+    /** Pan mode's pointer and info bar, over the inset map. */ panLayer;
     win;
     winBox;
     clock;
@@ -74,6 +76,7 @@ export class GlassPfd {
         /** The messages the ALERTS window has shown. */ alertsSeen: [],
         /** PFD > DME shows the DME window; DME TUNING picks its NAV radio. */ dme: false, dmeSource: "NAV1",
         /** DIRECT TO: the waypoint, and whether the cursor is on ACTIVATE? (else on the identifier). */ dto: { id: null, act: false },
+        /** Pan mode on the inset map (joystick push), or null. */ pan: null,
     };
     /** DIRECT TO's identifier, spelled with the FMS knob. */ dtoEntry;
     /** PROC: the same flow as the MFD's PROCEDURES page; its airport identifier is spelled in `procEntry`. */ proc;
@@ -97,6 +100,7 @@ export class GlassPfd {
         const half = Math.min(frame.width, frame.height) / 2;
         this.insetGeom = { x: frame.x, y: frame.y, w: frame.width, h: frame.height, cx: frame.x + frame.width / 2, cy: frame.y + frame.height / 2, px: half };
         this.inset = mapGroup(screen, this.p.el("PFD-Map-Display").nextElementSibling, this.insetGeom); // over the frame's black fill
+        this.panLayer = mapGroup(screen, this.p.el("PFD-Map-Display").nextElementSibling, this.insetGeom);
         // TMR/REF and ALERTS open where FG1000 puts the NRST window.
         this.winBox = screenBox(screen, this.nrst.el("Group"));
         this.win = screen.appendChild(document.createElementNS(NS, "g"));
@@ -166,9 +170,25 @@ export class GlassPfd {
                 this.menu()[i.value - 1]?.act?.();
                 return this.set({});
             case "RANGE":
+                if (u.inset && u.pan)
+                    u.pan = panTarget(u.pan, this.panView());
                 if (u.inset)
                     u.insetRange = stepRange(u.insetRange, i.value);
                 return this.set({});
+            case "JOYSTICK_PRESS":
+                // Pilot's Guide: the joystick push shows the map pointer; again removes it and recenters on the aircraft.
+                // NXi pans the PFD inset map the same way.
+                if (u.inset)
+                    u.pan = u.pan ? null : panStart(this.state);
+                return this.set({});
+            case "JOYSTICK_HORIZONTAL":
+            case "JOYSTICK_VERTICAL": {
+                if (!u.inset || !u.pan)
+                    return;
+                const h = i.control === "JOYSTICK_HORIZONTAL";
+                u.pan = panMove(u.pan, h ? i.value : 0, h ? 0 : i.value, this.panView());
+                return this.set({});
+            }
             case "FMS_OUTER":
             case "FMS_INNER":
                 return this.fms(i.control === "FMS_OUTER", i.value > 0 ? 1 : -1);
@@ -216,8 +236,12 @@ export class GlassPfd {
                 return this.set({});
             case "DTO": {
                 // v13 trainer: DIRECT TO opens its window in the NRST window's place, on the active waypoint; DTO again closes it.
-                const act = this.state.route[this.state.activeLeg];
-                const id = typeof act === "string" ? act : act?.id ?? null;
+                // Pilot's Guide: the destination can come from the map pointer.
+                const s = this.state;
+                const act = s.route[s.activeLeg];
+                const named = [...s.points, ...s.route.filter((r) => typeof r !== "string")];
+                const under = u.pan ? panInfo(u.pan, this.panView(), s, named, s.magVar).label : "MAP POINTER";
+                const id = under !== "MAP POINTER" ? under : typeof act === "string" ? act : act?.id ?? null;
                 this.openWindow("DTO");
                 u.dto = { id, act: !!id && !!findPoint(this.state, id) };
                 this.dtoEntry.cancel();
@@ -608,12 +632,23 @@ export class GlassPfd {
         const u = this.ui;
         for (const id of ["PFD-Map", "PFD-Map-bg", "PFD-Map-bg-1"])
             this.p.show(id, u.inset);
+        if (!u.inset)
+            u.pan = null;
         this.inset.style.display = u.inset ? "inline" : "none";
+        this.panLayer.style.display = u.pan ? "inline" : "none";
         if (!u.inset)
             return;
         this.p.text("RangeDisplay", rangeLabel(u.insetRange));
         this.p.text("OrientationDisplay", "NORTH UP");
-        drawMap(this.inset, { ...s, range: u.insetRange, orientation: "NORTH UP" }, this.insetGeom, u.dcltr);
+        drawMap(this.inset, { ...s, range: u.insetRange, orientation: "NORTH UP", center: u.pan?.center }, this.insetGeom, u.dcltr);
+        if (u.pan) {
+            const named = [...s.points, ...s.route.filter((r) => typeof r !== "string")];
+            this.panLayer.innerHTML = panMarkup(u.pan, panInfo(u.pan, this.panView(), s, named, s.magVar), this.insetGeom, 12);
+        }
+    }
+    panView() {
+        const g = this.insetGeom;
+        return { w: g.w, h: g.h, scale: g.px / this.ui.insetRange, up: 0, lat: this.state.lat };
     }
     // NearestAirportsPFD: three rows of the 25 nearest, scrolled with the FMS knob; ENT shows the selected airport.
     updateNrst() {

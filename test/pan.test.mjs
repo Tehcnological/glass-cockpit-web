@@ -1,7 +1,7 @@
 // Map pan mode (joystick), as on the v13 trainer.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { panInfo, panMove, panPoint, panStart, PAN_STEP } from "../dist/pan.js";
+import { panInfo, panMove, panPoint, panStart, panTarget, PAN_STEP } from "../dist/pan.js";
 
 // 100 px a nm, north up, a 400 x 300 px map.
 const view = { w: 400, h: 300, scale: 100, up: 0, lat: 0 };
@@ -37,4 +37,11 @@ test("the pointer's position and the info bar", () => {
   assert.equal(info.label, "ABC");
   assert.equal(info.dis, "304FT");
   assert.equal(info.brg, "350°");
+});
+
+test("a range change recenters the map on the pointer", () => {
+  const p = { center: here, x: 100, y: 0 };
+  const t = panTarget(p, view);
+  assert.deepEqual([t.x, t.y], [0, 0]);
+  assert.deepEqual(t.center, panPoint(p, view));
 });

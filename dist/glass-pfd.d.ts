@@ -120,6 +120,7 @@ export declare class GlassPfd {
     private minBug;
     private inset;
     private insetGeom;
+    /** Pan mode's pointer and info bar, over the inset map. */ private panLayer;
     private win;
     private winBox;
     private clock;
@@ -160,6 +161,7 @@ export declare class GlassPfd {
     private updateXpdr;
     private updateWind;
     private updateInset;
+    private panView;
     private updateNrst;
     private hl;
     private drawWindow;
