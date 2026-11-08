@@ -36,7 +36,11 @@ export class Page {
     return this.cache.get(name)!;
   }
 
+  /** Names `show` keeps hidden whatever it is asked, while set. */
+  hidden: ReadonlySet<string> = new Set();
+
   show(name: string, on: boolean) {
+    on &&= !this.hidden.has(name);
     const e = this.el(name);
     if (e) e.style.display = on ? "inline" : "none";
   }

@@ -2,6 +2,8 @@ import { type DisplayOptions } from "./display.js";
 import { type Radios } from "./surround.js";
 import { type Airspace, type LatLon, type MapPoint } from "./map.js";
 import { type Airport, type Procedure } from "./nav.js";
+import { unusualAttitude } from "./unusual-attitude.js";
+export { unusualAttitude };
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
 export type { Checklist } from "./mfd-pages.js";
 export type { MapPoint, Airspace, LatLon } from "./map.js";
@@ -106,8 +108,6 @@ export interface PfdOptions extends DisplayOptions {
     /** Speed references, switched on and off in TMR/REF. */ vspeeds?: Partial<Record<VSpeed, number>>;
     /** The airspeed tape's color strip, knots (default: the 172S's). */ speedRanges?: SpeedRanges;
 }
-/** Pilot's Guide, Unusual Attitudes: past +30° or -20° pitch, or past 65° bank. */
-export declare function unusualAttitude(pitch: number, roll: number): boolean;
 /** Speed range strip limits, knots: flaps operating vso to vfe (white), normal vs1 to vno (green), caution vno to vne
  * (yellow), vne up (red); under vso is red for low speed awareness. */
 export interface SpeedRanges {
@@ -129,6 +129,7 @@ export declare class GlassPfd {
     private options;
     readonly svg: SVGSVGElement;
     private state;
+    /** In an unusual attitude as of the last set(). */ private ua;
     private p;
     private surround;
     /** Removes the bezel's window listener. */ private unbezel;

@@ -20,6 +20,8 @@ import { BLANK as blank, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, 
 import { firstOption, fplMenu, stepMenu } from "./page-menu.js";
 import { FPL_TOOLS, FplTool, toolEnabled, type FplToolName } from "./fpl-tools.js";
 import { vsiPointer, vsiText } from "./vsi.js";
+import { uaIgnores, unusualAttitude } from "./unusual-attitude.js";
+export { unusualAttitude };
 
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
 export type { Checklist } from "./mfd-pages.js";
@@ -134,17 +136,15 @@ const FONT = `font-family="'Liberation Sans',Arial,sans-serif" font-size="18"`;
 // FG1000's failure flags, in its Failures group, by the instrument they cover.
 const FAILURES: [Failure, string][] = [["attitude", "NoAttitude"], ["airspeed", "NoASI"], ["altitude", "NoAlt"], ["vsi", "NoVS"], ["heading", "NoHDG"]];
 
-// Parts of the FG1000 PFD this port does not drive. L_NoGPS: the v13 trainer's PFD shows a GPS failure only as an alert.
-/** Pilot's Guide, Unusual Attitudes: past +30° or -20° pitch, or past 65° bank. */
-export function unusualAttitude(pitch: number, roll: number): boolean {
-  return pitch > 30 || pitch < -20 || Math.abs(roll) > 65;
-}
-// What the PFD removes in an unusual attitude (Pilot's Guide): what set() otherwise always shows, and what it decides
-// each time. Traffic, the VNV target altitude and an MDA/DH readout are not drawn here, so not listed.
+// What the PFD removes in an unusual attitude (Pilot's Guide), held hidden through Page.hidden: what set() otherwise
+// always shows, and what its updaters show as they decide. The inset map and the windows are kept closed by their
+// updaters. Traffic, the VNV target altitude and an MDA/DH readout are not drawn here, so not listed.
 const UA_ALWAYS = ["OAT", "XPDR-TIME", "SelectedHDG", "SelectedCRS", "BARO", "VDI"];
-const UA_SOMETIMES = ["SelectedALT", "SelectedALT-bug", "SelectedALT-meters", "WindData", "GS-ILS", "GS-type", "PFD-Map", "PFD-Map-bg", "PFD-Map-bg-1"];
+const UA_HIDDEN = new Set([...UA_ALWAYS, "SelectedALT", "SelectedALT-bug", "SelectedALT-meters", "WindData", "GS-ILS", "GS-type"]);
 /** The autopilot annunciations in the header. */
 const AFCS = ["APLateralArmed", "APLateralActive", "APVerticalArmed", "APVerticalActive", "APVerticalReference", "APStatus"];
+const AFCS_HIDDEN = new Set(AFCS.map((id) => `Header${id}`));
+// Parts of the FG1000 PFD this port does not drive. L_NoGPS: the v13 trainer's PFD shows a GPS failure only as an alert.
 const HIDDEN = ["L_NoGPS", "GSPD", "PFD-Multilines", "Annunciation", "SelectedALT-meters", "SelectedSPD-bug", "SelectedSPD-bg", "SelectedSPD-text", "SelectedSPD-symbol"];
 
 // Tape clipping, as "rect(top, right, bottom, left)" in screen coordinates.
@@ -194,6 +194,7 @@ const GREEN = "#00ff00";
 export class GlassPfd {
   readonly svg: SVGSVGElement;
   private state: PfdState = { ...DEFAULTS };
+  /** In an unusual attitude as of the last set(). */ private ua = false;
   private p: Page;
   private surround: Surround;
   /** Removes the bezel's window listener. */ private unbezel = () => {};
@@ -317,6 +318,7 @@ export class GlassPfd {
   private input(i: Input) {
     this.options.onInput?.(i);
     const u = this.ui;
+    if (this.ua && uaIgnores(i.control, u.window)) return;
     switch (i.control) {
       case "NAV_TOGGLE":
       case "COM_TOGGLE":
@@ -450,9 +452,8 @@ export class GlassPfd {
     const toggle = (set: Record<string, boolean>, name: string) => k(name, () => (set[name] = !set[name]), set[name]);
     // Pilot's Guide: in an unusual attitude the removed items' softkeys are disabled. The top level shows, dimmed where
     // they are; the submenu comes back as the attitude recovers.
-    const ua = unusualAttitude(s.pitch, s.roll);
-    const off = (key: Key) => (ua ? dimKey(key.label) : key);
-    switch (ua ? "top" : u.menu) {
+    const off = (key: Key) => (this.ua ? dimKey(key.label) : key);
+    switch (this.ua ? "top" : u.menu) {
       case "top": {
         const cdi: CdiSource[] = ["GPS", "NAV1", "NAV2"];
         // v13 trainer: OBS is dim with no flight plan (FG1000 always offers it); while on, it stays so it can be turned off.
@@ -650,6 +651,13 @@ export class GlassPfd {
   /** Merge new values into the state and redraw. */
   set(patch: Partial<PfdState>): void {
     const s = (this.state = { ...this.state, ...patch });
+    // Unusual attitude declutter, undone as the attitude recovers. Bearing information, the DME window and ALERTS stay
+    // (Pilot's Guide: the Bearing Information, Alerts and Annunciation windows can be displayed).
+    this.ua = unusualAttitude(s.pitch, s.roll);
+    this.p.hidden = this.ua ? UA_HIDDEN : new Set();
+    this.surround.p.hidden = this.ua ? AFCS_HIDDEN : new Set();
+    for (const id of UA_ALWAYS) this.p.show(id, true);
+    for (const id of AFCS) this.surround.p.show(`Header${id}`, true);
     this.updateAI(s.pitch, s.roll, s.slip);
     this.updateFD(s);
     this.updateIAS(s.ias, s.iasTrend);
@@ -705,26 +713,15 @@ export class GlassPfd {
     this.updateNrst();
     this.updateFlightPlan(s);
     this.drawWindow();
-    // Unusual attitude declutter, undone as the attitude recovers. Bearing information, the DME window and ALERTS stay
-    // (Pilot's Guide: the Bearing Information, Alerts and Annunciation windows can be displayed).
-    const ua = unusualAttitude(s.pitch, s.roll);
-    for (const id of UA_ALWAYS) this.p.show(id, !ua);
-    for (const id of AFCS) this.surround.p.show(`Header${id}`, !ua);
-    this.win.style.display = ua && this.ui.window !== "ALERTS" && this.ui.window !== "DME" ? "none" : "";
-    if (ua) {
-      for (const id of UA_SOMETIMES) this.p.show(id, false);
-      for (const g of [this.inset, this.panLayer]) g.style.display = "none";
-      for (const id of ["Group", "Info"]) this.nrst.show(id, false);
-      this.fpl.show("Group", false);
-    }
   }
 
   // setFlightPlan / updateFlightPlan: the flight plan window, shown by FPL while there is a flight plan. The arrow marks
   // the active waypoint; legs already flown show blanks.
   private updateFlightPlan(s: PfdState) {
-    const legs = s.route.map((r) => routePoint(r, s.points, s.airports));
-    this.fpl.show("Group", this.ui.fpl && legs.length > 0);
-    if (!this.ui.fpl || !legs.length) return;
+    const on = this.ui.fpl && !this.ua;
+    const legs = on ? s.route.map((r) => routePoint(r, s.points, s.airports)) : [];
+    this.fpl.show("Group", legs.length > 0);
+    if (!legs.length) return;
     const rows = legs.map((p, i) => {
       const prev = legs[i - 1];
       const leg = prev && p ? bearingDistance(prev.lat, prev.lon, p.lat, p.lon) : null;
@@ -786,11 +783,12 @@ export class GlassPfd {
   // setInsetMapVisible and the inset NavMap: north up, the range on the RANGE knob.
   private updateInset(s: PfdState) {
     const u = this.ui;
-    for (const id of ["PFD-Map", "PFD-Map-bg", "PFD-Map-bg-1"]) this.p.show(id, u.inset);
+    const on = u.inset && !this.ua;
+    for (const id of ["PFD-Map", "PFD-Map-bg", "PFD-Map-bg-1"]) this.p.show(id, on);
     if (!u.inset) u.pan = null;
-    this.inset.style.display = u.inset ? "inline" : "none";
-    this.panLayer.style.display = u.pan ? "inline" : "none";
-    if (!u.inset) return;
+    this.inset.style.display = on ? "inline" : "none";
+    this.panLayer.style.display = on && u.pan ? "inline" : "none";
+    if (!on) return;
     this.p.text("RangeDisplay", rangeLabel(u.insetRange));
     this.p.text("OrientationDisplay", "NORTH UP");
     drawMap(this.inset, { ...s, range: u.insetRange, orientation: "NORTH UP", center: u.pan?.center }, this.insetGeom, u.dcltr);
@@ -808,7 +806,7 @@ export class GlassPfd {
   // NearestAirportsPFD: three rows of the 25 nearest, scrolled with the FMS knob; ENT shows the selected airport.
   private updateNrst() {
     const u = this.ui;
-    const open = u.window === "NRST";
+    const open = u.window === "NRST" && !this.ua;
     this.nrst.show("Group", open && !u.nrstInfo);
     this.nrst.show("Info", open && u.nrstInfo);
     if (!open) return;
@@ -848,7 +846,7 @@ export class GlassPfd {
   private drawWindow() {
     const u = this.ui;
     const s = this.state;
-    if (u.window === null || u.window === "NRST") {
+    if (u.window === null || u.window === "NRST" || (this.ua && u.window !== "ALERTS" && u.window !== "DME")) {
       this.win.innerHTML = "";
       return;
     }
