@@ -116,7 +116,7 @@ Every PFD softkey works:
 - **XPDR:** modes, code entry, IDENT.
 - **TMR/REF:** the FMS outer knob picks a field, the inner changes it, ENT starts and stops the timer.
 - **NRST:** FMS scrolls, ENT shows the airport, CLR goes back.
-- **ALERTS.**
+- **ALERTS:** lists `alerts`, one string per message, written "TITLE - description" as the trainer shows them.
 - **SYN VIS** keys switch only their setting; there is no terrain to draw.
 - **FPL** toggles the flight plan window.
 
@@ -132,6 +132,7 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
 
 - **Softkey layouts** follow the trainer: DME on the PFD's top row and PFD menu; WX LGND, PRECIP and METAR in the inset menu; DCLTR, SHW CHRT and CHKLIST in the last three MFD slots; BACK in the eleventh slot of the ENGINE, LEAN, SYSTEM and MAP menus; LEAN's CYL SLCT and ASSIST and SYSTEM's RST FUEL and GAL REM where the trainer has them.
 - **Dim keys:** a key whose function is unavailable is grey and does nothing. OBS is dim with no flight plan. Keys for data this package has no source for (weather, topography, terrain, charts, map legend) are always dim. The inset's DCLTR stays working, although the trainer dims it.
+- **ADVISORY:** the last PFD softkey reads ADVISORY, lit, while a message in `alerts` is unread, and ALERTS once the window has shown it. The trainer flashes it; here it is lit steadily.
 
 ## Navdata
 

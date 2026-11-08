@@ -12,6 +12,7 @@ import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
 import { bearingDistance, bestApproach, latLon, nearest, nrstFreq, planName, routePoint } from "./nav.js";
+import { alertsKey } from "./alerts.js";
 import { BLANK as blank, CYAN, Highlighter, ListView, NS, dimKey, esc, key as k, screenBox } from "./ui.js";
 export { GlassMfd } from "./glass-mfd.js";
 const DEFAULTS = {
@@ -62,6 +63,7 @@ export class GlassPfd {
         synvis: { PATHWAY: false, "SYN TERR": false, "HRZN HDG": false, APTSIGNS: false },
         wind: 0, meters: false, hpa: false, xpdrEdit: null, fpl: false,
         timer: { up: true, running: false, base: 0, since: 0 },
+        /** How many of `alerts` the ALERTS window has shown. */ alertsSeen: 0,
     };
     /** The container must be visible: layout is measured once here. */
     constructor(container, options = {}) {
@@ -181,7 +183,12 @@ export class GlassPfd {
     menu() {
         const u = this.ui;
         const s = this.state;
-        const alerts = k("ALERTS", () => this.openWindow("ALERTS"), u.window === "ALERTS");
+        // Messages are read while the window shows them; fewer messages than were read leaves none unread.
+        if (u.window === "ALERTS" || u.alertsSeen > s.alerts.length)
+            u.alertsSeen = s.alerts.length;
+        const a = alertsKey(s.alerts.length, u.alertsSeen);
+        // shortcut: the trainer flashes ADVISORY; it is lit steadily here, flash once there is a blink timer.
+        const alerts = k(a.label, () => this.openWindow("ALERTS"), u.window === "ALERTS" || a.unread);
         const back = (to) => k("BACK", () => this.go(to));
         const toggle = (set, name) => k(name, () => (set[name] = !set[name]), set[name]);
         switch (u.menu) {
