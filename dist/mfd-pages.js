@@ -1163,17 +1163,25 @@ class ProceduresPage extends MfdPage {
         const a = this.loaded();
         if (!a || !this.enabled(this.item))
             return;
-        const here = { lat: this.s.lat, lon: this.s.lon };
-        const done = (patch) => () => {
-            this.m.change(patch);
-            this.m.close();
-        };
-        if (this.item === 0)
-            this.confirm(a.name, done(vtfPatch(a.start, a.pts, here)));
-        else if (this.item === 1)
-            this.confirm(a.name, done({ activeLeg: a.start, directFrom: here, vtf: false }));
+        const item = this.item;
+        if (item === 2)
+            this.activate(item);
         else
-            done({ activeLeg: a.start + a.pts.findIndex((p) => typeof p !== "string" && p.role === "MISSED"), directFrom: null, vtf: false })();
+            this.confirm(a.name, () => this.activate(item));
+    }
+    // Worked out from the state when it is carried out, after NOT APPROVED FOR GPS: the host may have changed the route.
+    activate(item) {
+        const a = this.loaded();
+        if (!a || !this.enabled(item))
+            return;
+        const here = { lat: this.s.lat, lon: this.s.lon };
+        if (item === 0)
+            this.m.change(vtfPatch(a.start, a.pts, here));
+        else if (item === 1)
+            this.m.change({ activeLeg: a.start, directFrom: here, vtf: false });
+        else
+            this.m.change({ activeLeg: a.start + a.pts.findIndex((p) => typeof p !== "string" && p.role === "MISSED"), directFrom: null, vtf: false });
+        this.m.close();
     }
     // Adds the approach after the en route waypoints (replacing an approach loaded before), as the G1000 does. ACTIVATE
     // with the VECTORS transition is vector-to-final: the final approach fix is active, its leg on the final course.

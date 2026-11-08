@@ -139,6 +139,7 @@ declare class ProceduresPage extends MfdPage {
     ent(): void;
     clr(): void;
     private menuItem;
+    private activate;
     private load;
     draw(): void;
 }
