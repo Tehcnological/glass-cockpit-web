@@ -1197,11 +1197,12 @@ export class PageMenuPage extends MfdPage {
   }
 
   /** Shows `options` for the page titled `title`, the cursor on the first available option. */
-  /** The window the menu was opened over (DIRECT TO); CLR goes back to it. */
+  /** The window the menu was opened over (DIRECT TO) and whether its cursor was on; CLR goes back to it as it was. */
   private back: MfdPage | null = null;
+  private backCrsr = false;
 
   open(options: MenuOption[], title: string, back: MfdPage | null = null) {
-    [this.options, this.base, this.crsr, this.back] = [options, title, true, back];
+    [this.options, this.base, this.crsr, this.back, this.backCrsr] = [options, title, true, back, back?.crsr ?? false];
     this.at = firstOption(options.map((o) => !!o.act));
   }
 
@@ -1219,7 +1220,9 @@ export class PageMenuPage extends MfdPage {
 
   clr() {
     this.m.close();
-    if (this.back) this.m.open(this.back);
+    if (!this.back) return;
+    this.m.open(this.back);
+    this.back.crsr = this.backCrsr; // hiding it for the menu turned its cursor off
   }
 
   toggleCrsr() {

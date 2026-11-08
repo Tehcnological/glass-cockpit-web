@@ -136,8 +136,9 @@ export declare class PageMenuPage extends MfdPage {
     constructor(m: Mfd, screen: SVGGElement, after: Element);
     get title(): string;
     /** Shows `options` for the page titled `title`, the cursor on the first available option. */
-    /** The window the menu was opened over (DIRECT TO); CLR goes back to it. */
+    /** The window the menu was opened over (DIRECT TO) and whether its cursor was on; CLR goes back to it as it was. */
     private back;
+    private backCrsr;
     open(options: MenuOption[], title: string, back?: MfdPage | null): void;
     fms(_outer: boolean, d: number): boolean;
     ent(): void;
