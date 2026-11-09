@@ -126,10 +126,13 @@ export class EisStrip {
   lean = new LeanAssist();
   fuel = new FuelCalc();
   private band: SVGGElement;
+  /** FG1000's gauges the LEAN and SYSTEM pages replace, found once (any missing are skipped). */ private gauges: SVGElement[];
   private drawn = "";
 
   constructor(private page: Page) {
-    this.band = page.el("Group")!.appendChild(document.createElementNS(NS, "g"));
+    const group = page.el("Group")!;
+    this.gauges = BAND.map((id) => group.querySelector<SVGElement>(`[id="${id}"]`)).filter((g): g is SVGElement => !!g);
+    this.band = group.appendChild(document.createElementNS(NS, "g"));
   }
 
   /** Draws the page for the softkey menu `menu`; counts fuel and watches for a peak whatever the page. */
@@ -138,8 +141,7 @@ export class EisStrip {
     this.fuel.burn(e.fuelFlow, now);
     this.lean.update(e.cylinders, e.fuelFlow);
     const view = eisView(menu);
-    const group = this.page.el("Group")!;
-    for (const id of BAND) group.querySelector<SVGElement>(`[id="${id}"]`)!.style.display = view === "engine" ? "" : "none";
+    for (const g of this.gauges) g.style.display = view === "engine" ? "" : "none";
     const m = view === "lean" ? leanMarkup(e, this.lean) : view === "system" ? systemMarkup(e, this.fuel, menu === "galrem") : "";
     if (m !== this.drawn) this.band.innerHTML = this.drawn = m;
   }

@@ -32,6 +32,7 @@ export declare class EisStrip {
     lean: LeanAssist;
     fuel: FuelCalc;
     private band;
+    /** FG1000's gauges the LEAN and SYSTEM pages replace, found once (any missing are skipped). */ private gauges;
     private drawn;
     constructor(page: Page);
     /** Draws the page for the softkey menu `menu`; counts fuel and watches for a peak whatever the page. */
