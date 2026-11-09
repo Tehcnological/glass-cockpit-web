@@ -84,7 +84,9 @@
   f.insertAdjacentHTML("beforeend", `<label>message<input type="checkbox" name="alert"></label><label>fail AHRS<input type="checkbox" name="ahrs"></label><label>fail ADC<input type="checkbox" name="adc"></label><label>fail PFD<input type="checkbox" name="pfdFail"></label><label>fail MFD<input type="checkbox" name="mfdFail"></label>`);
   // The aircraft: the sliders set it, and the autopilot loop moves it (in finer steps than the sliders show).
   const ac = Object.fromEntries([...f.querySelectorAll("input[type=range]")].map((i) => [i.name, Number(i.value)]));
-  const update = () => {
+  // `flying`: the autopilot loop's redraw, which redraws the MFD once a second, not every tick.
+  let tick = 0;
+  const update = (flying = false) => {
     const s = { ...ac };
     f.querySelectorAll("label").forEach((l) => l.querySelector("output") && (l.querySelector("output").value = l.querySelector("input").value));
     const engine = { rpm: s.rpm, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 };
@@ -100,7 +102,7 @@
     revBox.style.display = revOn ? "" : "none"; // shown before the second PFD is built: it measures its layout
     if (revOn) revUnit().set({ ...ps, reversionary: true, failed: { ...failed, ...modes.mfd.failed } });
     dark(mfd, modes.mfd.mode === "off");
-    if (modes.mfd.mode === "normal") mfd.set({
+    if (modes.mfd.mode === "normal" && (!flying || ++tick % 10 === 0)) mfd.set({
       heading: s.heading, headingBug: s.headingBug, course: s.course, selectedAlt: s.selectedAlt, alt: s.alt, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
       engine,
     });
@@ -126,7 +128,7 @@
       ac.cdiDots = Math.max(-2.4, Math.min(2.4, ac.cdiDots - Math.sin((ac.heading - ac.course) * rad) * (ac.ias / 3600) * dt / 0.3));
       for (const k of ["pitch", "roll", "ias", "vsi", "alt", "heading", "cdiDots"]) f.elements[k].value = ac[k];
     }
-    update();
+    update(true);
   }, 100);
   // Set once, so the sliders don't undo flight plan changes.
   const plan = { route: ["ABC", "WPONE", "KAAA"], activeLeg: 1 };

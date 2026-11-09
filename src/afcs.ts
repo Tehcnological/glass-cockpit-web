@@ -88,7 +88,6 @@ export class Afcs {
   private vnvSel = false; // VNV pressed: VPTH armed, or active as `vert`
   private ack = false; // descent acknowledged
   private apprV: "GS" | "GP" | null = null;
-  private fromAltv = false;
   private ref = { pitch: 0, roll: 0, alt: 0, vs: 0, spd: 0, capVs: 0 };
   private hdgErr = 0;
   private flash: { lat?: Flash; vert?: Flash; ap?: Flash } = {};
@@ -221,6 +220,7 @@ export class Afcs {
 
   private setHdg() {
     this.lat = "HDG";
+    if (!this.latArmed) this.navKey = null; // NAV pressed after HDG selects it again
     this.hdgErr = wrap(this.s.headingBug - this.s.heading);
   }
 
@@ -339,12 +339,13 @@ export class Afcs {
       if (navOn) this.rol(true);
       this.latArmed = this.navKey = null;
       this.apprV = null;
+      if (this.vert === "GS" || this.vert === "GP") this.pit();
       return;
     }
-    if (this.lat === "VOR" && this.freq() !== this.navSrc.freq) {
-      // A different VOR tuned: back to Roll Hold, VOR armed again.
+    if ((this.lat === "VOR" || this.lat === "VAPP") && this.freq() !== this.navSrc.freq) {
+      // A different VOR tuned: back to Roll Hold, the mode armed again.
       this.navSrc.freq = this.freq();
-      this.latArmed = "VOR";
+      this.latArmed = this.lat;
       this.rol(true);
       return;
     }
@@ -386,9 +387,10 @@ export class Afcs {
     const selChanged = s.selectedAlt !== prev.selectedAlt && prev !== START;
     // VNV.
     if (this.vnvSel && !s.vnv) {
-      // The profile ended or was cancelled.
+      // The profile ended or was cancelled. Capturing its last target, the flight director levels off there in ALT.
       this.vnvSel = false;
       if (this.vert === "VPTH") this.lostVertical();
+      if (this.vert === "ALTV") this.vert = "ALT";
     }
     if (this.vnvSel && s.vnv) {
       if (this.vert === "VPTH" && s.vnv.dev === null) {
@@ -409,7 +411,9 @@ export class Afcs {
     }
     // Approach vertical modes.
     const lateralOk = (this.apprV === "GS" && this.lat === "LOC") || (this.apprV === "GP" && this.lat === "GPS");
-    if (this.apprV && lateralOk && s.gs !== null && Math.abs(s.gs) <= 0.1) {
+    // Near center, or across it since the last update.
+    const crossed = s.gs !== null && prev.gs != null && Math.sign(s.gs) !== Math.sign(prev.gs);
+    if (this.apprV && lateralOk && s.gs !== null && (Math.abs(s.gs) <= 0.1 || crossed)) {
       this.vert = this.apprV;
       this.apprV = null;
       this.vnvSel = false;

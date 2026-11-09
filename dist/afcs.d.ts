@@ -59,7 +59,6 @@ export declare class Afcs {
     private vnvSel;
     private ack;
     private apprV;
-    private fromAltv;
     private ref;
     private hdgErr;
     private flash;

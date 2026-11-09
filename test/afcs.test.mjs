@@ -270,3 +270,38 @@ test("VNV: needs a profile on GPS", () => {
   assert.equal(setup({ cdiSource: "GPS" }).press("VNV").fd, null);
   assert.equal(setup({ vnv: { dev: null, target: 4000, vsr: 0 } }).press("VNV").fd, null);
 });
+
+test("review: NAV after HDG selects NAV again rather than cancelling", () => {
+  const u = setup();
+  u.press("NAV", "HDG");
+  assert.equal(u.press("NAV").display.lateralActive.text, "VOR");
+});
+
+test("review: switching the CDI on a glideslope reverts the vertical mode too", () => {
+  const u = setup({ cdiSource: "NAV2", gs: 0 });
+  u.press("APR");
+  assert.equal(u.fly().display.verticalActive.text, "GS");
+  const o = u.fly({ cdiSource: "GPS" });
+  assert.equal(o.display.lateralActive.text, "ROL");
+  assert.equal(o.display.verticalActive.text, "PIT");
+});
+
+test("review: the glideslope captures when the needle steps across center between updates", () => {
+  const u = setup({ cdiSource: "NAV2", gs: 0.15 });
+  u.press("APR");
+  assert.equal(u.fly({ gs: -0.12 }).display.verticalActive.text, "GS");
+});
+
+test("review: the VNV profile ending during ALTV levels off in ALT", () => {
+  const vnv = { dev: 0, target: 4000, vsr: -500 };
+  const u = setup({ cdiSource: "GPS", alt: 4100, vsi: -500, selectedAlt: 3000, vnv });
+  u.press("VNV");
+  assert.equal(u.fly().display.verticalActive.text, "ALTV", "100 ft above the target at 500 fpm: capturing");
+  assert.deepEqual(modes(u.fly({ vnv: null })).slice(3, 5), ["ALT", "4000FT"]);
+});
+
+test("review: retuning the VOR in VAPP reverts to ROL with VAPP armed", () => {
+  const u = setup();
+  u.press("APR");
+  assert.deepEqual(modes(u.fly({ radios: { ...RADIOS, nav1: { active: 116.8, standby: 110.1 } } })).slice(0, 2), ["VAPP", "ROL"]);
+});
