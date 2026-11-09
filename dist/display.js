@@ -22,6 +22,9 @@ export function buildDisplay(container, pages, label, { bezel }) {
     container.innerHTML = `<svg xmlns="${NS}" viewBox="${bezel ? "1 132 1407 918" : "0 0 1024 768"}" role="img"></svg>`;
     const svg = container.querySelector("svg");
     svg.setAttribute("aria-label", label);
+    // A display is a control surface (clicks and double clicks work its keys and knobs), so its text does not select.
+    for (const k of ["user-select", "-webkit-user-select"])
+        svg.style.setProperty(k, "none");
     if (bezel) {
         svg.innerHTML = scopeIds(BEZEL, tag);
         // fascia.svg shades its two side columns unevenly (the left has an extra black overlay and a fainter edge strip), so

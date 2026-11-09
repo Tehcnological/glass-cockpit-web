@@ -72,12 +72,14 @@ export const SPOTS: Spot[] = [
   { box: [1250, 100, 1300, 140], click: "COM_FREQ_TRANSFER", shiftClick: "COM_FREQ_TRANSFER_HOLD" },
   { box: [1275, 170, 1355, 245], wheel: "COM_INNER", shiftWheel: "COM_OUTER", click: "COM_TOGGLE" },
   { box: [1275, 331, 1355, 410], wheel: "CRS", shiftWheel: "BARO", click: "CRS_CENTER" },
-  { box: [1295, 500, 1345, 550], wheel: "RANGE", click: "JOYSTICK_PRESS" },
-  // Below the RANGE - and + (GUI.nas starts these at 500).
-  { box: [1255, 518, 1285, 550], click: "JOYSTICK_HORIZONTAL", value: -1, arrow: "printed" },
-  { box: [1345, 518, 1380, 550], click: "JOYSTICK_HORIZONTAL", value: 1, arrow: "printed" },
-  { box: [1295, 465, 1345, 500], click: "JOYSTICK_VERTICAL", value: -1, arrow: "printed" },
-  { box: [1295, 550, 1345, 585], click: "JOYSTICK_VERTICAL", value: 1, arrow: "printed" },
+  // The RANGE cluster's boxes are centered on the fascia's knob (1314, 526) and its printed arrows, - and +, not GUI.nas's,
+  // which sit 6 px right of them (README, "Where it follows the G1000 trainer"), so the hover glow lands on what it lights.
+  { box: [1289, 501, 1339, 551], wheel: "RANGE", click: "JOYSTICK_PRESS" },
+  // Below the RANGE - and +.
+  { box: [1255, 514, 1289, 538], click: "JOYSTICK_HORIZONTAL", value: -1, arrow: "printed" },
+  { box: [1339, 514, 1377, 538], click: "JOYSTICK_HORIZONTAL", value: 1, arrow: "printed" },
+  { box: [1289, 466, 1339, 501], click: "JOYSTICK_VERTICAL", value: -1, arrow: "printed" },
+  { box: [1289, 551, 1339, 586], click: "JOYSTICK_VERTICAL", value: 1, arrow: "printed" },
   { box: [1255, 620, 1305, 660], click: "DTO" },
   { box: [1255, 670, 1305, 710], click: "FPL" },
   { box: [1255, 720, 1305, 760], click: "CLR", shiftClick: "CLR_HOLD" },
@@ -90,12 +92,12 @@ export const SPOTS: Spot[] = [
     (x, i): Spot => ({ box: [x, 830, x + 60, 875], click: "SOFTKEY", value: i + 1 }),
   ),
   // RANGE turns on the - and + printed beside it.
-  { box: [1264, 496, 1284, 516], wheel: "RANGE", click: "RANGE", value: -1, arrow: "printed" },
-  { box: [1347, 496, 1367, 516], wheel: "RANGE", click: "RANGE", value: 1, arrow: "printed" },
-  diagonal([1258, 470, 1290, 494], -1, -1),
-  diagonal([1350, 470, 1382, 494], 1, -1),
-  diagonal([1258, 553, 1292, 585], -1, 1),
-  diagonal([1348, 553, 1382, 585], 1, 1),
+  { box: [1264, 494, 1284, 514], wheel: "RANGE", click: "RANGE", value: -1, arrow: "printed" },
+  { box: [1348, 494, 1368, 514], wheel: "RANGE", click: "RANGE", value: 1, arrow: "printed" },
+  diagonal([1256, 470, 1288, 494], -1, -1),
+  diagonal([1340, 470, 1372, 494], 1, -1),
+  diagonal([1256, 552, 1288, 584], -1, 1),
+  diagonal([1340, 552, 1372, 584], 1, 1),
 ];
 // After the knobs' own spots, so an arrow is on top of the knob it turns.
 SPOTS.push(...SPOTS.filter((s) => s.wheel && s.wheel !== "RANGE" && !s.arrow).flatMap(arrows));

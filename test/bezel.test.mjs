@@ -68,6 +68,14 @@ test("the joystick moves in eight directions and every knob pushes", () => {
     assert.ok(SPOTS.some((s) => s.click === c && !s.arrow), c);
 });
 
+test("the RANGE cluster's boxes are centered on the fascia's knob", () => {
+  const cx = (s) => (s.box[0] + s.box[2]) / 2, cy = (s) => (s.box[1] + s.box[3]) / 2;
+  const knob = SPOTS.find((s) => s.click === "JOYSTICK_PRESS");
+  assert.deepEqual([cx(knob), cy(knob)], [1314, 526]);
+  for (const s of SPOTS.filter((s) => s.click === "JOYSTICK_VERTICAL")) assert.equal(cx(s), 1314);
+  for (const s of SPOTS.filter((s) => s.click === "JOYSTICK_HORIZONTAL" && !s.also)) assert.equal(cy(s), 526);
+});
+
 test("an arrow covers no other button", () => {
   const overlap = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
   const turn = SPOTS.filter((s) => s.arrow);
