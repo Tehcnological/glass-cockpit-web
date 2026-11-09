@@ -1,7 +1,7 @@
 // PROC: the PROCEDURES menu, SELECT APPROACH and NOT APPROVED FOR GPS, as the v13 trainer has them. FG1000 has no
 // procedures page. DOM-free, so the MFD page and the PFD window share it and the tests can run it.
 import { clamp } from "./page.js";
-import { approachPatch, approachPoints, gpsApproved, loadedApproach, missedPatch, nearest, pastMap, routePoint, vtfPatch, type Airport, type Procedure } from "./nav.js";
+import { approachPatch, approachPoints, gpsApproved, loadedApproach, missedPatch, nearest, routePoint, vtfPatch, type Airport, type Procedure } from "./nav.js";
 import { minView, ROLE, stepBaro, toggleBaro, type AprRow } from "./apr-info.js";
 import type { LatLon, MapPoint } from "./map.js";
 
@@ -10,7 +10,7 @@ const SELECT_APPROACH = 3;
 
 /** What the flow reads and where it sends its changes. */
 export interface ProcHost {
-  s(): LatLon & { route: (string | MapPoint)[]; points: MapPoint[]; airports: Airport[]; procedures: Procedure[]; minimums?: number | null; activeLeg: number; directFrom?: LatLon | null };
+  s(): LatLon & { route: (string | MapPoint)[]; points: MapPoint[]; airports: Airport[]; procedures: Procedure[]; minimums?: number | null };
   change(patch: object): void;
   close(): void;
 }
@@ -165,8 +165,8 @@ export class ProcFlow {
     const here = { lat: s.lat, lon: s.lon };
     if (item === 0) this.h.change(vtfPatch(a.start, a.pts, here));
     else if (item === 1) this.h.change({ activeLeg: a.start, directFrom: here, vtf: false });
-    // Pilot's Guide: as SUSP, the first missed approach leg; past the missed approach point, from the aircraft.
-    else this.h.change(missedPatch(s.route, pastMap(s) ? here : null)!); // enabled: the approach has missed approach legs
+    // Pilot's Guide: sequences to the missed approach as SUSP does, the leg from the MAP to the first missed approach fix.
+    else this.h.change(missedPatch(s.route, null)!); // enabled: the approach has missed approach legs
     this.h.close();
   }
 

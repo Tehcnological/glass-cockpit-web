@@ -710,11 +710,9 @@ export class GlassPfd {
   /** Merge new values into the state and redraw. */
   set(patch: Partial<PfdState>): void {
     const s = (this.state = { ...this.state, ...patch });
-    // SUSP as the aircraft passes the missed approach point, reported; a host's own `susp` is not echoed back.
-    if (suspended(s) !== s.susp) {
-      s.susp = !s.susp;
-      if (!("susp" in patch)) this.options.onChange?.({ susp: s.susp });
-    }
+    // SUSP as the aircraft passes the missed approach point, reported after the redraw; a host's own `susp` is not echoed back.
+    const report = suspended(s) !== s.susp && !("susp" in patch);
+    s.susp = suspended(s);
     // Unusual attitude declutter, undone as the attitude recovers. Bearing information, the DME window and ALERTS stay
     // (Pilot's Guide: the Bearing Information, Alerts and Annunciation windows can be displayed).
     this.ua = unusualAttitude(s.pitch, s.roll);
@@ -780,6 +778,7 @@ export class GlassPfd {
     this.updateNrst();
     this.updateFlightPlan(s);
     this.drawWindow();
+    if (report) this.options.onChange?.({ susp: s.susp });
   }
 
   // setFlightPlan / updateFlightPlan: the flight plan window, shown by FPL while there is a flight plan. The arrow marks

@@ -154,12 +154,13 @@ export function pastMap(s) {
 /**
  * SUSP (Pilot's Guide; FG1000 sequences onto the missed approach): past the loaded approach's missed approach point
  * waypoint sequencing suspends, the MAP staying active, until SUSP or ACTIVATE MISSED APPROACH makes the missed
- * approach active. It ends whenever the MAP stops being the active waypoint. Not set in OBS mode, which keeps its key.
+ * approach active. It ends whenever the MAP stops being the active waypoint. Never in OBS mode, even when a host
+ * shares `susp` from a unit that cannot see OBS (the MFD), so the OBS key can always be turned off.
  */
 export function suspended(s) {
-    return activeMap(s) !== null && (!!s.susp || (!s.obs && pastMap(s)));
+    return activeMap(s) !== null && !s.obs && (!!s.susp || pastMap(s));
 }
-/** SUSP and ACTIVATE MISSED APPROACH: the first missed approach leg active, from `from` (null: from the MAP). Null with no missed approach. */
+/** SUSP and ACTIVATE MISSED APPROACH: the first missed approach leg active, from `from` (null: from the MAP, as both use it). Null with no missed approach. */
 export function missedPatch(route, from) {
     const i = route.findIndex((r) => isApproach(r) && r.role === "MISSED");
     return i < 0 ? null : { activeLeg: i, directFrom: from, vtf: false, susp: false };

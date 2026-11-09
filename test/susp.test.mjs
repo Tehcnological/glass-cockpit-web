@@ -30,6 +30,7 @@ test("sequencing suspends at the MAP, which stays active, until it is no longer 
   assert.equal(suspended({ ...plan(33.40), susp: true, activeLeg: 5 }), false, "the missed approach active");
   assert.equal(suspended({ ...plan(33.40), susp: true, route: [], activeLeg: 0 }), false, "the plan deleted");
   assert.equal(suspended({ ...plan(33.40), obs: true }), false, "not in OBS mode");
+  assert.equal(suspended({ ...plan(33.40), obs: true, susp: true }), false, "OBS wins over a shared susp");
   // An approach with no missed approach legs holds the MAP too.
   assert.equal(suspended(plan(33.40, legs.slice(0, 3))), true);
 });
@@ -50,9 +51,9 @@ const activateMissed = (s) => {
   return h.changes[0];
 };
 
-test("ACTIVATE MISSED APPROACH: from the MAP short of it, from the aircraft past it", () => {
+test("ACTIVATE MISSED APPROACH flies the leg from the MAP, as SUSP does, short of it or past it", () => {
   assert.deepEqual(activateMissed({ ...plan(33.30), activeLeg: 3 }), { activeLeg: 5, directFrom: null, vtf: false, susp: false });
-  assert.deepEqual(activateMissed({ ...plan(33.42), susp: true }), { activeLeg: 5, directFrom: { lat: 33.42, lon: -112 }, vtf: false, susp: false });
+  assert.deepEqual(activateMissed({ ...plan(33.42), susp: true }), { activeLeg: 5, directFrom: null, vtf: false, susp: false });
 });
 
 test("loading an approach and a direct-to clear SUSP", () => {

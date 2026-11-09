@@ -345,12 +345,10 @@ export class GlassMfd {
     /** Merge new values into the state and redraw. */
     set(patch) {
         const s = (this.state = { ...this.state, ...patch });
-        // SUSP as the aircraft passes the missed approach point, reported; a host's own `susp` is not echoed back.
-        if (suspended(s) !== s.susp) {
-            s.susp = !s.susp;
-            if (!("susp" in patch))
-                this.options.onChange?.({ susp: s.susp });
-        }
+        // SUSP as the aircraft passes the missed approach point, reported after the redraw; a host's own `susp` is not echoed
+        // back. The MFD cannot see OBS and draws nothing for susp, so the PFD's value wins in a host that shares it.
+        const report = suspended(s) !== s.susp && !("susp" in patch);
+        s.susp = suspended(s);
         this.pages.utility.util.tick(s.groundspeed, Date.now());
         const page = this.page;
         const under = this.groupPage;
@@ -388,6 +386,8 @@ export class GlassMfd {
         if (base !== page)
             base.draw();
         page.draw();
+        if (report)
+            this.options.onChange?.({ susp: s.susp });
     }
     panView() {
         const s = this.state;
