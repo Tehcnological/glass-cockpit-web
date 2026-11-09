@@ -644,18 +644,22 @@ function trainerWindow(root: SVGGElement | null) {
 // WPT - APPROACH INFORMATION's boxes: title, top, rows shown. Fixed, so the sequence box gets what is left.
 const APR_BOXES = { AIRPORT: [77, 2], APPROACHES: [166, 5], TRANSITIONS: [338, 3], MINIMUMS: [458, 1], SEQUENCE: [524, 7] } as const;
 
-/** Draws WPT - APPROACH INFORMATION's window from `AprInfo.view` (our own layout: FG1000 has no such page). */
-function aprPanel(v: ReturnType<AprInfo["view"]>, use: string, name: string): string {
+/** Draws WPT - APPROACH INFORMATION's window from `AprInfo.view` (our own layout: FG1000 has no such page). With `ask`,
+ * the approach loading page's: the sequence box shorter, LOAD? and ACTIVATE? under it. */
+function aprPanel(v: ReturnType<AprInfo["view"]>, use: string, name: string, ask?: { load: boolean; activate: boolean }): string {
   let out = windowRect(725, 54, 309, 688, PANEL_GREY);
+  // shortcut: the loading page's sequence shows its first 5 fixes (it is not a cursor stop there); the map shows them all.
+  const rowsOf = (title: keyof typeof APR_BOXES) => (ask && title === "SEQUENCE" ? 5 : APR_BOXES[title][1]);
   const box = (title: keyof typeof APR_BOXES) => {
-    const [y, n] = APR_BOXES[title];
+    const [y] = APR_BOXES[title];
+    const n = rowsOf(title);
     out += tabbedBox(730.5, y, 289, n * 26 + 16, title);
     return (i: number) => y + 30 + i * 26;
   };
   // A list scrolled to keep the cursor (or the first row) in view.
   const list = (title: keyof typeof APR_BOXES, rows: AprRow[], fill: (r: AprRow) => string) => {
     const row = box(title);
-    const n = APR_BOXES[title][1];
+    const n = rowsOf(title);
     const at = Math.max(0, rows.findIndex((r) => r.cur));
     const top = clamp(at - n + 1, 0, Math.max(0, rows.length - n));
     rows.slice(top, top + n).forEach((r, i) => {
@@ -672,6 +676,8 @@ function aprPanel(v: ReturnType<AprInfo["view"]>, use: string, name: string): st
   out += panelText(v.min.mode, 740, min(0), "start", v.min.cur ? "#000000" : CYAN, v.min.cur) +
     panelText(v.min.alt, 1010, min(0), "end", v.min.altCur ? "#000000" : v.min.mode === "OFF" ? "#808080" : CYAN, v.min.altCur);
   list("SEQUENCE", v.sequence, () => "#ffffff");
+  if (ask) out += panelText("LOAD?", 874, 696, "middle", ask.load ? "#000000" : "#ffffff", ask.load) +
+    panelText("ACTIVATE?", 874, 726, "middle", ask.activate ? "#000000" : "#ffffff", ask.activate);
   return out;
 }
 
@@ -1303,14 +1309,15 @@ class DirectToPage extends MapPage {
   }
 }
 
-// PROC: FG1000 has no procedures page. This one follows the v13 trainer: a PROCEDURES menu, then the SELECT APPROACH
-// window (airport, approach, transition, LOAD? / ACTIVATE?), drawn in the style of the NRST pages' data display.
-const PROC_ROWS = 6;
-// The PROCEDURES window over the page; the flow is in procedures.ts, shared with the PFD.
+// PROC: FG1000 has no procedures page. The PROCEDURES window over the page (v13 trainer), then, as the Pilot's Guide
+// has it, SELECT APPROACH opens PROC - APPROACH LOADING: a page of its own, the approach previewed on its map beside
+// WPT - APPROACH INFORMATION's boxes, with LOAD? and ACTIVATE? under them. The flow is in procedures.ts, shared with the PFD.
 class ProceduresPage extends MfdPage {
-  navMap = "partial" as const;
   private entry: IdEntry;
   private flow: ProcFlow;
+  private mapG: SVGGElement;
+  private panel: SVGGElement;
+  private drawn = "";
 
   constructor(m: Mfd, screen: SVGGElement, after: Element) {
     super(m, "Procedures", screen);
@@ -1321,27 +1328,33 @@ class ProceduresPage extends MfdPage {
     const text = (id: string, x: number, y: number, fill = "#ffffff", size = 19.35, anchor = "start") =>
       `<text id="Procedures${id}" x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style};font-size:${size}px"></text>`;
     const label = (t: string, y: number, fill = CYAN) => `<text x="874" y="${y}" fill="${fill}" text-anchor="middle" style="${style};font-size:19.35px">${t}</text>`;
-    let rows = "";
-    for (let i = 0; i < PROC_ROWS; i++) rows += text(`Approach${i}`, 740, 210 + i * 26);
-    for (let i = 0; i < PROC_ROWS; i++) rows += text(`Trans${i}`, 740, 420 + i * 26);
     let menu = "";
     for (let i = 0; i < PROC_MENU.length; i++) menu += text(`Menu${i}`, 740, 130 + i * 30);
     // v13 trainer: ACTIVATE? on an approach the GPS may not fly asks first.
     const ask = ["- NOT APPROVED FOR GPS -", "GPS guidance is for", "monitoring only.", "Activate approach?"].map((t, i) => label(t, 300 + i * 30, "#ffffff")).join("");
+    // The loading page covers the page under it, from the engine strip to the screen's right edge.
     g.innerHTML =
-      windowRect(725, 54, 309, 688, PANEL_GREY) +
-      `<g id="ProceduresMenu">${label("PROCEDURES", 85, "#ffffff")}${tabbedBox(730.5, 106, 289, PROC_MENU.length * 30 + 10, "OPTIONS")}${menu}</g>` +
-      `<g id="ProceduresSelect">` +
-      label("APPROACH", 85, "#ffffff") + tabbedBox(730.5, 98, 289, 60, "AIRPORT") +
-      text("ID", 874, 124, "#ffffff", 24, "middle") + text("Name", 874, 150, "#ffffff", 19.35, "middle") +
-      tabbedBox(730.5, 186, 289, PROC_ROWS * 26 + 10, "SELECT APPROACH") + tabbedBox(730.5, 396, 289, PROC_ROWS * 26 + 10, "TRANSITION") + rows +
-      text("Load", 874, 610, "#ffffff", 22, "middle") + text("Activate", 874, 645, "#ffffff", 22, "middle") + `</g>` +
+      `<g id="ProceduresSelect"><rect x="150" y="53.5" width="874" height="690" fill="#000000"/><g id="ProceduresPanel"/></g>` +
+      `<g id="ProceduresMenu">${windowRect(725, 54, 309, 105 + PROC_MENU.length * 30, PANEL_GREY)}` +
+      `${label("PROCEDURES", 85, "#ffffff")}${tabbedBox(730.5, 106, 289, PROC_MENU.length * 30 + 10, "OPTIONS")}${menu}</g>` +
       `<g id="ProceduresAsk"><rect x="734.5" y="270" width="290" height="190" style="fill:#000000;stroke:${WINDOW_FRAME};stroke-width:1"/>` +
       `${ask}${text("Yes", 834, 440, "#ffffff", 22, "middle")}${text("No", 914, 440, "#ffffff", 22, "middle")}</g>`;
     after.after(g);
     this.root = g;
+    this.panel = this.p.el("Panel") as SVGGElement;
+    this.mapG = mapGroup(screen, this.panel, INFO_MAP);
     this.entry = new IdEntry(this.p, 4);
     this.flow = new ProcFlow({ s: () => this.s, change: (patch) => this.m.change(patch), close: () => this.m.close() }, this.entry);
+  }
+
+  /** The PROCEDURES menu, or NOT APPROVED FOR GPS asked from it: a window over the page, which stays drawn. */
+  get windowed() {
+    const f = this.flow;
+    return (f.view === "ask" ? f.pending?.from ?? "select" : f.view) === "menu";
+  }
+
+  get title() {
+    return this.windowed ? super.title : "PROC - APPROACH LOADING";
   }
 
   open() {
@@ -1396,24 +1409,16 @@ class ProceduresPage extends MfdPage {
     this.p.text("No", "NO");
     this.m.hl.set(this.p.el("Yes"), f.view === "ask" && f.yes);
     this.m.hl.set(this.p.el("No"), f.view === "ask" && !f.yes);
-    const procs = f.procs();
+    if (under !== "select") return;
     const apt = this.s.airports.find((a) => a.id === f.airport);
-    const on = this.crsr && f.view === "select";
-    this.entry.draw(f.airport ?? "____", on && f.grp === "APT", this.m.hl);
-    this.p.text("Name", apt ? apt.name.toUpperCase() : "");
-    const list = (name: string, items: string[], sel: number, lit: boolean) => {
-      const top = firstRow(sel, items.length, PROC_ROWS);
-      for (let i = 0; i < PROC_ROWS; i++) {
-        this.p.text(`${name}${i}`, items[top + i] ?? "");
-        this.m.hl.set(this.p.el(`${name}${i}`), lit && top + i === sel && !!items[top + i]);
-      }
-    };
-    list("Approach", procs.length ? procs.map((p) => p.name) : ["NONE"], f.apr, on && f.grp === "APR" && procs.length > 0);
-    list("Trans", f.transitions(), f.trans, on && f.grp === "TRANS");
-    this.p.text("Load", "LOAD?");
-    this.p.text("Activate", "ACTIVATE?");
-    this.m.hl.set(this.p.el("Load"), on && f.grp === "LOAD");
-    this.m.hl.set(this.p.el("Activate"), on && f.grp === "ACTIVATE");
+    const v = f.loading(this.crsr);
+    // The panel only when it changed (the MFD draws many times a second in flight); the map always, the aircraft moves.
+    const panel = aprPanel(v, apt?.use ?? "", (apt?.name ?? "").toUpperCase(), v);
+    if (panel !== this.drawn) {
+      this.panel.innerHTML = this.drawn = panel;
+      cursorBoxes(this.panel);
+    }
+    this.m.drawMap(this.mapG, INFO_MAP, apt, v.points);
   }
 }
 

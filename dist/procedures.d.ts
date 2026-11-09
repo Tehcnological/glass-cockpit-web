@@ -1,4 +1,5 @@
 import { type Airport, type Procedure } from "./nav.js";
+import { type AprRow } from "./apr-info.js";
 import type { LatLon, MapPoint } from "./map.js";
 export declare const PROC_MENU: string[];
 /** What the flow reads and where it sends its changes. */
@@ -8,6 +9,7 @@ export interface ProcHost {
         points: MapPoint[];
         airports: Airport[];
         procedures: Procedure[];
+        minimums?: number | null;
     };
     change(patch: object): void;
     close(): void;
@@ -33,9 +35,11 @@ export declare class ProcFlow {
         act: () => void;
         from: "menu" | "select";
     } | null;
-    grp: "APT" | "APR" | "TRANS" | "LOAD" | "ACTIVATE";
+    grp: "APT" | "APR" | "TRANS" | "MIN" | "MINALT" | "LOAD" | "ACTIVATE";
     apr: number;
     trans: number;
+    /** BARO minimums, feet; null is off. Loading the approach sets the PFD's (Pilot's Guide). */
+    baro: number | null;
     constructor(h: ProcHost, entry?: Speller);
     /** Opens on the PROCEDURES menu. SELECT APPROACH opens on the destination: the last airport in the flight plan, else the nearest. */
     open(): void;
@@ -57,4 +61,22 @@ export declare class ProcFlow {
     private menuItem;
     private activate;
     private load;
+    /** What the approach loading page draws (as WPT - APPROACH INFORMATION's boxes); `crsr` is the FMS cursor being on.
+     * `points`: the approach from the selected transition on, to preview on the map. */
+    loading(crsr: boolean): {
+        apt: string;
+        aptCur: boolean;
+        approaches: AprRow[];
+        transitions: AprRow[];
+        min: {
+            mode: string;
+            alt: string;
+            cur: boolean;
+            altCur: boolean;
+        };
+        sequence: AprRow[];
+        load: boolean;
+        activate: boolean;
+        points: MapPoint[];
+    };
 }

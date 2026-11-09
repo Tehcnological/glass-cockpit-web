@@ -15,6 +15,7 @@ import { RADIOS, Surround, type RadioFailure, type Radios } from "./surround.js"
 import { adjust, bezelInput, type Input } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { ProcFlow, PROC_MENU } from "./procedures.js";
+import { MIN_BLANK, minView, stepBaro } from "./apr-info.js";
 import { panInfo, panMarkup, panMove, panStart, panTarget, type Pan, type PanView } from "./pan.js";
 import { bearingDistance, bestApproach, directToPatch, cancelDirectTo, findPoint, latLon, nearest, nrstFreq, planName, routePoint, type Airport, type Procedure } from "./nav.js";
 import { alertsKey, seenAlerts } from "./alerts.js";
@@ -672,7 +673,7 @@ export class GlassPfd {
       case "dir": t.base = this.timerValue(); t.since = Date.now(); t.up = !t.up; break;
       case "action": break;
       case "minimums": this.change({ minimums: s.minimums === null ? Math.round(s.alt / 100) * 100 : null }); break;
-      case "minalt": if (s.minimums !== null) this.change({ minimums: Math.max(0, s.minimums + d * 10) }); break;
+      case "minalt": if (s.minimums !== null) this.change({ minimums: stepBaro(s.minimums, d) }); break;
       default: {
         const v = TMR_FIELDS[u.cursor] as VSpeed;
         this.change({ vspeedsOn: { ...s.vspeedsOn, [v]: !s.vspeedsOn[v] } });
@@ -940,7 +941,7 @@ export class GlassPfd {
       }
       rows.push({ label: "MINIMUMS", cells: [
         { text: s.minimums === null ? "OFF" : "BARO", field: "minimums", right: 180 },
-        { text: s.minimums === null ? "____FT" : `${s.minimums}FT`, field: "minalt", right: end },
+        { text: s.minimums === null ? MIN_BLANK : `${s.minimums}FT`, field: "minalt", right: end },
       ] });
     } else if (u.window === "DME") {
       // v13 trainer: DME TUNING, the NAV radio the DME window shows; the small FMS knob switches it.
@@ -984,6 +985,8 @@ export class GlassPfd {
         rows.push({ label: apt ? apt.name.toUpperCase() : "", cells: [] });
         rows.push({ label: "", cells: [{ text: procs[f.apr]?.name ?? "NONE", right: end, cur: g === "APR" && procs.length > 0 }] });
         rows.push({ label: "TRANS", cells: [{ text: f.transitions()[f.trans] ?? "", right: end, cur: g === "TRANS" }] });
+        const min = minView(f.baro, g === "MIN", g === "MINALT");
+        rows.push({ label: "MINIMUMS", cells: [{ text: min.mode, right: 170, cur: min.cur }, { text: min.alt, right: end, cur: min.altCur }] });
         rows.push({ label: "LOAD?", cells: [], cur: g === "LOAD" }, { label: "ACTIVATE?", cells: [], cur: g === "ACTIVATE" });
       }
     } else if (u.window === "MENU") {

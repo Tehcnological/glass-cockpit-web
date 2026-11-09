@@ -14,6 +14,7 @@ import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
 import { ProcFlow, PROC_MENU } from "./procedures.js";
+import { MIN_BLANK, minView, stepBaro } from "./apr-info.js";
 import { panInfo, panMarkup, panMove, panStart, panTarget } from "./pan.js";
 import { bearingDistance, bestApproach, directToPatch, cancelDirectTo, findPoint, latLon, nearest, nrstFreq, planName, routePoint } from "./nav.js";
 import { alertsKey, seenAlerts } from "./alerts.js";
@@ -603,7 +604,7 @@ export class GlassPfd {
                 break;
             case "minalt":
                 if (s.minimums !== null)
-                    this.change({ minimums: Math.max(0, s.minimums + d * 10) });
+                    this.change({ minimums: stepBaro(s.minimums, d) });
                 break;
             default: {
                 const v = TMR_FIELDS[u.cursor];
@@ -883,7 +884,7 @@ export class GlassPfd {
             }
             rows.push({ label: "MINIMUMS", cells: [
                     { text: s.minimums === null ? "OFF" : "BARO", field: "minimums", right: 180 },
-                    { text: s.minimums === null ? "____FT" : `${s.minimums}FT`, field: "minalt", right: end },
+                    { text: s.minimums === null ? MIN_BLANK : `${s.minimums}FT`, field: "minalt", right: end },
                 ] });
         }
         else if (u.window === "DME") {
@@ -934,6 +935,8 @@ export class GlassPfd {
                 rows.push({ label: apt ? apt.name.toUpperCase() : "", cells: [] });
                 rows.push({ label: "", cells: [{ text: procs[f.apr]?.name ?? "NONE", right: end, cur: g === "APR" && procs.length > 0 }] });
                 rows.push({ label: "TRANS", cells: [{ text: f.transitions()[f.trans] ?? "", right: end, cur: g === "TRANS" }] });
+                const min = minView(f.baro, g === "MIN", g === "MINALT");
+                rows.push({ label: "MINIMUMS", cells: [{ text: min.mode, right: 170, cur: min.cur }, { text: min.alt, right: end, cur: min.altCur }] });
                 rows.push({ label: "LOAD?", cells: [], cur: g === "LOAD" }, { label: "ACTIVATE?", cells: [], cur: g === "ACTIVATE" });
             }
         }

@@ -43,7 +43,7 @@
   };
   // The units share their knobs and flight plan, as a real G1000's do: a change on one is set on the others, and the
   // sliders follow. RANGE and the map stay each unit's own.
-  const SHARED = ["headingBug", "course", "baro", "selectedAlt", "radios", "navVolume", "comVolume", "navIdent", "route", "activeLeg", "directFrom", "vtf", "points"];
+  const SHARED = ["headingBug", "course", "baro", "selectedAlt", "radios", "navVolume", "comVolume", "navIdent", "route", "activeLeg", "directFrom", "vtf", "points", "minimums"];
   const share = (from) => (patch) => {
     for (const [k, v] of Object.entries(patch)) if (f.elements[k]?.type === "range") (f.elements[k].value = v), (f.elements[k].nextElementSibling.value = v), (ac[k] = v);
     const p = Object.fromEntries(Object.entries(patch).filter(([k]) => SHARED.includes(k)));

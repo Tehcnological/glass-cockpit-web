@@ -61,6 +61,7 @@ export interface MfdState extends Knobs {
   /** Index into `route` of the active waypoint; the leg into it is magenta. */ activeLeg: number;
   /** Set by DIRECT TO: where the direct leg to the active waypoint starts. */ directFrom: LatLon | null;
   /** Vector-to-final is active (PROC): the active waypoint is the final approach fix, on the final course. */ vtf: boolean;
+  /** Barometric minimums, feet; null is off. Not drawn here: PROC's approach loading sets them for the PFD (reported through `onChange`). */ minimums: number | null;
   engine: Engine;
   /** Which NAV shows green as the CDI source. */ cdiSource: CdiSource;
   /** Bearing to each NAV radio's station, magnetic (the PFD's `bearings` fit): CRS push sets the course to the CDI radio's. */
@@ -71,7 +72,7 @@ export interface MfdState extends Knobs {
 const DEFAULTS: MfdState = {
   heading: 0, headingBug: 0, course: 0, baro: 29.92, alt: 0, selectedAlt: null, track: 0, groundspeed: 0, dtk: null, ete: null,
   lat: 0, lon: 0, magVar: 0, range: 10, orientation: "NORTH UP",
-  points: [], airspaces: [], airways: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null, vtf: false,
+  points: [], airspaces: [], airways: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null, vtf: false, minimums: null,
   engine: { rpm: 0, fuelFlow: 0, oilPressure: 0, oilTemp: 0, egt: 0, vacuum: 0, fuelLeft: 0, fuelRight: 0, volts: 0, engineHours: 0 },
   radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, cdiSource: "NAV1", bearings: {}, checklists: [],
 };
@@ -405,8 +406,9 @@ export class GlassMfd {
     this.updateHeader(s);
     drawEis(this.eis, s.engine);
     // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO and
-    // WAYPOINT ENTRY are windows over the page, which stays drawn.
-    const base = page === this.pages.directTo || page === this.pages.waypointEntry || page === this.pages.pageMenu || page === this.pages.mapSetup || page === this.pages.fplTool ? under : page;
+    // WAYPOINT ENTRY are windows over the page, which stays drawn, as is PROC's PROCEDURES menu (not its loading page).
+    const windows: MfdPage[] = [this.pages.directTo, this.pages.waypointEntry, this.pages.pageMenu, this.pages.mapSetup, this.pages.fplTool];
+    const base = windows.includes(page) || (page === this.pages.procedures && this.pages.procedures.windowed) ? under : page;
     const mode = base.navMap;
     // Profile View: the navigation map page's (Pilot's Guide), with the PROFILE key or the PAGE MENU.
     const profile = mode === "full" && base.name === "NavigationMap" && !!this.ui.layers.PROFILE;

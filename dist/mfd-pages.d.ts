@@ -130,10 +130,15 @@ declare class DirectToPage extends MapPage {
     draw(): void;
 }
 declare class ProceduresPage extends MfdPage {
-    navMap: "partial";
     private entry;
     private flow;
+    private mapG;
+    private panel;
+    private drawn;
     constructor(m: Mfd, screen: SVGGElement, after: Element);
+    /** The PROCEDURES menu, or NOT APPROVED FOR GPS asked from it: a window over the page, which stays drawn. */
+    get windowed(): boolean;
+    get title(): string;
     open(): void;
     /** LD APR: SELECT APPROACH on `name` at `airport`, at its transitions. */
     loadApproach(airport: string, name: string): void;

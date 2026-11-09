@@ -121,7 +121,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Flight plan catalog | Create New, Activate, Invert & Activate, Copy, Edit, Delete, Delete All | Missing (no stored plans) |
 | Direct-to window | Cancel Direct-To NAV, Clear Vertical Constraints | Partial: Cancel Direct-To NAV (no VNV) |
 | Airport information | View Destination Airport, Show Directory/Departure/Arrival/Approach/Weather Page, View NOTAMs, Chart Mode On | Missing |
-| Approach loading (PROC) | Load Approach, Load & Activate Approach | Done through PROC |
+| Approach loading (PROC) | Load Approach, Load & Activate Approach | Done through PROC: PROC - APPROACH LOADING page with map preview and BARO minimums |
 | User waypoint information | Create New User Waypoint, Delete User Waypoint, Rename User Waypoint, Delete All User Waypoints, Waypoint Setup (temporary or normal), Use Present Position | Missing |
 | Nearest airports | Select Airport/Runway/Frequency/Approach Window, Load Approach | Done |
 | Nearest VOR | Select VOR Window, Select Frequency Window | Missing |
