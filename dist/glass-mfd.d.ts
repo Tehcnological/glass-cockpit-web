@@ -1,3 +1,4 @@
+import type { Cylinder } from "./lean.js";
 import { type DisplayOptions } from "./display.js";
 import { type Airspace, type Airway, type LatLon, type MapPoint, type Orientation } from "./map.js";
 import type { CdiSource } from "./glass-pfd.js";
@@ -15,6 +16,9 @@ export interface Engine {
     /** Gallons. */ fuelRight: number;
     volts: number;
     engineHours: number;
+    /** Four entries, cylinders 1 to 4 (the 172S's IO-360), degrees F: the LEAN page's EGT and CHT bars and lean assist.
+     * Without it (or with another count) the LEAN page's bars all show `egt` and its values are dashed. */
+    cylinders?: Cylinder[];
 }
 /** The knob values (`Knobs`) are not drawn on the MFD; its knobs change them, so a host can share them with a PFD. */
 export interface MfdState extends Knobs {
@@ -39,7 +43,7 @@ export interface MfdState extends Knobs {
     /** Index into `route` of the active waypoint; the leg into it is magenta. */ activeLeg: number;
     /** Set by DIRECT TO: where the direct leg to the active waypoint starts. */ directFrom: LatLon | null;
     /** Vector-to-final is active (PROC): the active waypoint is the final approach fix, on the final course. */ vtf: boolean;
-    /** Waypoint sequencing is suspended at the approach's missed approach point (the PFD's SUSP); set as the aircraft passes the MAP. */ susp: boolean;
+    /** Waypoint sequencing is suspended (the PFD's SUSP): set as the aircraft passes the approach's missed approach point, or while a hold is active. */ susp: boolean;
     /** Barometric minimums, feet; null is off. Not drawn here: PROC's approach loading sets them for the PFD (reported through `onChange`). */ minimums: number | null;
     engine: Engine;
     /** Which NAV shows green as the CDI source. */ cdiSource: CdiSource;

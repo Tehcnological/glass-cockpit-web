@@ -7,7 +7,8 @@
 // NavigationMapStyles.nas) and the ownship icon from FG1000/Icons/APSmodel.svg.
 import NAV_MAP from "./svg/nav-map.js";
 import EIS from "./svg/eis.js";
-import { drawEis, engineKeys } from "./eis.js";
+import { EisStrip, engineBack, engineKeys } from "./eis.js";
+import type { Cylinder } from "./lean.js";
 import SURROUND from "./svg/surround-mfd.js";
 import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay, type DisplayOptions } from "./display.js";
@@ -36,6 +37,9 @@ export interface Engine {
   /** Gallons. */ fuelRight: number;
   volts: number;
   engineHours: number;
+  /** Four entries, cylinders 1 to 4 (the 172S's IO-360), degrees F: the LEAN page's EGT and CHT bars and lean assist.
+   * Without it (or with another count) the LEAN page's bars all show `egt` and its values are dashed. */
+  cylinders?: Cylinder[];
 }
 
 /** The knob values (`Knobs`) are not drawn on the MFD; its knobs change them, so a host can share them with a PFD. */
@@ -61,7 +65,7 @@ export interface MfdState extends Knobs {
   /** Index into `route` of the active waypoint; the leg into it is magenta. */ activeLeg: number;
   /** Set by DIRECT TO: where the direct leg to the active waypoint starts. */ directFrom: LatLon | null;
   /** Vector-to-final is active (PROC): the active waypoint is the final approach fix, on the final course. */ vtf: boolean;
-  /** Waypoint sequencing is suspended at the approach's missed approach point (the PFD's SUSP); set as the aircraft passes the MAP. */ susp: boolean;
+  /** Waypoint sequencing is suspended (the PFD's SUSP): set as the aircraft passes the approach's missed approach point, or while a hold is active. */ susp: boolean;
   /** Barometric minimums, feet; null is off. Not drawn here: PROC's approach loading sets them for the PFD (reported through `onChange`). */ minimums: number | null;
   engine: Engine;
   /** Which NAV shows green as the CDI source. */ cdiSource: CdiSource;
@@ -102,7 +106,7 @@ const MENU_OTHER = "#ffffff";
 export class GlassMfd {
   readonly svg: SVGSVGElement;
   private state: MfdState = { ...DEFAULTS };
-  private eis: Page;
+  private eis: EisStrip;
   private nav: Page;
   private surround: Surround;
   /** Removes the bezel's window listener. */ private unbezel = () => {};
@@ -135,7 +139,7 @@ export class GlassMfd {
   constructor(container: HTMLElement, private options: MfdOptions = {}) {
     const { svg, screen } = buildDisplay(container, [NAV_MAP, ...Object.values(PAGE_SVGS), SURROUND, EIS], "Multi-function display", options);
     this.svg = svg;
-    this.eis = new Page(screen, "EIS");
+    this.eis = new EisStrip(new Page(screen, "EIS"));
     this.nav = new Page(screen, "NavigationMap");
     this.surround = new Surround(screen);
     this.raw = new Page(screen, "");
@@ -426,7 +430,7 @@ export class GlassMfd {
     this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit), keys.map((k) => !!k.dim));
     this.surround.setPageTitle(page.title); // a page's softkeys may change its title (the airport page's APR)
     this.updateHeader(s);
-    drawEis(this.eis, s.engine);
+    this.eis.draw(s.engine, this.ui.menu);
     // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO and
     // WAYPOINT ENTRY are windows over the page, which stays drawn, as is PROC's PROCEDURES menu (not its loading page).
     const windows: MfdPage[] = [this.pages.directTo, this.pages.waypointEntry, this.pages.pageMenu, this.pages.mapSetup, this.pages.fplTool];
@@ -514,7 +518,8 @@ export class GlassMfd {
       case "engine":
       case "lean":
       case "system":
-        return fill([...engineKeys(u.menu, to), key("BACK", to(u.menu === "engine" ? "top" : "engine"))]);
+      case "galrem":
+        return fill([...engineKeys(u.menu, to, this.eis), key("BACK", to(engineBack(u.menu)))]);
       case "map": {
         // shortcut: no traffic data; TRAFFIC switches only its setting.
         const layer = (n: string) => key(n, () => (u.layers[n] = !u.layers[n]), u.layers[n]);

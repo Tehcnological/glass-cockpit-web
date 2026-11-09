@@ -20,8 +20,9 @@
   import { Afcs, AFCS_KEYS } from "./dist/afcs.js";
   import { RADIOS } from "./dist/surround.js";
   // The GFC 700: its keys are on the MFD (and on the second PFD in its place), its annunciations on the PFDs. With the
-  // autopilot engaged, the loop below flies the sliders toward the command bars (a toy model, not flight dynamics).
-  const afcs = new Afcs({ maxSpeed: 140 });
+  // autopilot engaged, the loop below flies the sliders toward the command bars (a toy model, not flight dynamics). Once
+  // the AHRS has aligned it runs its preflight test (PFT above the airspeed tape); a host would sound a tone when it passes.
+  const afcs = new Afcs({ maxSpeed: 140, onPreflightPass: () => console.log("GFC 700 preflight test passed") });
   let out = null;
   const afcsKey = (i) => { if (AFCS_KEYS.includes(i.control)) afcs.press(i.control), update(); };
   // DISPLAY BACKUP, or a failed display, puts the MFD's place in reversionary mode: a second PFD, laid over the MFD so it
@@ -84,7 +85,7 @@
   const ctl = {
     pitch: [-80, 80, 0], roll: [-60, 60, 0], ias: [0, 200, 100], alt: [-500, 15000, 3000], vsi: [-2000, 2000, 0],
     heading: [0, 359, 90], headingBug: [0, 359, 120], course: [0, 359, 100], cdiDots: [-2.4, 2.4, 0.5], gs: [-1, 1, 0.3], selectedAlt: [0, 15000, 4000],
-    range: [1, 50, 10], rpm: [0, 3000, 2400],
+    range: [1, 50, 10], rpm: [0, 3000, 2400], mixture: [0, 100, 100],
   };
   const f = document.getElementById("f");
   for (const [k, [min, max, v]] of Object.entries(ctl)) {
@@ -100,7 +101,11 @@
   const update = (flying = false) => {
     const s = { ...ac };
     if (!flying) readouts();
-    const engine = { rpm: s.rpm, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 };
+    // A toy mixture (percent rich): fuel flow follows it, and each cylinder's EGT peaks near 45%, a little apart, for the
+    // LEAN page and its ASSIST. The ENGINE page's EGT gauge shows the hottest, over 1100 to 1600 F.
+    const mix = s.mixture / 100;
+    const cylinders = [-25, 0, 15, -10].map((d, i) => ({ egt: 1450 + d - 1600 * (mix - 0.45 - 0.01 * i) ** 2, cht: 360 + d / 2 }));
+    const engine = { rpm: s.rpm, fuelFlow: 3 + 8 * mix, oilPressure: 60, oilTemp: 190, egt: (Math.max(...cylinders.map((c) => c.egt)) - 1100) / 500, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5, cylinders };
     const modes = displayModes(backup, !f.pfdFail.checked, !f.mfdFail.checked);
     const failed = { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked };
     // The PFD aligns its AHRS on load: no autopilot until it has.
@@ -140,7 +145,7 @@
     const moving = !!(out?.ap && out.fd);
     if (moved && !moving) syncForm(); // the autopilot let go: the sliders show where it left the aircraft
     moved = moving;
-    if (!out || (!out.fd && !out.display.status.text)) return void (shown && ((shown = false), update()));
+    if (!out || (!out.fd && !out.display.status.text && !out.display.alert.text)) return void (shown && ((shown = false), update()));
     shown = true;
     if (!moving && now - drawnAt < 100) return;
     drawnAt = now;

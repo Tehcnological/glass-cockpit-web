@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { near, parseCifp } from "../dist/navdata.js";
-import { asWaypoint, isArrival, isDeparture, procedurePatch, procedurePoints } from "../dist/nav.js";
+import { asWaypoint, holdAtWaypoint, isArrival, isDeparture, procedurePatch, procedurePoints, suspended } from "../dist/nav.js";
 import { ProcFlow, PROC_MENU } from "../dist/procedures.js";
 import { AprInfo } from "../dist/apr-info.js";
 import { airportInfoMenu, fplMenu } from "../dist/page-menu.js";
@@ -94,6 +94,26 @@ test("loading a departure puts it after the departure airport, replacing one loa
   // An active leg past the end stays within the new plan.
   const p2 = procedurePatch(["KPSP", "KTUS"], 5, sid, pts);
   assert.ok(p2.activeLeg < p2.route.length);
+});
+
+// A hold suspends sequencing while it is the active leg (PR 28): loading or removing a departure keeps that in step.
+test("with a hold active, loading or removing a departure keeps the active leg in range", () => {
+  const [sid] = data().procedures;
+  const pts = procedurePoints(sid, "TRM", "RW13B");
+  const hold = { course: 90, turn: "R", time: 1 };
+  const plan = (route) => ({ route, points: [W("BLH")], airports: [], activeLeg: 1, vtf: false });
+  // Holding at an en route waypoint: the hold stays the active leg, and SUSP with it.
+  const atBlh = holdAtWaypoint(plan(["KPSP", "BLH", "KTUS"]), 1, hold); // [KPSP, BLH, hold, KTUS]
+  const p = procedurePatch(atBlh.route, 2, sid, pts);
+  assert.ok(p.route[p.activeLeg].hold, "the hold is still active");
+  assert.equal(suspended({ ...p, points: [], airports: [], lat: 33, lon: -112 }), true);
+  // Holding at a departure fix: the hold goes with it, and the new departure's first fix is active.
+  const dep = W("OLD1", { departure: "X1" });
+  const atDep = holdAtWaypoint(plan(["KPSP", dep, "BLH"]), 1, hold); // the hold leg carries `departure`
+  const q = procedurePatch(atDep.route, 2, sid, pts);
+  assert.deepEqual([q.activeLeg, q.route.some((r) => r.hold)], [1, false]);
+  const r = fplMenu(atDep.route, 2).find((o) => o.label === "Remove Departure").patch;
+  assert.deepEqual(r, { route: ["KPSP", "BLH"], activeLeg: 1, directFrom: null });
 });
 
 test("loading an arrival puts it before the approach, or at the end, replacing one loaded before", () => {

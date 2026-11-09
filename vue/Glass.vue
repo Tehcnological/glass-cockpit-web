@@ -7,6 +7,7 @@
 // The bezel's knobs work with the mouse; changes to FlightState values come back as a `change` event.
 // Autopilot: the MFD's GFC 700 keys come out as a `key` event for the host's `Afcs`; its `update` gives `afcs` (the
 // annunciations) and `fd` (the command bars) to pass back to the PFD. `afcsKeys` on the PFD in the MFD's place draws them there.
+// The preflight test (PFT) and its `pft` and `onPreflightPass` options are the host's `Afcs`'s; `afcs` carries its alert.
 // `startup` is the PFD's AHRS alignment at power-up, seconds (the package's default when not given; 0 skips it).
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { AfcsDisplay, AfcsKey, GlassMfd, GlassPfd, MfdState, PfdOptions, PfdState } from "glass-cockpit-web";
