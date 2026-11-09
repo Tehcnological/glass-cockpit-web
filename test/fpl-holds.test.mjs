@@ -118,6 +118,7 @@ test("which hold options the menu offers", () => {
   assert.ok(!toolEnabled("Hold At Waypoint", s, 4), "not on the empty row");
   const held = { ...s, route: holdAtWaypoint(s, 2, H).route };
   assert.ok(!toolEnabled("Hold At Waypoint", held, 3), "on a hold: Remove Hold instead");
+  assert.ok(!toolEnabled("Create ATK Offset Waypoint", held, 3), "no along track offset from a hold's zero-length leg");
   assert.ok(toolEnabled("Hold At Present Position", s, null));
   assert.ok(toolEnabled("Hold At Present Position", { ...s, route: [] }, null));
 });

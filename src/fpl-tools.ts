@@ -26,8 +26,11 @@ export function toolEnabled(name: FplToolName, s: ToolState, sel: number | null)
   // On a hold, the menu offers Remove Hold in Hold At Waypoint's place.
   if (name === "Hold At Waypoint") return sel !== null && !isHold(s.route[sel]) && !!routePoint(s.route[sel] ?? "", s.points, s.airports);
   const legs = s.route.filter((r) => routePoint(r, s.points, s.airports)).length > 1;
-  return name === "Create ATK Offset Waypoint" ? legs && sel !== null && sel < s.route.length : legs;
+  // Not from a hold: its leg has no length to measure along.
+  return name === "Create ATK Offset Waypoint" ? legs && sel !== null && sel < s.route.length && !isHold(s.route[sel]) : legs;
 }
+
+const isHoldTool = (name: FplToolName) => name === "Hold At Waypoint" || name === "Hold At Present Position";
 
 /** A hold leg's flight plan row, MFD and PFD (our own): HOLD, the inbound course, the turns. */
 export const holdRow = (h: Hold) => ({ Leg: "HOLD", DTK: deg3(h.course), DIS: h.turn === "R" ? "RIGHT" : "LEFT" });
@@ -78,7 +81,7 @@ export class FplTool {
   }
 
   rows(s: ToolState): ToolRow[] {
-    if (this.name === "Hold At Waypoint" || this.name === "Hold At Present Position") {
+    if (isHoldTool(this.name)) {
       const h = this.hold;
       const w = routePoint(s.route[this.sel] ?? "", s.points, s.airports);
       return [
@@ -129,7 +132,7 @@ export class FplTool {
   }
 
   fms(_s: ToolState, outer: boolean, d: number) {
-    if (this.name === "Hold At Waypoint" || this.name === "Hold At Present Position") {
+    if (isHoldTool(this.name)) {
       // shortcut: the course steps 1 degree a click, not digit by digit; upgrade if a lesson needs it.
       const h = this.hold;
       if (outer) this.row = Math.max(0, Math.min(HOLD_ROWS, this.row + d));
@@ -161,7 +164,7 @@ export class FplTool {
   }
 
   ent(s: ToolState): ToolEnt {
-    if (this.name === "Hold At Waypoint" || this.name === "Hold At Present Position") {
+    if (isHoldTool(this.name)) {
       if (this.row < HOLD_ROWS) {
         this.row++;
         return { close: false };

@@ -13,8 +13,10 @@ export function toolEnabled(name, s, sel) {
     if (name === "Hold At Waypoint")
         return sel !== null && !isHold(s.route[sel]) && !!routePoint(s.route[sel] ?? "", s.points, s.airports);
     const legs = s.route.filter((r) => routePoint(r, s.points, s.airports)).length > 1;
-    return name === "Create ATK Offset Waypoint" ? legs && sel !== null && sel < s.route.length : legs;
+    // Not from a hold: its leg has no length to measure along.
+    return name === "Create ATK Offset Waypoint" ? legs && sel !== null && sel < s.route.length && !isHold(s.route[sel]) : legs;
 }
+const isHoldTool = (name) => name === "Hold At Waypoint" || name === "Hold At Present Position";
 /** A hold leg's flight plan row, MFD and PFD (our own): HOLD, the inbound course, the turns. */
 export const holdRow = (h) => ({ Leg: "HOLD", DTK: deg3(h.course), DIS: h.turn === "R" ? "RIGHT" : "LEFT" });
 const HOLD_ROWS = 4; // course, turn, leg type, leg length; then LOAD?
@@ -64,7 +66,7 @@ export class FplTool {
         return { course: h.course, turn: h.turn, ...(h.byTime ? { time: h.time } : { distance: h.dist }) };
     }
     rows(s) {
-        if (this.name === "Hold At Waypoint" || this.name === "Hold At Present Position") {
+        if (isHoldTool(this.name)) {
             const h = this.hold;
             const w = routePoint(s.route[this.sel] ?? "", s.points, s.airports);
             return [
@@ -113,7 +115,7 @@ export class FplTool {
         return this.name === "Closest Point Of FPL";
     }
     fms(_s, outer, d) {
-        if (this.name === "Hold At Waypoint" || this.name === "Hold At Present Position") {
+        if (isHoldTool(this.name)) {
             // shortcut: the course steps 1 degree a click, not digit by digit; upgrade if a lesson needs it.
             const h = this.hold;
             if (outer)
@@ -157,7 +159,7 @@ export class FplTool {
         return false;
     }
     ent(s) {
-        if (this.name === "Hold At Waypoint" || this.name === "Hold At Present Position") {
+        if (isHoldTool(this.name)) {
             if (this.row < HOLD_ROWS) {
                 this.row++;
                 return { close: false };

@@ -66,7 +66,7 @@ Two callbacks let a host follow the controls:
 - `onChange(patch)` reports state the controls changed, so a host can keep a PFD and MFD in step. Both units also report `route`, `activeLeg`, `directFrom` and `vtf` when the flight plan's PAGE MENU, DIRECT TO or PROC change them.
 - `onInput({ control, value })` reports every input, including ones the display does not act on.
 
-A hold in `route` is an entry of its own, a point right after the fix it holds at, at the fix's position, with `hold: { course, turn: "L" | "R", time?, distance? }` (inbound course, magnetic degrees; legs in minutes or nm; `Hold` in [`src/nav.ts`](src/nav.ts)). The displays do not move the aircraft, so the host sequences the plan: `sequenceLeg(route, activeLeg)` gives the leg to fly once the aircraft reaches the active waypoint, which makes a hold fix's hold active and keeps a hold active until the pilot removes it or activates another leg.
+A hold in `route` is an entry of its own, a point right after the fix it holds at, at the fix's position, with `hold: { course, turn: "L" | "R", time?, distance? }` (inbound course, magnetic degrees; legs in minutes or nm; `Hold` in [`src/nav.ts`](src/nav.ts)). The displays do not move the aircraft, so the host sequences the plan: `sequenceLeg(route, activeLeg)` gives the leg to fly once the aircraft reaches the active waypoint, which makes a hold fix's hold active and keeps a hold active until the pilot removes it or activates another leg. The leg into a hold has no length, so `bearingDistance` over it gives nothing usable: while the active entry is a hold, fly `hold.course` (magnetic) as the desired track to the fix; the racetrack on the map is advisory.
 
 ### PFD
 
