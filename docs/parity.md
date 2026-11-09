@@ -41,7 +41,7 @@ Garmin art, screenshots, data or manual text is copied.
 | DIRECT TO | Direct-to window; again closes on the PFD | Done |
 | FPL | PFD: flight plan window toggles. MFD: FPL page, again goes back | Done |
 | CLR / hold | Back out; hold (MFD only, Pilot's Guide): navigation map | Done (hold 2 s or Shift+click) |
-| MENU | PAGE MENU for the page; PFD with no window: PFD SETUP MENU | Partial: nav map and FPL only (see Page menus) |
+| MENU | PAGE MENU for the page; PFD with no window: PFD SETUP MENU | Partial: see Page menus |
 | PROC | Procedures window; again closes | Done |
 | ENT | Accept | Done where a page uses it |
 | FMS dual knob | Outer moves the cursor, inner changes the field or opens WPT entry; with no cursor the MFD outer/inner select page group/page | Done on the ported pages |
@@ -120,15 +120,15 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Active flight plan | Activate Leg, Load Waypoint, Store Flight Plan, Invert Flight Plan, Delete Flight Plan, Create ATK Offset Waypoint, Parallel Track, Closest Point of FPL, Collapse/Expand Airways, Hold At Wpt, Hold At Present Position, Remove Departure/Arrival/Approach, Enable/Cancel VNV, VNV Direct-To, Select VNV Profile Window | Partial: Invert, Delete, Remove Approach, Closest Point of FPL, Parallel Track (no overlap cancel, no VNV), Create ATK Offset Waypoint (10 nm / 1 nm knob steps), Hold At Wpt (MFD only; Remove Hold on a hold), Hold At Present Position (no EFC time) |
 | Flight plan catalog | Create New, Activate, Invert & Activate, Copy, Edit, Delete, Delete All | Missing (no stored plans) |
 | Direct-to window | Cancel Direct-To NAV, Clear Vertical Constraints | Partial: Cancel Direct-To NAV (no VNV) |
-| Airport information | View Destination Airport, Show Directory/Departure/Arrival/Approach/Weather Page, View NOTAMs, Chart Mode On | Missing |
+| Airport information | View Destination Airport, Show Directory/Departure/Arrival/Approach/Weather Page, View NOTAMs, Chart Mode On | Partial: View Destination Airport (the flight plan's last airport), Show Approach Page; Directory, Departure, Arrival and Weather grey as their softkeys; NOTAMs and Chart Mode No data |
 | Approach loading (PROC) | Load Approach, Load & Activate Approach | Done through PROC: PROC - APPROACH LOADING page with map preview and BARO minimums |
 | User waypoint information | Create New User Waypoint, Delete User Waypoint, Rename User Waypoint, Delete All User Waypoints, Waypoint Setup (temporary or normal), Use Present Position | Missing |
 | Nearest airports | Select Airport/Runway/Frequency/Approach Window, Load Approach | Done |
-| Nearest VOR | Select VOR Window, Select Frequency Window | Missing |
+| Nearest VOR | Select VOR Window, Select Frequency Window | Done |
 | Nearest airspaces | Select Alerts Window | Missing / No data |
-| Trip planning | Flight Plan Mode, Waypoints Mode, Auto Mode, Manual Mode | Partial: AUTO, MANUAL and FPL as softkeys; no PAGE MENU |
+| Trip planning | Flight Plan Mode, Waypoints Mode, Auto Mode, Manual Mode | Partial: Flight Plan, Auto and Manual Mode (and their softkeys); Waypoints Mode grey (WPTS not ported) |
 | Utility | Reset Flight Timer, Reset Departure Time, Reset Trip ODOM/AVG GS, Reset Odometer, Reset Maximum Speed, Reset All | Done |
-| AUX GPS status | Set WPT to Present Position (RAIM prediction) | Missing |
+| AUX GPS status | Set WPT to Present Position (RAIM prediction) | Partial: adds a PPOS user waypoint to `points` and shows it in RAIM PREDICTION's waypoint field; the prediction itself grey (no satellites) |
 | Weather (XM, FIS-B, Connext), traffic, TAWS, terrain, Stormscope, Iridium phone and text | Product groups, legends, operate/standby/test, inhibit, show flight IDs, call and message actions | No data |
 
 ## Dialogs and flows
