@@ -26,6 +26,12 @@ export type AfcsInput = Pick<
    */
   vnv?: { dev: number | null; target: number; vsr: number } | null;
   /** On the ground the GA switch selects takeoff mode. */ onGround?: boolean;
+  /**
+   * AFCS failures the host flags (Pilot's Guide, AFCS status alerts): `roll` (ROLL), `pitch` (PTCH) and `system` (SYS)
+   * disconnect the autopilot and keep it off, the flight director staying; `pft` fails the preflight test (PFT in red),
+   * which keeps both off.
+   */
+  faults?: Partial<Record<"roll" | "pitch" | "system" | "pft", boolean>>;
 };
 
 export interface AfcsField { text: string; color: "white" | "green" | "yellow" | "red"; flash: boolean }
@@ -35,6 +41,8 @@ export interface AfcsDisplay {
   verticalActive: AfcsField; verticalReference: AfcsField; verticalArmed: AfcsField;
   /** FLC's airspeed reference, knots, with its bug; null hides them. */ airspeedRef: number | null;
   /** Overspeed: MAXSPD flashes yellow in the airspeed reference box. */ maxspd: boolean;
+  /** The AFCS status alert above the airspeed tape: PFT (white while the preflight test runs, red if it failed), or
+   * ROLL, PTCH or SYS in red; blank otherwise. */ alert: AfcsField;
 }
 export interface AfcsOutput {
   /** Command bars, degrees; null when the flight director is off. */ fd: { pitch: number; roll: number } | null;
@@ -45,7 +53,15 @@ export interface AfcsOutput {
 export interface AfcsOptions {
   /** Highest autopilot airspeed, knots: above it MAXSPD shows and the flight director pitches up. Set the aircraft's. */
   maxSpeed?: number;
+  /** The preflight test, seconds (default `PFT_S`; 0 skips it): it starts at the first `update` with valid attitude, so
+   * after the AHRS aligns. */
+  pft?: number;
+  /** Called once when the preflight test passes, where the real unit sounds the autopilot disconnect tone. */
+  onPreflightPass?: () => void;
 }
+
+/** How long the preflight test runs, seconds. Assumed: the Pilot's Guide gives no time, only that it runs at power-up. */
+export const PFT_S = 5;
 
 // Pilot's Guide limits and steps.
 const PITCH = [-15, 20] as const;
@@ -93,16 +109,21 @@ export class Afcs {
   private flash: { lat?: Flash; vert?: Flash; ap?: Flash } = {};
   private s: AfcsInput = START;
   private now = 0;
+  /** When the preflight test ends, ms: null until attitude is valid, 0 once it has passed. */
+  private pftEnd: number | null;
 
-  constructor(private options: AfcsOptions = {}) {}
+  constructor(private options: AfcsOptions = {}) {
+    this.pftEnd = (options.pft ?? PFT_S) > 0 ? null : 0;
+  }
 
   /** An AFCS key on the bezel, or a switch on the yoke or panel. Acts on the state the last `update` was given. */
   press(key: AfcsKey | AfcsSwitch): void {
     const s = this.s;
+    if (this.testing) return; // the autopilot and flight director cannot engage until the preflight test passes
     if (key === "AP_DISC") return this.ap ? this.disconnect(false) : void delete this.flash.ap; // also acknowledges
     if (key === "AP") {
       if (this.ap) return this.disconnect(false);
-      if (s.failed.attitude) return;
+      if (s.failed.attitude || this.servoFault) return;
       this.ap = true;
       delete this.flash.ap;
       if (!this.fdOn) this.activate();
@@ -138,6 +159,7 @@ export class Afcs {
 
   /** The control wheel steering button, held down (true) and released. */
   cws(down: boolean): void {
+    if (this.testing) return;
     if (down && !this.fdOn && !this.ap) this.activate();
     this.held = down;
     if (!down) this.sync();
@@ -148,6 +170,13 @@ export class Afcs {
     const prev = this.s;
     this.s = s;
     this.now = now;
+    if (this.pftEnd === null && !s.failed.attitude) this.pftEnd = now + (this.options.pft ?? PFT_S) * 1000;
+    if (this.pftEnd && now >= this.pftEnd && !s.faults?.pft) {
+      this.pftEnd = 0;
+      this.options.onPreflightPass?.();
+    }
+    if (this.ap && this.servoFault) this.disconnect(true);
+    if (this.testing && this.fdOn) this.off();
     if (s.failed.attitude) {
       // Invalid attitude: the flight director cannot compute its modes; the autopilot disconnects with a red AP.
       if (this.ap) this.disconnect(true);
@@ -165,6 +194,17 @@ export class Afcs {
       this.verticalTransitions(prev);
     }
     return { fd: this.command(), ap: this.ap && !this.held, display: this.draw() };
+  }
+
+  /** The preflight test is running, or has failed. */
+  private get testing() {
+    return this.pftEnd !== 0 || !!this.s.faults?.pft;
+  }
+
+  /** A ROLL, PTCH or SYS failure: no autopilot. */
+  private get servoFault() {
+    const f = this.s.faults;
+    return !!(f?.roll || f?.pitch || f?.system);
   }
 
   // Key handling.
@@ -519,9 +559,12 @@ export class Afcs {
     const field = (text: string, color: AfcsField["color"], f?: Flash): AfcsField =>
       f && f.until > now ? { text, color: f.color, flash: true } : { text, color, flash: false };
     const ap = this.flash.ap && this.flash.ap.until > now ? this.flash.ap : undefined;
+    const f = this.s.faults;
+    const alert = field(f?.system ? "SYS" : f?.pitch ? "PTCH" : f?.roll ? "ROLL" : this.pftEnd || f?.pft ? "PFT" : "", // nothing until it starts
+      f?.system || f?.pitch || f?.roll || f?.pft ? "red" : "white");
     const status = this.ap ? field(this.held ? "CWS" : "AP", this.held ? "white" : "green") : ap ? field("AP", ap.color, ap) : blank;
     if (!this.fdOn) {
-      return { lateralArmed: blank, lateralActive: blank, status, verticalActive: blank, verticalReference: blank, verticalArmed: blank, airspeedRef: null, maxspd: false };
+      return { lateralArmed: blank, lateralActive: blank, status, verticalActive: blank, verticalReference: blank, verticalArmed: blank, airspeedRef: null, maxspd: false, alert };
     }
     const r = this.ref;
     const reference = this.vert === "ALT" || this.vert === "ALTS" || this.vert === "ALTV" ? `${r.alt}FT`
@@ -543,6 +586,7 @@ export class Afcs {
       verticalArmed: { text: armed, color: "white", flash: pending },
       airspeedRef: this.vert === "FLC" ? r.spd : null,
       maxspd: this.overspeed(),
+      alert,
     };
   }
 }
