@@ -199,6 +199,8 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
 - **Attitude and turn rate** (Pilot's Guide): the turn rate band has ticks at half-standard and standard rate each side, with the trend vector drawn through them. FG1000 draws the band alone.
 - **Bezel shading:** FG1000's fascia shades its left column darker than its right (an extra overlay and a fainter edge strip); here both match the right.
 - **Colors:** the cursor and selectable text are full cyan (FG1000: a paler #80ffff), and the page group window shows the selected page in cyan and the rest in white (FG1000: lilac and grey).
+- **Font:** the screens draw every text in Saira Semi Condensed Medium, bundled (SIL Open Font License 1.1, `src/fonts/`), chosen for its likeness to the trainer's lettering; FG1000 names Liberation Sans Narrow and does not bundle it. The bezel keeps FG1000's lettering. The trainer's own font is Garmin's and is not used.
+- **MFD windows:** drawn as the trainer draws them, in a light grey frame with black boxes whose titles step their top edge (FG1000: black windows, grey title tabs). PAGE MENU and the flight plan tools' windows are dark grey and fit their contents, with a cursor bar across the whole row. MAP SETUP, PROCEDURES, DIRECT TO, the waypoint approach panel and the AUX pages are full-height and mid grey; MAP SETUP keeps its group in a box of its own, its labels on the grey and its values in a black column.
 
 - **Softkey layouts** follow the trainer: DME on the PFD's top row and PFD menu; WX LGND, PRECIP and METAR in the inset menu; DCLTR, SHW CHRT and CHKLIST in the last three MFD slots; BACK in the eleventh slot of the ENGINE, LEAN, SYSTEM and MAP menus; LEAN's CYL SLCT and ASSIST and SYSTEM's RST FUEL and GAL REM where the trainer has them.
 - **Dim keys:** a key whose function is unavailable is grey and does nothing. OBS is dim with no flight plan. Keys for data this package has no source for (weather, topography, terrain, charts, map legend) are always dim. The inset's DCLTR stays working, although the trainer dims it.
@@ -325,8 +327,6 @@ EOF
 - The audio panel (the demo has its DISPLAY BACKUP button only), and typing the scheduler's messages on the keyboard.
 - PAGE MENU on pages other than the navigation map, flight plan and DIRECT TO, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice).
 - The GFC 700's status alerts above the airspeed tape (PFT, PTRM, mistrim, ROLL, PTCH, SYS) and its preflight test, the VS reference box and bug above the vertical speed tape, the GPS to LOC switch on an ILS keeping GPS active (it reverts to ROL as a manual switch does), the VNV non-path descent recapture rule and overspeed reversion, the MET switch, the trim and the servos; the engine strip's LEAN and SYSTEM pages and its invalid flags, the MFD's red COM/NAV fields (`failed` is the PFD's), and the map's range ring and measure bearing/distance in pan mode.
-
-FG1000 renders in Liberation Sans Narrow, which is not bundled. Without that font installed, some narrow labels fall back to a wider font.
 
 ## Contributing
 

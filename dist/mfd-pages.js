@@ -515,18 +515,37 @@ function cursorBoxes(g) {
         t.before(box);
     }
 }
+// v13 trainer's MFD windows: a menu (PAGE MENU) dark grey, a full-height window (MAP SETUP, PROCEDURES, DIRECT TO) mid
+// grey, both in a light grey frame, with black boxes under stepped titles. FG1000 draws black windows with grey tabs.
+const WINDOW_BG = "#24282c";
+const PANEL_GREY = "#5f6266";
+const WINDOW_FRAME = "#c0c0c0";
+/** A window at x, y, w by h filled `fill`, in the trainer's frame: light grey with a darker bevel inside. */
+const windowRect = (x, y, w, h, fill) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" style="fill:${fill};stroke:${WINDOW_FRAME};stroke-width:3"/>` +
+    `<rect x="${x + 2.5}" y="${y + 2.5}" width="${w - 5}" height="${h - 5}" style="fill:none;stroke:#404040;stroke-width:1"/>`;
+/** A black box at x, y, w by h, `title` at its top left: the left side rises to the title's middle and a tick after
+ * the title steps down to the top edge (v13 trainer). */
+const tabbedBox = (x, y, w, h, title) => {
+    const end = x + 12 + title.length * 8.5; // Saira Semi Condensed capitals at 14.5px
+    return `<rect x="${x}" y="${y}" width="${w}" height="${h}" style="fill:#000000;stroke:none"/>` +
+        `<path d="M${x},${y + h}V${y - 9}H${x + 5}M${end},${y - 9}V${y}H${x + w}V${y + h}H${x}" style="fill:none;stroke:${WINDOW_FRAME};stroke-width:1"/>` +
+        `<text x="${x + 8}" y="${y - 3}" fill="#ffffff" style="font-family:'Liberation Sans',sans-serif;font-size:14.5px">${title}</text>`;
+};
+/** Greys an FG1000 window page's background (#181818) and title tabs (#4b4b4b) to the trainer's window grey. */
+function trainerWindow(root) {
+    for (const e of root?.querySelectorAll("rect, path") ?? [])
+        if (/fill:#(181818|4b4b4b)/.test(e.getAttribute("style") ?? ""))
+            e.style.fill = PANEL_GREY;
+}
 // WPT - APPROACH INFORMATION's boxes: title, top, rows shown. Fixed, so the sequence box gets what is left.
 const APR_BOXES = { AIRPORT: [77, 2], APPROACHES: [166, 5], TRANSITIONS: [338, 3], MINIMUMS: [458, 1], SEQUENCE: [524, 7] };
 /** Draws WPT - APPROACH INFORMATION's window from `AprInfo.view` (our own layout: FG1000 has no such page). */
 function aprPanel(v, use, name) {
-    const BG = "#1a3030";
-    let out = `<rect x="724.5" y="53.5" width="310" height="689" fill="${BG}" stroke="#ffffff"/>`;
+    let out = windowRect(725, 54, 309, 688, PANEL_GREY);
     const box = (title) => {
         const [y, n] = APR_BOXES[title];
-        out += `<rect x="730.5" y="${y}" width="289" height="${n * 26 + 16}" fill="#000000" stroke="#ffffff"/>` +
-            `<rect x="745.5" y="${y - 10}" width="${title.length * 9 + 12}" height="20" fill="${BG}" stroke="#ffffff"/>` +
-            `<text x="751" y="${y + 5}" fill="#ffffff" style="font-family:'Liberation Sans',sans-serif;font-size:14.5px">${title}</text>`;
-        return (i) => y + 30 + i * 26; // the first row clear of the title tab
+        out += tabbedBox(730.5, y, 289, n * 26 + 16, title);
+        return (i) => y + 30 + i * 26;
     };
     // A list scrolled to keep the cursor (or the first row) in view.
     const list = (title, rows, fill) => {
@@ -995,6 +1014,7 @@ class WaypointEntryPage extends MapPage {
     done = () => { };
     constructor(m, screen) {
         super(m, "WaypointEntry", screen, DTO_MAP);
+        trainerWindow(this.root);
     }
     /** Opens blank, then takes the inner knob turn `d` that opened it. */
     open(done, d) {
@@ -1090,6 +1110,7 @@ class DirectToPage extends MapPage {
     sub = new WaypointSubmenu(this.p, this.m);
     constructor(m, screen) {
         super(m, "DirectTo", screen, DTO_MAP);
+        trainerWindow(this.root);
     }
     open(id) {
         [this.id, this.onActivate, this.crsr] = [id, !!id, true];
@@ -1215,13 +1236,14 @@ class ProceduresPage extends MfdPage {
         // v13 trainer: ACTIVATE? on an approach the GPS may not fly asks first.
         const ask = ["- NOT APPROVED FOR GPS -", "GPS guidance is for", "monitoring only.", "Activate approach?"].map((t, i) => label(t, 300 + i * 30, "#ffffff")).join("");
         g.innerHTML =
-            `<rect x="724.5" y="53.5" width="310" height="689" style="fill:#1a3030;stroke:#ffffff;stroke-width:1"/>` +
-                `<g id="ProceduresMenu">${label("PROCEDURES", 85)}${menu}</g>` +
+            windowRect(725, 54, 309, 688, PANEL_GREY) +
+                `<g id="ProceduresMenu">${label("PROCEDURES", 85, "#ffffff")}${tabbedBox(730.5, 106, 289, PROC_MENU.length * 30 + 10, "OPTIONS")}${menu}</g>` +
                 `<g id="ProceduresSelect">` +
-                label("APPROACH", 85) + text("ID", 874, 120, "#ffffff", 24, "middle") + text("Name", 874, 148, "#ffffff", 19.35, "middle") +
-                label("SELECT APPROACH", 182) + rows + label("TRANSITION", 392) +
+                label("APPROACH", 85, "#ffffff") + tabbedBox(730.5, 98, 289, 60, "AIRPORT") +
+                text("ID", 874, 124, "#ffffff", 24, "middle") + text("Name", 874, 150, "#ffffff", 19.35, "middle") +
+                tabbedBox(730.5, 186, 289, PROC_ROWS * 26 + 10, "SELECT APPROACH") + tabbedBox(730.5, 396, 289, PROC_ROWS * 26 + 10, "TRANSITION") + rows +
                 text("Load", 874, 610, "#ffffff", 22, "middle") + text("Activate", 874, 645, "#ffffff", 22, "middle") + `</g>` +
-                `<g id="ProceduresAsk"><rect x="734.5" y="270" width="290" height="190" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>` +
+                `<g id="ProceduresAsk"><rect x="734.5" y="270" width="290" height="190" style="fill:#000000;stroke:${WINDOW_FRAME};stroke-width:1"/>` +
                 `${ask}${text("Yes", 834, 440, "#ffffff", 22, "middle")}${text("No", 914, 440, "#ffffff", 22, "middle")}</g>`;
         after.after(g);
         this.root = g;
@@ -1309,11 +1331,7 @@ export class PageMenuPage extends MfdPage {
         let rows = "";
         for (let i = 0; i < MENU_ROWS; i++)
             rows += text("", 744, 150 + i * 27, "start", `Option${i}`);
-        g.innerHTML =
-            `<rect x="724.5" y="53.5" width="310" height="390" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>` +
-                text("PAGE MENU", 874, 82, "middle") + text("OPTIONS", 740, 115) +
-                `<rect x="734.5" y="120.5" width="290" height="${MENU_ROWS * 27 + 12}" style="fill:none;stroke:#808080;stroke-width:1"/>` +
-                text("Press the FMS CRSR knob to", 874, 395, "middle") + text("return to base page", 874, 420, "middle") + rows;
+        g.innerHTML = `<g id="PageMenuFrame"/>` + rows;
         after.after(g);
         this.root = g;
     }
@@ -1327,6 +1345,14 @@ export class PageMenuPage extends MfdPage {
     open(options, title, back = null) {
         [this.options, this.base, this.crsr, this.back, this.backCrsr] = [options, title, true, back, back?.crsr ?? false];
         this.at = firstOption(options.map((o) => !!o.act));
+        // v13 trainer: the window fits its options
+        const bottom = 120.5 + Math.min(Math.max(options.length, 1), MENU_ROWS) * 27 + 12;
+        const text = (t, y) => `<text x="874" y="${y}" fill="#ffffff" text-anchor="middle" style="font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px">${t}</text>`;
+        this.root.querySelector("#PageMenuFrame").innerHTML =
+            `<rect x="725" y="54" width="309" height="${bottom + 82 - 54}" style="fill:${WINDOW_BG};stroke:${WINDOW_FRAME};stroke-width:3"/>` +
+                `<rect x="727.5" y="56.5" width="304" height="${bottom + 77 - 54}" style="fill:none;stroke:#606060;stroke-width:1"/>` + // the frame's bevel
+                text("PAGE MENU", 82) + tabbedBox(734.5, 120.5, 290, bottom - 120.5, "OPTIONS") +
+                text("Press the FMS CRSR knob to", bottom + 37) + text("return to base page", bottom + 62);
     }
     fms(_outer, d) {
         this.at = stepMenu(this.options.map((o) => !!o.act), this.at, d);
@@ -1354,7 +1380,7 @@ export class PageMenuPage extends MfdPage {
         for (let i = 0; i < MENU_ROWS; i++) {
             const o = this.options[top + i];
             this.p.text(`Option${i}`, o?.label ?? "", o?.act ? CYAN : "#808080");
-            this.m.hl.set(this.p.el(`Option${i}`), !!o && top + i === this.at);
+            this.m.hl.set(this.p.el(`Option${i}`), !!o && top + i === this.at, { x: 738, w: 283 });
         }
     }
 }
@@ -1375,12 +1401,13 @@ export class MapSetupPage extends MfdPage {
         const text = (t, x, y, anchor = "start", id = "", fill = "#ffffff") => `<text ${id && `id="MapSetup${id}"`} x="${x}" y="${y}" fill="${fill}" text-anchor="${anchor}" style="${style}">${t}</text>`;
         let rows = "";
         for (let i = 0; i < SETUP_ROWS; i++)
-            rows += text("", 744, 150 + i * 27, "start", `Label${i}`) + text("", 1014, 150 + i * 27, "end", `Value${i}`, CYAN);
+            rows += text("", 738, 196 + i * 27, "start", `Label${i}`) + text("", 1012, 196 + i * 27, "end", `Value${i}`, CYAN);
+        // v13 trainer: the group in a box of its own, the settings' labels on the window and their values in a black column.
         g.innerHTML =
-            `<rect x="724.5" y="53.5" width="310" height="390" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>` +
-                text("MAP SETUP", 874, 82, "middle") + text("GROUP", 740, 115) + text("", 1014, 115, "end", "Group", CYAN) +
-                `<rect x="734.5" y="120.5" width="290" height="${SETUP_ROWS * 27 + 12}" style="fill:none;stroke:#808080;stroke-width:1"/>` +
-                text("Press the FMS CRSR knob to", 874, 395, "middle") + text("return to base page", 874, 420, "middle") + rows;
+            windowRect(725, 54, 309, 688, PANEL_GREY) + text("MAP SETUP", 874, 82, "middle") +
+                tabbedBox(734.5, 112.5, 290, 34, "GROUP") + text("", 744, 137, "start", "Group", CYAN) +
+                `<rect x="886.5" y="172.5" width="138" height="${SETUP_ROWS * 27 + 12}" style="fill:#000000;stroke:${WINDOW_FRAME};stroke-width:1"/>` +
+                text("Press the FMS CRSR knob to", 874, 700, "middle") + text("return to base page", 874, 725, "middle") + rows;
         after.after(g);
         this.root = g;
     }
@@ -1419,10 +1446,10 @@ export class MapSetupPage extends MfdPage {
         const g = SETUP_GROUPS[this.group];
         const s = this.settings();
         this.p.text("Group", g.name);
-        this.m.hl.set(this.p.el("Group"), this.at === -1);
+        this.m.hl.set(this.p.el("Group"), this.at === -1, { x: 738, w: 283 });
         for (let i = 0; i < SETUP_ROWS; i++) {
             const r = g.rows[i];
-            this.p.text(`Label${i}`, r?.label ?? "", r?.step ? "#ffffff" : "#808080");
+            this.p.text(`Label${i}`, r?.label ?? "", r?.step ? "#ffffff" : "#a8abae"); // dim, readable on the grey window
             this.p.text(`Value${i}`, r?.step ? r.value(s) : "");
             this.m.hl.set(this.p.el(`Value${i}`), i === this.at);
         }
@@ -1472,7 +1499,7 @@ export class FplToolPage extends MfdPage {
     draw() {
         const text = panelText;
         const rows = this.tool.rows(this.s);
-        let out = `<rect x="724.5" y="53.5" width="310" height="${rows.length * 27 + 90}" style="fill:#000000;stroke:#ffffff;stroke-width:1"/>`;
+        let out = windowRect(725, 54, 309, rows.length * 27 + 89, WINDOW_BG);
         rows.forEach((r, i) => {
             const y = i === 0 ? 82 : 100 + i * 27;
             if (r.title) {
@@ -1489,18 +1516,15 @@ export class FplToolPage extends MfdPage {
         cursorBoxes(this.g);
     }
 }
-const PANEL_BG = "#1a3030";
 /** A box of what this package does not carry out, grey. */
 const greyBox = (title, rows) => ({ title, rows: rows.map(([label, value]) => ({ label, value, dim: true })) });
 /** `boxes` stacked down a column at x, w wide, from y. */
 function panelColumn(x, w, y, boxes, rowH = 23) {
     let out = "";
     for (const b of boxes) {
-        out += `<rect x="${x + 0.5}" y="${y + 0.5}" width="${w}" height="${b.rows.length * rowH + 12}" fill="#000000" stroke="#ffffff"/>` +
-            `<rect x="${x + 15.5}" y="${y - 9.5}" width="${b.title.length * 9 + 12}" height="20" fill="${PANEL_BG}" stroke="#ffffff"/>` +
-            `<text x="${x + 21}" y="${y + 5}" fill="#ffffff" style="font-family:'Liberation Sans',sans-serif;font-size:14.5px">${esc(b.title)}</text>`;
+        out += tabbedBox(x + 0.5, y + 0.5, w, b.rows.length * rowH + 12, esc(b.title));
         b.rows.forEach((r, i) => {
-            const ry = y + 28 + i * rowH;
+            const ry = y + 24 + i * rowH; // centered in the box: Saira sits lower than Liberation
             const fill = (on, normal) => (on ? "#000000" : r.dim ? "#808080" : normal);
             out += panelText(r.label, x + 10, ry, "start", fill(r.cur === "label", r.cur === "label" ? CYAN : "#ffffff"), r.cur === "label");
             if (r.mid !== undefined)
@@ -1530,7 +1554,7 @@ class PanelPage extends MfdPage {
         this.root = this.g;
     }
     paint(left, right) {
-        this.g.innerHTML = `<rect x="150.5" y="53.5" width="884" height="689" fill="${PANEL_BG}" stroke="#ffffff"/>` +
+        this.g.innerHTML = windowRect(151, 54, 883, 688, PANEL_GREY) +
             panelColumn(160, 425, 75, left) + panelColumn(600, 425, 75, right);
         cursorBoxes(this.g);
     }

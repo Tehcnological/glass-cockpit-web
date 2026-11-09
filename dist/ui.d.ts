@@ -18,7 +18,11 @@ export declare class Highlighter {
     private color;
     private boxes;
     constructor(color?: string);
-    set(t: SVGGraphicsElement | null, on: boolean): void;
+    /** `span`, the box's x and width when it runs across a list row (v13 trainer's menus) rather than hugging the text. */
+    set(t: SVGGraphicsElement | null, on: boolean, span?: {
+        x: number;
+        w: number;
+    }): void;
 }
 /**
  * GroupElement: `size` rows of the columns `cols` (elements <prefix><col><row>), scrolled to keep the selected row near

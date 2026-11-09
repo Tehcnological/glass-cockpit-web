@@ -1,6 +1,7 @@
 // Builds the SVG for one display unit: the 1024 x 768 screen, optionally inside the bezel FlightGear draws for its
 // FG1000 window (Dialogs/fascia.svg, screen at 186,45 of the 1407 x 918 bezel, per Nasal/GUI.nas).
 import BEZEL from "./svg/bezel.js";
+import FONT from "./svg/font.js";
 import { clipRect } from "./page.js";
 const NS = "http://www.w3.org/2000/svg";
 let displayCount = 0;
@@ -35,7 +36,13 @@ export function buildDisplay(container, pages, label, { bezel }) {
                 right.after(left);
         }
     }
+    // Departs from FG1000 (Liberation Sans Narrow, not bundled): every screen text in Saira Semi Condensed, an open font
+    // close to the v13 trainer's, bundled so it looks the same on every machine. The bezel keeps its own lettering.
+    const style = svg.appendChild(document.createElementNS(NS, "style"));
+    style.textContent = `@font-face{font-family:"Saira Semi Condensed";src:url(${FONT}) format("truetype")}` +
+        `.gcw-screen text,.gcw-screen tspan{font-family:"Saira Semi Condensed",sans-serif!important;font-stretch:normal!important}`;
     const screen = svg.appendChild(document.createElementNS(NS, "g"));
+    screen.setAttribute("class", "gcw-screen");
     if (bezel)
         screen.setAttribute("transform", "translate(187 177)");
     screen.innerHTML = `<rect width="1024" height="768" fill="#000"/>${pages.map((p) => `<g>${scopeIds(p, tag)}</g>`).join("")}`;

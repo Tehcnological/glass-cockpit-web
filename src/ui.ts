@@ -18,7 +18,8 @@ export class Highlighter {
   private boxes = new Map<Element, SVGRectElement>();
   constructor(private color = CYAN) {}
 
-  set(t: SVGGraphicsElement | null, on: boolean) {
+  /** `span`, the box's x and width when it runs across a list row (v13 trainer's menus) rather than hugging the text. */
+  set(t: SVGGraphicsElement | null, on: boolean, span?: { x: number; w: number }) {
     if (!t) return;
     let box = this.boxes.get(t);
     if (!box) {
@@ -29,11 +30,14 @@ export class Highlighter {
       this.boxes.set(t, box);
     }
     const target = (t.querySelector("tspan") ?? t) as SVGElement;
-    target.style.fill = on ? "#000000" : "";
+    // Off, it clears only its own black: a page that redrew the row in its color keeps that color.
+    if (on) target.style.fill = "#000000";
+    else if (/^(#000000|rgb\(0, 0, 0\))$/.test(target.style.fill)) target.style.fill = "";
     box.style.display = on && t.style.display !== "none" ? "inline" : "none";
     if (!on) return;
     const b = t.getBBox();
-    for (const [k, v] of Object.entries({ x: b.x - 2, y: b.y - 1, width: b.width + 4, height: b.height + 2 })) box.setAttribute(k, String(v));
+    const x = span ? { x: span.x, width: span.w } : { x: b.x - 2, width: b.width + 4 };
+    for (const [k, v] of Object.entries({ ...x, y: b.y - 1, height: b.height + 2 })) box.setAttribute(k, String(v));
     if (t.getAttribute("transform")) box.setAttribute("transform", t.getAttribute("transform")!);
   }
 }
