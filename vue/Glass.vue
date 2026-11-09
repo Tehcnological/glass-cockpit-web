@@ -9,7 +9,7 @@
 // annunciations) and `fd` (the command bars) to pass back to the PFD. `afcsKeys` on the PFD in the MFD's place draws them there.
 // The preflight test (PFT) and its `pft` and `onPreflightPass` options are the host's `Afcs`'s; `afcs` carries its alert.
 // `startup` is the PFD's AHRS alignment at power-up, seconds (the package's default when not given; 0 skips it). The PFD
-// emits `aligned` once when it ends; until then the host passes `failed.attitude` to `Afcs.update`, so the autopilot stays off.
+// emits `aligned` once when it ends (on mount with `startup: 0`); until then the host passes `failed.attitude` to `Afcs.update`, so the autopilot stays off.
 // A host imports `Afcs` from `glass-cockpit-web/afcs`, which does not load the displays.
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { AfcsDisplay, AfcsKey, GlassMfd, GlassPfd, MfdState, PfdOptions, PfdState } from "glass-cockpit-web";
@@ -68,6 +68,7 @@ onMounted(async () => {
   const onInput = ({ control }: { control: string }) => (lib.AFCS_KEYS as readonly string[]).includes(control) && emit("key", control as AfcsKey);
   if (props.unit === "mfd") mfd = new lib.GlassMfd(box.value!, { bezel: props.bezel, onChange, onInput, afcsKeys: props.afcsKeys });
   else pfd = new lib.GlassPfd(box.value!, { bezel: props.bezel, onChange, vspeeds: props.vspeeds, onInput, afcsKeys: props.afcsKeys, startup: props.startup });
+  if (pfd && !pfd.aligning) emit("aligned"); // `startup: 0`: the PFD has nothing to report, so say it here
   draw(props.state);
 });
 onUnmounted(() => (pfd?.destroy(), mfd?.destroy()));

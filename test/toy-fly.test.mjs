@@ -61,6 +61,7 @@ test("Glass.vue emits aligned when the PFD's AHRS has aligned", () => {
   const glass = readFileSync(new URL("../vue/Glass.vue", import.meta.url), "utf8");
   assert.match(glass, /aligned: \[\]/);
   assert.match(glass, /emit\("aligned"\)/);
+  assert.match(glass, /!pfd\.aligning\) emit\("aligned"\)/, "and on mount when there is no alignment (startup: 0)");
 });
 
 test("package.json exports glass-cockpit-web/afcs, with no runtime import of the displays", () => {
