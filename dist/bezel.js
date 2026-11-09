@@ -23,6 +23,11 @@ const diagonal = (box, h, v) => ({
     box, click: "JOYSTICK_HORIZONTAL", value: h, also: { control: "JOYSTICK_VERTICAL", value: v },
     arrow: "drawn", dir: (Math.atan2(v, h) * 180) / Math.PI, size: 0.6,
 });
+// The RANGE cluster's boxes are placed on the fascia's knob and its printed arrows, - and +, not where GUI.nas puts them
+// (the knob, up and down 6 px right of the art, left and right 8 px low; README, "Where it follows the G1000 trainer"),
+// so the hover glow lands on what it lights. `range` takes edges relative to the knob's center.
+const [RX, RY] = [1314, 526];
+const range = (l, t, r, b) => [RX + l, RY + t, RX + r, RY + b];
 // GUI.nas WHEEL_HOT_SPOTS and CLICK_HOT_SPOTS merged per control, in bezel pixels (top left, bottom right).
 export const SPOTS = [
     { box: [65, 45, 112, 90], wheel: "NAV_VOL", click: "NAV_ID" },
@@ -35,14 +40,12 @@ export const SPOTS = [
     { box: [1250, 100, 1300, 140], click: "COM_FREQ_TRANSFER", shiftClick: "COM_FREQ_TRANSFER_HOLD" },
     { box: [1275, 170, 1355, 245], wheel: "COM_INNER", shiftWheel: "COM_OUTER", click: "COM_TOGGLE" },
     { box: [1275, 331, 1355, 410], wheel: "CRS", shiftWheel: "BARO", click: "CRS_CENTER" },
-    // The RANGE cluster's boxes are centered on the fascia's knob (1314, 526) and its printed arrows, - and +, not GUI.nas's,
-    // which sit 6 px right of them (README, "Where it follows the G1000 trainer"), so the hover glow lands on what it lights.
-    { box: [1289, 501, 1339, 551], wheel: "RANGE", click: "JOYSTICK_PRESS" },
-    // Below the RANGE - and +.
-    { box: [1255, 514, 1289, 538], click: "JOYSTICK_HORIZONTAL", value: -1, arrow: "printed" },
-    { box: [1339, 514, 1377, 538], click: "JOYSTICK_HORIZONTAL", value: 1, arrow: "printed" },
-    { box: [1289, 466, 1339, 501], click: "JOYSTICK_VERTICAL", value: -1, arrow: "printed" },
-    { box: [1289, 551, 1339, 586], click: "JOYSTICK_VERTICAL", value: 1, arrow: "printed" },
+    { box: range(-25, -25, 25, 25), wheel: "RANGE", click: "JOYSTICK_PRESS" },
+    // Below the RANGE - and +. The printed left and right arrows are 41 and 44 px from the center.
+    { box: range(-59, -12, -25, 12), click: "JOYSTICK_HORIZONTAL", value: -1, arrow: "printed" },
+    { box: range(25, -12, 63, 12), click: "JOYSTICK_HORIZONTAL", value: 1, arrow: "printed" },
+    { box: range(-25, -60, 25, -25), click: "JOYSTICK_VERTICAL", value: -1, arrow: "printed" },
+    { box: range(-25, 25, 25, 60), click: "JOYSTICK_VERTICAL", value: 1, arrow: "printed" },
     { box: [1255, 620, 1305, 660], click: "DTO" },
     { box: [1255, 670, 1305, 710], click: "FPL" },
     { box: [1255, 720, 1305, 760], click: "CLR", shiftClick: "CLR_HOLD" },
@@ -53,12 +56,13 @@ export const SPOTS = [
     // SOFTKEY_HOTSPOTS
     ...[205, 290, 375, 460, 545, 630, 715, 800, 885, 970, 1055, 1145].map((x, i) => ({ box: [x, 830, x + 60, 875], click: "SOFTKEY", value: i + 1 })),
     // RANGE turns on the - and + printed beside it.
-    { box: [1264, 494, 1284, 514], wheel: "RANGE", click: "RANGE", value: -1, arrow: "printed" },
-    { box: [1348, 494, 1368, 514], wheel: "RANGE", click: "RANGE", value: 1, arrow: "printed" },
-    diagonal([1256, 470, 1288, 494], -1, -1),
-    diagonal([1340, 470, 1372, 494], 1, -1),
-    diagonal([1256, 552, 1288, 584], -1, 1),
-    diagonal([1340, 552, 1372, 584], 1, 1),
+    { box: range(-50, -32, -30, -12), wheel: "RANGE", click: "RANGE", value: -1, arrow: "printed" },
+    { box: range(34, -32, 54, -12), wheel: "RANGE", click: "RANGE", value: 1, arrow: "printed" },
+    // The lower diagonals reach up to the side arrows, so no gap below those is dead.
+    diagonal(range(-58, -56, -26, -32), -1, -1),
+    diagonal(range(26, -56, 58, -32), 1, -1),
+    diagonal(range(-58, 12, -26, 58), -1, 1),
+    diagonal(range(26, 12, 58, 58), 1, 1),
 ];
 // After the knobs' own spots, so an arrow is on top of the knob it turns.
 SPOTS.push(...SPOTS.filter((s) => s.wheel && s.wheel !== "RANGE" && !s.arrow).flatMap(arrows));

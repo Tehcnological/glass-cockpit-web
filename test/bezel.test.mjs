@@ -68,12 +68,21 @@ test("the joystick moves in eight directions and every knob pushes", () => {
     assert.ok(SPOTS.some((s) => s.click === c && !s.arrow), c);
 });
 
-test("the RANGE cluster's boxes are centered on the fascia's knob", () => {
+test("the RANGE cluster's boxes are centered on the fascia's knob and printed arrows", () => {
   const cx = (s) => (s.box[0] + s.box[2]) / 2, cy = (s) => (s.box[1] + s.box[3]) / 2;
   const knob = SPOTS.find((s) => s.click === "JOYSTICK_PRESS");
-  assert.deepEqual([cx(knob), cy(knob)], [1314, 526]);
-  for (const s of SPOTS.filter((s) => s.click === "JOYSTICK_VERTICAL")) assert.equal(cx(s), 1314);
-  for (const s of SPOTS.filter((s) => s.click === "JOYSTICK_HORIZONTAL" && !s.also)) assert.equal(cy(s), 526);
+  const [x, y] = [cx(knob), cy(knob)];
+  assert.deepEqual([x, y], [1314, 526]); // the fascia's knob
+  for (const s of SPOTS.filter((s) => s.click === "JOYSTICK_VERTICAL")) assert.equal(cx(s), x);
+  const side = SPOTS.filter((s) => s.click === "JOYSTICK_HORIZONTAL" && !s.also);
+  for (const s of side) assert.equal(cy(s), y);
+  // - and + on the printed glyphs, level with each other, above the side arrows.
+  const [minus, plus] = SPOTS.filter((s) => s.click === "RANGE").sort((a, b) => a.box[0] - b.box[0]);
+  assert.deepEqual([cx(minus), cy(minus), cx(plus), cy(plus)], [1274, 504, 1358, 504]);
+  // The diagonals mirror each other about the knob, and the lower ones meet the side arrows with no dead band between.
+  const diag = SPOTS.filter((s) => s.also);
+  for (const d of diag) assert.ok(diag.some((e) => e !== d && cx(e) - x === x - cx(d) && cy(e) === cy(d)), String(d.box));
+  for (const d of diag.filter((d) => d.also.value > 0)) assert.equal(d.box[1], side[0].box[3]);
 });
 
 test("an arrow covers no other button", () => {

@@ -2,6 +2,7 @@
 // FG1000 window (Dialogs/fascia.svg, screen at 186,45 of the 1407 x 918 bezel, per Nasal/GUI.nas).
 import BEZEL from "./svg/bezel.js";
 import { clipRect } from "./page.js";
+import { NO_SELECT } from "./display-backup.js";
 // From dist/, the font in src/fonts/ (both ship in the package; README "Font").
 const FONT = new URL("../src/fonts/SairaSemiCondensed-Medium.ttf", import.meta.url).href;
 const NS = "http://www.w3.org/2000/svg";
@@ -19,12 +20,10 @@ export function scopeIds(markup, tag) {
 }
 export function buildDisplay(container, pages, label, { bezel }) {
     const tag = `glass-d${++displayCount}-`;
-    container.innerHTML = `<svg xmlns="${NS}" viewBox="${bezel ? "1 132 1407 918" : "0 0 1024 768"}" role="img"></svg>`;
+    // A display is a control surface (clicks and double clicks work its keys and knobs), so its text does not select.
+    container.innerHTML = `<svg xmlns="${NS}" viewBox="${bezel ? "1 132 1407 918" : "0 0 1024 768"}" role="img" style="${NO_SELECT}"></svg>`;
     const svg = container.querySelector("svg");
     svg.setAttribute("aria-label", label);
-    // A display is a control surface (clicks and double clicks work its keys and knobs), so its text does not select.
-    for (const k of ["user-select", "-webkit-user-select"])
-        svg.style.setProperty(k, "none");
     if (bezel) {
         svg.innerHTML = scopeIds(BEZEL, tag);
         // fascia.svg shades its two side columns unevenly (the left has an extra black overlay and a fainter edge strip), so
