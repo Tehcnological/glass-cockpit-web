@@ -28,9 +28,9 @@ test("vector-to-final without a FAF to fly to goes direct from the aircraft", ()
 
 test("loading an approach clears vector-to-final; activating sets or clears it", () => {
   const pts = [pt("A", "IF"), pt("B", "FAF")];
-  assert.deepEqual(approachPatch(["KAAA"], pts, "load", here), { route: ["KAAA", ...pts], vtf: false });
-  assert.deepEqual(approachPatch(["KAAA"], pts, "activate", here), { route: ["KAAA", ...pts], activeLeg: 1, directFrom: here, vtf: false });
-  assert.deepEqual(approachPatch(["KAAA"], pts, "vectors", here), { route: ["KAAA", ...pts], activeLeg: 2, directFrom: null, vtf: true });
+  assert.deepEqual(approachPatch(["KAAA"], pts, "load", here), { route: ["KAAA", ...pts], vtf: false, susp: false });
+  assert.deepEqual(approachPatch(["KAAA"], pts, "activate", here), { route: ["KAAA", ...pts], activeLeg: 1, directFrom: here, vtf: false, susp: false });
+  assert.deepEqual(approachPatch(["KAAA"], pts, "vectors", here), { route: ["KAAA", ...pts], activeLeg: 2, directFrom: null, vtf: true, susp: false });
 });
 
 test("a loaded approach is found by its marked fixes, not by point identity", () => {

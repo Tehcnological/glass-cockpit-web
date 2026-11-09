@@ -63,7 +63,7 @@ The container must be in the page and visible when a display is created, since r
 Two callbacks let a host follow the controls:
 
 - `onScheduler(message)` (MFD) hands over a scheduler message from AUX - UTILITY when it comes due; add it to the PFD's `alerts` and the ALERTS key reads ADVISORY. The demo does. The host decides when to take it off.
-- `onChange(patch)` reports state the controls changed, so a host can keep a PFD and MFD in step. Both units also report `route`, `activeLeg`, `directFrom` and `vtf` when the flight plan's PAGE MENU, DIRECT TO or PROC change them.
+- `onChange(patch)` reports state the controls changed, so a host can keep a PFD and MFD in step. Both units also report `route`, `activeLeg`, `directFrom`, `vtf` and `susp` when the flight plan's PAGE MENU, DIRECT TO, PROC or SUSP change them, and `susp` when the aircraft passes the missed approach point.
 - `onInput({ control, value })` reports every input, including ones the display does not act on.
 
 ### PFD
@@ -159,7 +159,7 @@ Every PFD softkey that is not dim works:
 
 - **INSET:** DCLTR, range.
 - **PFD:** BRG1/BRG2 cycle OFF, NAV1, NAV2, GPS, ADF over `bearings`; WIND; ALT UNIT meters and hPa; STD BARO; DFLTS.
-- **OBS, CDI.**
+- **OBS, CDI.** OBS reads SUSP while sequencing is suspended at the missed approach point (see PROC below).
 - **XPDR:** modes, code entry, IDENT.
 - **TMR/REF:** the FMS outer knob picks a field, the inner changes it, ENT starts and stops the timer.
 - **NRST:** FMS scrolls, ENT shows the airport, CLR goes back.
@@ -221,6 +221,7 @@ Where Garmin's G1000 trainer (v13.02, Cessna 172S) and FG1000 differ, this packa
   `heading` flags the heading box (FG1000's flag; the trainer's magnetometer failure was not checked). FG1000's NO GPS POSITION flag is not used on the PFD.
 - **DME:** PFD > DME shows the DME window left of the HSI: the NAV radio, its active frequency and the distance from `bearings` (dashes without one). The top-row DME key opens DME TUNING, where the small FMS knob switches NAV1 and NAV2. No HOLD.
 - **PROC** opens a PROCEDURES menu: ACTIVATE VECTOR-TO-FINAL and ACTIVATE APPROACH (grey until an approach is loaded), ACTIVATE MISSED APPROACH (grey until one with a missed approach is loaded), SELECT APPROACH, and SELECT ARRIVAL and SELECT DEPARTURE (always grey, not ported). Activating an approach the GPS may not fly (anything but RNAV (GPS) and GPS approaches), from ACTIVATE? or the menu, asks NOT APPROVED FOR GPS, YES or NO; NO goes back without activating. CLR goes back from SELECT APPROACH to the menu. PROC marks the fixes it loads with `approach` (the approach's name), which is how it finds the loaded approach. ACTIVATE with the VECTORS transition, or ACTIVATE VECTOR-TO-FINAL, makes the final approach fix active with no leg from the aircraft (direct from the aircraft when the approach has no fix before its FAF), and sets `vtf` on the unit (reported through `onChange`; the PFD keeps it too, which dims Cancel Direct-To NAV) so a host can label the PFD's active leg, as the trainer does: `{ from: "vtf 356°", to: "TWOFA faf" }`. The PFD flight plan tags approach fixes in lowercase: `faf`, `map`. `gpsApproved` and `vtfLeg` are exported for hosts.
+- **SUSP** (Pilot's Guide; FG1000 has no suspend and would sequence onto the missed approach): with the loaded approach's missed approach point active, once the aircraft passes it (beyond the MAP along the leg into it) both units set `susp` and report it through `onChange`. The MAP stays the active waypoint and the GPS CDI stays on the final course; the PFD's OBS softkey reads SUSP, lit, and the HSI's GPS annunciation reads SUSP. The units do not sequence the plan themselves: a host that sequences `activeLeg` holds at the MAP while `susp` is set. Pressing SUSP, or ACTIVATE MISSED APPROACH (before or after the MAP), makes the leg from the MAP to the first missed approach fix active. An approach with no missed approach legs stays suspended at the MAP, and SUSP does nothing. `susp` ends when the MAP stops being the active waypoint (another leg activated, the plan deleted), on a direct-to (even one to the MAP) and on loading an approach. No SUSP in OBS mode, even when a host shares `susp` from the MFD (which cannot see OBS), so OBS can always be turned off. `pastMap`, `suspended` and `missedPatch` in `nav.ts` hold the rules.
 
 ## Navdata
 
@@ -322,7 +323,7 @@ EOF
 
 - MFD pages that need data this package has no source for: weather, terrain, XM, stored flight plans, user waypoints, nearest airspaces.
 - AUX - UTILITY's flight data logger and typed scheduler times, the AUX - SYSTEM SETUP settings shown grey, Trip Planning's WPTS mode and ESA, GPS Status's sky view, signal bars, accuracy, RAIM and SBAS, and System Status's airframe, databases and ANN TEST.
-- DIRECT TO's VNAV fields, approach suspend and missed-approach sequencing.
+- DIRECT TO's VNAV fields.
 - USER and AIRWAY waypoint lists.
 - Synthetic vision, the arc HSI, DME HOLD and the GPS course-to-intercept diamond.
 - Map terrain (and Profile View's terrain and winds) and airway labels.

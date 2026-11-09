@@ -16,6 +16,7 @@ import { PAN_WPT_PAGES, PanIdle, panInfo, panMarkup, panMeasureFrom, panMove, pa
 import { AIRWAY_RANGE, drawMap, mapGroup, mapUp, profileView, rangeLabel, shownAirways, stepRange } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
+import { suspended } from "./nav.js";
 import { BLANK, Highlighter, IdEntry, NS, dimKey, key } from "./ui.js";
 import { dataBar, setupDefaults } from "./aux-pages.js";
 import { PAGE_GROUPS, makePages } from "./mfd-pages.js";
@@ -24,7 +25,7 @@ const PAN_FONT = 18;
 const DEFAULTS = {
     heading: 0, headingBug: 0, course: 0, baro: 29.92, alt: 0, selectedAlt: null, track: 0, groundspeed: 0, dtk: null, ete: null,
     lat: 0, lon: 0, magVar: 0, range: 10, orientation: "NORTH UP",
-    points: [], airspaces: [], airways: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null, vtf: false, minimums: null,
+    points: [], airspaces: [], airways: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null, vtf: false, susp: false, minimums: null,
     engine: { rpm: 0, fuelFlow: 0, oilPressure: 0, oilTemp: 0, egt: 0, vacuum: 0, fuelLeft: 0, fuelRight: 0, volts: 0, engineHours: 0 },
     radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, cdiSource: "NAV1", bearings: {}, checklists: [],
 };
@@ -364,6 +365,10 @@ export class GlassMfd {
     /** Merge new values into the state and redraw. */
     set(patch) {
         const s = (this.state = { ...this.state, ...patch });
+        // SUSP as the aircraft passes the missed approach point, reported after the redraw; a host's own `susp` is not echoed
+        // back. The MFD cannot see OBS and draws nothing for susp, so the PFD's value wins in a host that shares it.
+        const report = suspended(s) !== s.susp && !("susp" in patch);
+        s.susp = suspended(s);
         this.pages.utility.util.tick(s.groundspeed, Date.now());
         const page = this.page;
         const under = this.groupPage;
@@ -402,6 +407,8 @@ export class GlassMfd {
         if (base !== page)
             base.draw();
         page.draw();
+        if (report)
+            this.options.onChange?.({ susp: s.susp });
     }
     /** The map pan mode works on: the full navigation map, or the page's own (the flight plan page's). */
     panWindow() {

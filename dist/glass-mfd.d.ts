@@ -2,7 +2,7 @@ import { type DisplayOptions } from "./display.js";
 import { type Airspace, type Airway, type LatLon, type MapPoint, type Orientation } from "./map.js";
 import type { CdiSource } from "./glass-pfd.js";
 import { type Knobs } from "./bezel.js";
-import type { Airport, Procedure, Station } from "./nav.js";
+import { type Airport, type Procedure, type Station } from "./nav.js";
 import { type Checklist } from "./mfd-pages.js";
 export interface Engine {
     rpm: number;
@@ -39,6 +39,7 @@ export interface MfdState extends Knobs {
     /** Index into `route` of the active waypoint; the leg into it is magenta. */ activeLeg: number;
     /** Set by DIRECT TO: where the direct leg to the active waypoint starts. */ directFrom: LatLon | null;
     /** Vector-to-final is active (PROC): the active waypoint is the final approach fix, on the final course. */ vtf: boolean;
+    /** Waypoint sequencing is suspended at the approach's missed approach point (the PFD's SUSP); set as the aircraft passes the MAP. */ susp: boolean;
     /** Barometric minimums, feet; null is off. Not drawn here: PROC's approach loading sets them for the PFD (reported through `onChange`). */ minimums: number | null;
     engine: Engine;
     /** Which NAV shows green as the CDI source. */ cdiSource: CdiSource;
