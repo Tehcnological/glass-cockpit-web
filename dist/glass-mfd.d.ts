@@ -1,3 +1,4 @@
+import type { Cylinder } from "./lean.js";
 import { type DisplayOptions } from "./display.js";
 import { type Airspace, type Airway, type LatLon, type MapPoint, type Orientation } from "./map.js";
 import type { CdiSource } from "./glass-pfd.js";
@@ -15,6 +16,9 @@ export interface Engine {
     /** Gallons. */ fuelRight: number;
     volts: number;
     engineHours: number;
+    /** Four entries, cylinders 1 to 4 (the 172S's IO-360), degrees F: the LEAN page's EGT and CHT bars and lean assist.
+     * Without it (or with another count) the LEAN page's bars all show `egt` and its values are dashed. */
+    cylinders?: Cylinder[];
 }
 /** The knob values (`Knobs`) are not drawn on the MFD; its knobs change them, so a host can share them with a PFD. */
 export interface MfdState extends Knobs {

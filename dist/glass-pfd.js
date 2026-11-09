@@ -7,7 +7,7 @@ import NRST from "./svg/nrst-pfd.js";
 import NRST_INFO from "./svg/nrst-info-pfd.js";
 import FPL from "./svg/fpl-pfd.js";
 import EIS from "./svg/eis.js";
-import { drawEis, engineKeys, reversionaryLayout } from "./eis.js";
+import { EisStrip, engineBack, engineKeys, reversionaryLayout } from "./eis.js";
 import { buildDisplay } from "./display.js";
 import { Page, clamp, deg3, matrixAttr, mod, ownMatrix, pad } from "./page.js";
 import { RADIOS, Surround } from "./surround.js";
@@ -67,7 +67,7 @@ const DEFAULTS = {
     reversionary: false,
     engine: { rpm: 0, fuelFlow: 0, oilPressure: 0, oilTemp: 0, egt: 0, vacuum: 0, fuelLeft: 0, fuelRight: 0, volts: 0, engineHours: 0 },
 };
-const ENGINE_MENUS = ["engine", "lean", "system"];
+const ENGINE_MENUS = ["engine", "lean", "system", "galrem"];
 /** SETUP: the PFD SETUP MENU; MENU: the flight plan's PAGE MENU. */
 /** Whether a PAGE MENU option can be chosen: it makes a change or opens a window. */
 const on = (o) => !!(o.patch || o.tool);
@@ -138,6 +138,7 @@ export class GlassPfd {
     /** In an unusual attitude as of the last set(). */ ua = false;
     eis;
     eisBack;
+    strip;
     /** Where reversionary mode moves OAT and the inset map. */ rev;
     p;
     surround;
@@ -257,6 +258,7 @@ export class GlassPfd {
         for (const [a, v] of [["x", 0], ["y", strip.y], ["width", strip.x + strip.width], ["height", strip.height], ["fill", "#000000"]])
             this.eisBack.setAttribute(a, String(v));
         this.eis.el("Group").parentNode.insertBefore(this.eisBack, this.eis.el("Group"));
+        this.strip = new EisStrip(this.eis);
         this.rev = reversionaryLayout(screenBox(screen, this.p.el("TAS")), screenBox(screen, this.p.el("OAT")), frame);
         // Autopilot annunciations start blank, as Surround.new() leaves them.
         for (const id of AFCS)
@@ -533,7 +535,8 @@ export class GlassPfd {
             case "engine":
             case "lean":
             case "system":
-                return [...engineKeys(u.menu, (m) => () => this.go(m)), back(u.menu === "engine" ? "top" : "engine"), alerts]; // reached only from ENGINE
+            case "galrem":
+                return [...engineKeys(u.menu, (m) => () => this.go(m), this.strip), back(engineBack(u.menu)), alerts]; // reached only from ENGINE
             case "code":
                 return [...[0, 1, 2, 3, 4, 5, 6, 7].map((d) => k(String(d), () => this.xpdrDigit(String(d)))),
                     k("IDENT", () => this.ident()), k("BKSP", () => this.xpdrDigit("BKSP")), back("xpdr"), alerts];
@@ -862,7 +865,7 @@ export class GlassPfd {
         this.eis.show("Group", on);
         this.eisBack.style.display = on ? "inline" : "none";
         if (on)
-            drawEis(this.eis, s.engine);
+            this.strip.draw(s.engine, this.ui.menu);
         const move = (id, d) => this.p.el(id)?.setAttribute("transform", on ? `translate(${d.dx} ${d.dy})` : "");
         move("OAT", this.rev.oat);
         move("PFD-Map", this.rev.inset);

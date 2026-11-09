@@ -168,6 +168,7 @@ export declare class GlassPfd {
     /** In an unusual attitude as of the last set(). */ private ua;
     private eis;
     private eisBack;
+    private strip;
     /** Where reversionary mode moves OAT and the inset map. */ private rev;
     private p;
     private surround;
