@@ -87,3 +87,17 @@ test("a fast spin turns HDG and CRS five degrees a notch", () => {
   assert.deepEqual(go("HEADING", 5), { headingBug: 4 });
   assert.deepEqual(go("CRS", -5), { course: 355 });
 });
+
+test("GFC 700 keys: two columns of six in the left column between the HDG and ALT knobs, GDU 1044B order", async () => {
+  const { AFCS_SPOTS } = await import("../dist/bezel.js");
+  const rows = (x) => AFCS_SPOTS.filter((s) => s.box[0] < x).map((s) => s.click);
+  assert.deepEqual(rows(90), ["AP", "HDG", "NAV", "APR", "VS", "FLC"]);
+  assert.deepEqual(AFCS_SPOTS.filter((s) => s.box[0] >= 90).map((s) => s.click), ["FD", "ALT", "VNV", "BC", "NOSE_UP", "NOSE_DN"]);
+  for (const { box: [x1, y1, x2, y2], label } of AFCS_SPOTS) {
+    assert.ok(x1 >= 45 && x2 <= 135 && y1 > 445 && y2 < 769, label); // clear of PUSH HDG SYNC and the ALT label
+    assert.ok(label);
+  }
+  // None overlap the knobs' own spots.
+  const hit = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+  for (const s of AFCS_SPOTS) for (const t of [...SPOTS, ...AFCS_SPOTS]) if (s !== t) assert.ok(!hit(s.box, t.box), `${s.label} overlaps`);
+});

@@ -103,7 +103,7 @@ export class GlassMfd {
                 this.set({}); // still under the PAGE MENU
         }, 1000);
         if (options.bezel)
-            this.unbezel = bezelInput(svg, (i) => this.input(i));
+            this.unbezel = bezelInput(svg, (i) => this.input(i), options.afcsKeys ?? true);
         this.loadPage();
     }
     /** Stops the page menu timers. Call when the display is removed. */

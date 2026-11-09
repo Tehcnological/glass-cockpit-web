@@ -74,6 +74,32 @@ FG1000 draws the turn rate scale above the compass rose but never moves anything
 
 Past +30° or -20° pitch, or 65° bank, the PFD declutters as the Pilot's Guide describes unusual attitudes (FG1000 only removes the command bars): the OAT, wind, inset map, heading and course readouts, baro setting, selected altitude, glideslope and vertical deviation, transponder and clock, autopilot annunciations, and the TMR/REF, NRST, flight plan, PROC, DIRECT TO and setup windows go, and the INSET, PFD, XPDR, IDENT, TMR/REF and NRST softkeys dim. The attitude, airspeed, altitude, vertical speed and HSI stay, with bearing information, the DME window and ALERTS. RANGE, the joystick, MENU, DIRECT TO, PROC and FPL do nothing then, nor do the FMS knobs, ENT and CLR unless ALERTS or the DME window is open. Everything returns as the attitude recovers. `unusualAttitude(pitch, roll)` gives the test, reading bank the short way round (350 is 10° left).
 
+### Autopilot
+
+The GFC 700 flight director and autopilot (Pilot's Guide; the most capable of the 172S's two autopilot options, the other being the KAP 140). FG1000 has no autopilot logic and leaves the AFCS fields blank. Its keys are drawn in the MFD bezel's left column, where the v13 trainer and the GDU 1044B have them: AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, NOSE UP and NOSE DN (option `afcsKeys`, on for the MFD, off for the PFD; FG1000's bezel is the GDU 1040's, so they are drawn as copies of its FPL key). A press reaches `onInput` as `{ control: "AP" }` and the like.
+
+The logic is `Afcs`, without the DOM, owned by the host, since its keys are on one unit and its annunciations on the other:
+
+```js
+import { Afcs, AFCS_KEYS } from "glass-cockpit-web";
+const afcs = new Afcs({ maxSpeed: 140 }); // the aircraft's highest autopilot airspeed, knots
+const mfd = new GlassMfd(el, { bezel: true, onInput: (i) => AFCS_KEYS.includes(i.control) && afcs.press(i.control) });
+// Each frame, with the PFD's state (and `vnv`, `onGround` if the host has them):
+const out = afcs.update(pfdState, performance.now());
+pfd.set({ ...pfdState, fd: out.fd, afcs: out.display });
+if (out.ap) flyToward(out.fd); // the host moves the aircraft; GCW only draws
+```
+
+`press` also takes the yoke's `AP_DISC` and the panel's `GA`; `cws(down)` holds control wheel steering. It covers:
+
+- Flight director activation as the Pilot's Guide tabulates it (FD and AP in ROL and PIT; ALT, VS, FLC, HDG, NAV, APR, BC and VNV in their own modes), the FD key disabled while the autopilot is engaged, and a mode's key pressed again reverting that axis to ROL or PIT.
+- Lateral: ROL (wings level under 6°, holds to 22°), HDG (turning the way the bug went, past 340° reversing), NAV and APR on GPS, VOR (VAPP) or LOC, and BC, armed beyond one dot and captured inside it; LOC within 105° of the course. Bank is limited to 22° and standard rate, 10° once established on a VOR or localizer. Switching the CDI or tuning another VOR reverts to ROL; losing the signal rolls wings level with ROL flashing yellow.
+- Vertical: PIT (NOSE keys 0.5°, -15° to +20°), ALT (to the nearest 10 ft), VS (100 fpm, -2000 to +1500), FLC (1 kt, 80 to 200, never climbing or descending away from the selected altitude), ALTS armed with PIT, VS, FLC and GA and capturing to ALT at 50 ft, GS on a localizer approach and GP on an LPV, L/VNAV or LNAV+V approach, VNV (VPTH and ALTV, with the descent acknowledged by VNV or a new selected altitude) from the host's `vnv` profile, and GA (TO on the ground), which disconnects the autopilot.
+- Annunciations: armed white, active green, an automatic transition flashing green for 10 s, a lost mode yellow; AP green, CWS white, a manual disconnect flashing yellow for 5 s and an automatic one (attitude failure) red until AP DISC. FLC's airspeed reference shows above the airspeed tape with its bug, and MAXSPD flashes there past `maxSpeed` (the flight director pitches up).
+- Command bars limited to +20°/-15° pitch and 22° bank.
+
+The pitch and roll laws are this package's own, simple proportional ones: the command bars point the right way at sensible rates, not as a certified GFC 700 would fly. The demo flies its sliders toward them with a toy model, and has AP DISC, CWS and GA buttons.
+
 The airspeed tape's color strip comes from the `speedRanges` option, knots: `{ vso, vs1, vfe, vno, vne }`, white from `vso` to `vfe`, green from `vs1` to `vno`, yellow to `vne`, red above, and red under `vso` for low speed awareness. It defaults to the 172S's (`SPEEDS_172S`: 40, 48, 85, 129, 163). Its `vne` also turns the IAS box red when `vne` is not set.
 
 `reversionary: true` puts the PFD in reversionary mode, as the Pilot's Guide shows it (FG1000 does not wire it): the MFD's engine strip down the left on a black backing, drawn from `engine` (the MFD's `Engine`), OAT under TAS, the inset map in the lower right, and ENGINE on the first softkey (ENGINE, LEAN and SYSTEM, as on the MFD). FG1000's PFD already keeps the strip's width clear of the flight instruments, so they stay where they are. DISPLAY BACKUP puts both displays in reversionary mode, so the host sets it on the PFD and shows a second `GlassPfd` with it in the MFD's place; the demo lays one over the MFD, which keeps its pages for when the button is pushed again. A display that fails sends the other into reversionary mode on its own (Line Maintenance Manual): `displayModes(backup, pfdPowered, mfdPowered)` (exported with `DisplayBackup`) gives each display's mode, `normal`, `reversionary` or `off`, and the `failed` radios to cross out on the one left: COM/NAV 2 on the PFD when the MFD fails, COM/NAV 1 on the MFD's place when the PFD fails. The demo's fail PFD and fail MFD boxes show it. `Glass.vue` takes a `reversionary` prop, with `mfd.engine` for the strip.
@@ -294,11 +320,11 @@ EOF
 - AUX - UTILITY's flight data logger and typed scheduler times, the AUX - SYSTEM SETUP settings shown grey, Trip Planning's WPTS mode and ESA, GPS Status's sky view, signal bars, accuracy, RAIM and SBAS, and System Status's airframe, databases and ANN TEST.
 - DIRECT TO's VNAV fields, approach suspend and missed-approach sequencing.
 - USER and AIRWAY waypoint lists.
-- Synthetic vision, the arc HSI, DME HOLD, selected airspeed, autopilot annunciations and the GPS course-to-intercept diamond.
+- Synthetic vision, the arc HSI, DME HOLD and the GPS course-to-intercept diamond.
 - Map terrain (and Profile View's terrain and winds) and airway labels.
 - The audio panel (the demo has its DISPLAY BACKUP button only), and typing the scheduler's messages on the keyboard.
 - PAGE MENU on pages other than the navigation map, flight plan and DIRECT TO, and most of its options; display brightness; the trainer's DEMO MODE page (MENU twice).
-- The autopilot keys the trainer's MFD bezel has (AP, FD, HDG, ALT, NAV, VNV, APR, BC, VS, FLC, UP, DN), the engine strip's LEAN and SYSTEM pages and its invalid flags, the MFD's red COM/NAV fields (`failed` is the PFD's), and the map's range ring and measure bearing/distance in pan mode.
+- The GFC 700's status alerts above the airspeed tape (PFT, PTRM, mistrim, ROLL, PTCH, SYS) and its preflight test, the VS reference box and bug above the vertical speed tape, the GPS to LOC switch on an ILS keeping GPS active (it reverts to ROL as a manual switch does), the VNV non-path descent recapture rule and overspeed reversion, the MET switch, the trim and the servos; the engine strip's LEAN and SYSTEM pages and its invalid flags, the MFD's red COM/NAV fields (`failed` is the PFD's), and the map's range ring and measure bearing/distance in pan mode.
 
 FG1000 renders in Liberation Sans Narrow, which is not bundled. Without that font installed, some narrow labels fall back to a wider font.
 

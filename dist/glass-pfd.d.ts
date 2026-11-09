@@ -4,6 +4,7 @@ import { type RadioFailure, type Radios } from "./surround.js";
 import { type Airspace, type LatLon, type MapPoint } from "./map.js";
 import { type Airport, type Procedure } from "./nav.js";
 import { unusualAttitude } from "./unusual-attitude.js";
+import type { AfcsDisplay } from "./afcs.js";
 export { unusualAttitude };
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
 export type { Checklist } from "./mfd-pages.js";
@@ -14,6 +15,7 @@ export type { Radio, Radios, RadioFailure } from "./surround.js";
 export { DisplayBackup, displayModes, type DisplayMode } from "./display-backup.js";
 export type { DisplayOptions } from "./display.js";
 export type { Control, Input } from "./bezel.js";
+export { Afcs, AFCS_KEYS, type AfcsKey, type AfcsSwitch, type AfcsInput, type AfcsOutput, type AfcsDisplay, type AfcsField, type AfcsOptions } from "./afcs.js";
 export type CdiSource = "GPS" | "NAV1" | "NAV2" | "OFF";
 export type BrgSource = "OFF" | "NAV1" | "NAV2" | "GPS" | "ADF";
 /** What a bearing source points at: a station or waypoint, its bearing (magnetic) and distance (nm). */
@@ -57,6 +59,8 @@ export interface PfdState {
         pitch: number;
         roll: number;
     } | null;
+    /** The GFC 700's annunciations (`Afcs.update`'s `display`): the AFCS status box and FLC's airspeed reference. Null blanks them. */
+    afcs: AfcsDisplay | null;
     radios: Radios;
     /** NAV and COM volume, 0 to 1; a change shows on the radios for 2 seconds. */ navVolume: number;
     comVolume: number;
@@ -209,6 +213,8 @@ export declare class GlassPfd {
     private speedStrip;
     private ladderWindow;
     private updateFD;
+    /** The AFCS status box, and FLC's airspeed reference (cyan, with its bug) or MAXSPD (flashing yellow) above the tape. */
+    private updateAfcs;
     private updateIAS;
     private updateVSI;
     private updateALT;
