@@ -16,7 +16,7 @@ type FplPatch = {
     route: Route;
     activeLeg: number;
     directFrom?: LatLon | null;
-    vtf: boolean;
+    vtf?: boolean;
 };
 /** The flight plan menu for `route`; `patch` is the change an option makes, absent when it is dim here. */
 export declare function fplMenu(route: Route, activeLeg: number): {
@@ -25,10 +25,13 @@ export declare function fplMenu(route: Route, activeLeg: number): {
 }[];
 /** The flight plan's destination: its last airport, or undefined with none. */
 export declare const destination: (route: Route, airports: Pick<Airport, "id">[]) => string | undefined;
-/** WPT - AIRPORT INFORMATION's menu: `airport` shows an airport on the page, `approach` the approach view. */
+/** WPT - AIRPORT INFORMATION's menu: `airport` shows an airport on the page, `approach` the approach view, `departure`
+ * and `arrival` (absent where the airport has none) the departure and arrival views. */
 export declare function airportInfoMenu(dest: string | undefined, go: {
     airport: (id: string) => void;
     approach: () => void;
+    departure?: () => void;
+    arrival?: () => void;
 }): MenuOption[];
 /** NRST - NEAREST VOR's menu: it moves the cursor to the VOR list or the frequency, as the VOR and FREQ softkeys do. */
 export declare const nearestVorMenu: (select: (w: "LIST" | "FREQ") => void) => MenuOption[];

@@ -1018,14 +1018,25 @@ export class GlassPfd {
                 const g = f.grp;
                 const apt = s.airports.find((a) => a.id === f.airport);
                 const procs = f.procs();
-                rows.push({ label: "APPROACH", cells: [], title: true });
+                rows.push({ label: { APR: "APPROACH", SID: "DEPARTURE", STAR: "ARRIVAL" }[f.kind], cells: [], title: true });
                 rows.push({ label: "", cells: [{ text: this.procEntry.editing ? this.procEntry.value : f.airport ?? "____", right: 70, cur: g === "APT" }] });
                 rows.push({ label: apt ? apt.name.toUpperCase() : "", cells: [] });
                 rows.push({ label: "", cells: [{ text: procs[f.apr]?.name ?? "NONE", right: end, cur: g === "APR" && procs.length > 0 }] });
-                rows.push({ label: "TRANS", cells: [{ text: f.transitions()[f.trans] ?? "", right: end, cur: g === "TRANS" }] });
-                const min = minView(f.baro, g === "MIN", g === "MINALT");
-                rows.push({ label: "MINIMUMS", cells: [{ text: min.mode, right: 170, cur: min.cur }, { text: min.alt, right: end, cur: min.altCur }] });
-                rows.push({ label: "LOAD?", cells: [], cur: g === "LOAD" }, { label: "ACTIVATE?", cells: [], cur: g === "ACTIVATE" });
+                const trans = { label: "TRANS", cells: [{ text: f.transitions()[f.trans] ?? "", right: end, cur: g === "TRANS" }] };
+                const rwy = { label: "RWY", cells: [{ text: f.runways()[f.rwy] ?? "", right: end, cur: g === "RWY" }] };
+                // Pilot's Guide: a departure's runway comes before its transition, an arrival's after.
+                if (f.kind === "SID")
+                    rows.push(rwy, trans);
+                else if (f.kind === "STAR")
+                    rows.push(trans, rwy);
+                else {
+                    rows.push(trans);
+                    const min = minView(f.baro, g === "MIN", g === "MINALT");
+                    rows.push({ label: "MINIMUMS", cells: [{ text: min.mode, right: 170, cur: min.cur }, { text: min.alt, right: end, cur: min.altCur }] });
+                }
+                rows.push({ label: "LOAD?", cells: [], cur: g === "LOAD" });
+                if (f.kind === "APR")
+                    rows.push({ label: "ACTIVATE?", cells: [], cur: g === "ACTIVATE" });
             }
         }
         else if (u.window === "MENU") {

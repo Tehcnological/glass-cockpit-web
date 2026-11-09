@@ -1,0 +1,41 @@
+SUSAD        BLH   K2011740VTHW N33354583W114454058    N33354583W114454058E0140004102     NARBLYTHE                        249802002
+SUSAD        TRM   K2011620VTHW N33374115W116093670    N33374115W116093670E0130-01242     NARTHERMAL                       258682002
+SUSAP KPSPK2CJEEON K20    W     N33444458W116182526                       E0109     NAR           JEEON                    940902605
+SUSAP KPSPK2CKAIMI K20    W     N33452443W116221119                       E0109     NAR           KAIMI                    940922605
+SUSAP KPSPK2CTEEGE K20    W     N33420984W115555838                       E0108     NAR           TEEGE                    941022605
+SUSAP KPSPK2DJEEON14RW13B 010         0        VA                     1304        + 00977     18000       KPSP  K2PA       941582506
+SUSAP KPSPK2DJEEON14RW13B 020KAIMIK2PC0EE  L   DF                                 - 06000                                  941592506
+SUSAP KPSPK2DJEEON15      010KAIMIK2PC0E       IF                                 - 06000     18000                        941602506
+SUSAP KPSPK2DJEEON15      020JEEONK2PC0EE      TF                                 + 04200                                  941612506
+SUSAP KPSPK2DJEEON16BLH   010JEEONK2PC0E       IF                                 + 04200     18000                        941622506
+SUSAP KPSPK2DJEEON16BLH   020TEEGEK2PC0E       TF                                 + 11000                                  941632506
+SUSAP KPSPK2DJEEON16BLH   030BLH  K2D 0VE      TF                                                                          941642506
+SUSAP KPSPK2DJEEON16TRM   010JEEONK2PC0E       IF                                 + 04200     18000                        941652506
+SUSAP KPSPK2DJEEON16TRM   020TRM  K2D 0VE      TF                                                                          941662506
+SUSAD        ELP   K4011520VTHW N31485728W106165478    N31485728W106165478E0120040232     NAREL PASO                       251731809
+SUSAD        EWM   K4011240VTLW N31570643W106162085    N31570643W106162085E0120040411     NARNEWMAN                        252011913
+SUSAD        SSO   K2011540VTHW N32160928W109154712    N32160928W109154712E0130036002     NARSAN SIMON                     258142002
+SUSAEAENRT   JOKIM K20    C     N32035636W110201222                       E0089     NAR           JOKIM                    401912605
+SUSAEAENRT   SSAND K20    C   H N32093339W110195122                       E0089     NAR           SSAND                    500662605
+SUSAP KTUSK2CJEGEK K20    W     N32111848W110512825                       E0091     NAR           JEGEK                    352912605
+SUSAP KTUSK2COTUKE K20    C     N32223229W111044092                       E0092     NAR           OTUKE                    353042605
+SUSAP KTUSK2CPENSL K20    W     N32080940W109154403                       E0085     NAR           PENSL                    353052605
+SUSAP KTUSK2CVOTTO K20    W     N32103201W110371156                       E0090     NAR           VOTTO                    353222605
+SUSAP KTUSK2CZONNA K20    W     N32124422W109422057                       E0087     NAR           ZONNA                    353302605
+SUSAP KTUSK2EZONNA24ELP   010ELP  K4D 0V       IF                                             18000                        354082312
+SUSAP KTUSK2EZONNA24ELP   020PENSLK2PC0E       TF                                                                          354092312
+SUSAP KTUSK2EZONNA24ELP   030ZONNAK2PC0EE      TF                                   FL210                                  354102312
+SUSAP KTUSK2EZONNA24EWM   010EWM  K4D 0V       IF                                             18000                        354112312
+SUSAP KTUSK2EZONNA24EWM   020PENSLK2PC0E       TF                                                                          354122312
+SUSAP KTUSK2EZONNA24EWM   030ZONNAK2PC0EE      TF                                   FL210                                  354132312
+SUSAP KTUSK2EZONNA24SSO   010SSO  K2D 0V       IF                                 - FL280     18000                        354142312
+SUSAP KTUSK2EZONNA24SSO   020ZONNAK2PC0EE      TF                                   FL210                                  354152312
+SUSAP KTUSK2EZONNA26RW12  010ZONNAK2PC0E       IF                                   FL210     18000                        354162312
+SUSAP KTUSK2EZONNA26RW12  020SSANDK2EA0E       TF                                   14000          280                     354172312
+SUSAP KTUSK2EZONNA26RW12  030VOTTOK2PC0E       TF                                 + 10000                                  354182312
+SUSAP KTUSK2EZONNA26RW12  040JEGEKK2PC0E       TF                                 + 09000                                  354192312
+SUSAP KTUSK2EZONNA26RW12  050OTUKEK2PC0EY      TF                                   07000          210                     354202312
+SUSAP KTUSK2EZONNA26RW12  060OTUKEK2PC0EE      FM COT K4      284766273061    D                                            354212312
+SUSAP KTUSK2EZONNA26RW30  010ZONNAK2PC0E       IF                                   FL210     18000                        354222312
+SUSAP KTUSK2EZONNA26RW30  020JOKIMK2EA0EY      TF                                   12000          250                     354232312
+SUSAP KTUSK2EZONNA26RW30  030JOKIMK2EA0EE      FM COT K4      284162112459    D                                            354242312

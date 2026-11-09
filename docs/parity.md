@@ -66,7 +66,7 @@ Garmin art, screenshots, data or manual text is copied.
 
 | Window | Status |
 | --- | --- |
-| Flight plan (FPL) | Partial: shown and its PAGE MENU works (Invert, Delete, Remove Approach, Closest Point of FPL, Parallel Track, Hold At Present Position); no cursor editing on the PFD, so no ATK offset or Hold At Waypoint there |
+| Flight plan (FPL) | Partial: shown and its PAGE MENU works (Invert, Delete, Remove Departure, Remove Arrival, Remove Approach, Closest Point of FPL, Parallel Track, Hold At Present Position); no cursor editing on the PFD, so no ATK offset or Hold At Waypoint there |
 | PROC (PROCEDURES, SELECT APPROACH and so on) | Done (the MFD's flow, in the NRST window's place) |
 | DIRECT TO | Done (no VNV fields) |
 | NRST | Done |
@@ -83,7 +83,7 @@ Garmin art, screenshots, data or manual text is copied.
 | MAP | Navigation map | Partial: Map Setup's Map, Airways and Profile groups only |
 | MAP | Traffic map | Done (shows what the host passes) |
 | MAP | Stormscope, weather data link, TAWS | No data |
-| WPT | Airport information | Partial: info and APPROACH INFORMATION (APR) done; departure, arrival and weather (DP, STAR, WX) grey with no data; INFO-2 directory missing |
+| WPT | Airport information | Partial: info, DEPARTURE INFORMATION (DP), ARRIVAL INFORMATION (STAR) and APPROACH INFORMATION (APR) done, DP and STAR grey where the airport has none; weather (WX) grey with no data; INFO-2 directory missing |
 | WPT | Intersection, NDB, VOR information | Done |
 | WPT | User waypoint information | Partial: identifier (FMS knob or keyboard; ENT on a new name creates one at the aircraft), the user waypoint list, position (degrees and minutes on the small knob, applied at once rather than on ENT), reference (nearest VOR radial and airport bearing, display only), map. Missing: editing the comment (shows `name`), reference waypoint (RAD/RAD, RAD/DIS) entry, temporary waypoints. Our own layout: FG1000 has no such page |
 | AUX | Utility | Partial: timers, trip statistics and scheduler done (times stepped, not typed); flight data logger missing |
@@ -107,7 +107,7 @@ Garmin art, screenshots, data or manual text is copied.
 | MAP | TRAFFIC, PROFILE, TOPO, TERRAIN, AIRWAYS, PRECIP, METAR, LEGEND, BACK | Partial: PROFILE (no terrain) and AIRWAYS (host data) done; the rest No data |
 | ENGINE, LEAN, SYSTEM | CYL SLCT, ASSIST, RST FUEL, GAL REM (+/- 1, 10 GAL) | Done (our own art, FG1000 has none; MFD and reversionary PFD): LEAN with EGT and CHT bars per cylinder (`engine.cylinders`), CYL SLCT, ASSIST (first cylinder to peak, ΔPEAK, fuel flow at peak); SYSTEM with oil, fuel calculator (GAL USED, GAL REM, RST FUEL, -10/-1/+1/+10 GAL). Assumed: peak at a 10 F drop, bar scales, GAL REM key slots; no battery amps or time remaining |
 | Nearest airports | APT, RNWY, FREQ, APR, LD APR | Done |
-| Procedures page | DP, STAR, APR, GO BACK | Missing |
+| Procedures page | DP, STAR, APR, GO BACK | Done on the PROC loading pages (slots assumed: DP, STAR, APR as the airport page's, GO BACK eleventh) |
 
 ## Page menus (MENU)
 
@@ -117,10 +117,11 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Page | Options | Status |
 | --- | --- | --- |
 | Navigation map | Map Setup (orientation, auto zoom, track vector, wind vector, nav range ring, fuel range, field of view, topo, airways, land, aviation, traffic, weather groups), Declutter, Measure Bearing/Distance, Show/Hide Profile View, Show Chart | Partial: Map Setup (Map group: orientation, track vector; Airways group; Profile group grey), Declutter, Measure Bearing/Distance (no elevation), Show/Hide Profile View |
-| Active flight plan | Activate Leg, Load Waypoint, Store Flight Plan, Invert Flight Plan, Delete Flight Plan, Create ATK Offset Waypoint, Parallel Track, Closest Point of FPL, Collapse/Expand Airways, Hold At Wpt, Hold At Present Position, Remove Departure/Arrival/Approach, Enable/Cancel VNV, VNV Direct-To, Select VNV Profile Window | Partial: Invert, Delete, Remove Approach, Closest Point of FPL, Parallel Track (no overlap cancel, no VNV), Create ATK Offset Waypoint (10 nm / 1 nm knob steps), Hold At Wpt (MFD only; Remove Hold on a hold), Hold At Present Position (no EFC time) |
+| Active flight plan | Activate Leg, Load Waypoint, Store Flight Plan, Invert Flight Plan, Delete Flight Plan, Create ATK Offset Waypoint, Parallel Track, Closest Point of FPL, Collapse/Expand Airways, Hold At Wpt, Hold At Present Position, Remove Departure/Arrival/Approach, Enable/Cancel VNV, VNV Direct-To, Select VNV Profile Window | Partial: Invert (drops departure, arrival and approach), Delete, Remove Departure/Arrival/Approach, Closest Point of FPL, Parallel Track (no overlap cancel, no VNV), Create ATK Offset Waypoint (10 nm / 1 nm knob steps), Hold At Wpt (MFD only; Remove Hold on a hold), Hold At Present Position (no EFC time) |
 | Flight plan catalog | Create New, Activate, Invert & Activate, Copy, Edit, Delete, Delete All | Missing (no stored plans) |
 | Direct-to window | Cancel Direct-To NAV, Clear Vertical Constraints | Partial: Cancel Direct-To NAV (no VNV) |
-| Airport information | View Destination Airport, Show Directory/Departure/Arrival/Approach/Weather Page, View NOTAMs, Chart Mode On | Partial: View Destination Airport (the flight plan's last airport), Show Approach Page; Directory, Departure, Arrival and Weather grey as their softkeys; NOTAMs and Chart Mode No data |
+| Airport information | View Destination Airport, Show Directory/Departure/Arrival/Approach/Weather Page, View NOTAMs, Chart Mode On | Partial: View Destination Airport (the flight plan's last airport), Show Departure, Arrival and Approach Page (Departure and Arrival grey where the airport has none, as their softkeys); Directory and Weather grey as their softkeys; NOTAMs and Chart Mode No data |
+| Departure and arrival loading (PROC) | Load Departure, Load Arrival | Done through PROC: PROC - DEPARTURE LOADING and PROC - ARRIVAL LOADING pages with map preview |
 | Approach loading (PROC) | Load Approach, Load & Activate Approach | Done through PROC: PROC - APPROACH LOADING page with map preview and BARO minimums |
 | User waypoint information | Create New User Waypoint, Delete User Waypoint, Rename User Waypoint, Delete All User Waypoints, Waypoint Setup (temporary or normal), Use Present Position | Partial: all but Waypoint Setup (grey: no temporary waypoints). Deleting a waypoint in the flight plan removes it from the plan too |
 | Nearest airports | Select Airport/Runway/Frequency/Approach Window, Load Approach | Done |
@@ -138,7 +139,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Waypoint entry (FMS inner knob spells the identifier, with the matching name) | Done on the MFD |
 | Direct-to, including from a page's cursor or the pan pointer | Done |
 | PROC: activate vector-to-final, approach, missed; NOT APPROVED FOR GPS | Done on the MFD |
-| PROC: select arrival, select departure | Missing |
+| PROC: select arrival, select departure | Done on both units (procedure, runway and transition, LOAD?; no header rows in the flight plan list) |
 | Hold at waypoint / present position | Partial: PAGE MENU windows (inbound course, turns, time or distance legs, LOAD?), a hold leg in the plan with a racetrack on the map, Remove Hold, `sequenceLeg` keeps a hold active; Hold At Waypoint MFD only (no PFD cursor); an active hold suspends sequencing and SUSP resumes on the leg after it; no EFC time, no entry procedures; procedure holding legs (CIFP HF, HM, HA) are not holds yet, as the navdata has no hold course, turn or leg length |
 | Airways (load, collapse, expand) | Missing (airway data is there since `buildNasr` airways; the flight plan cannot load them yet) |
 | Duplicate waypoint picker | Missing |
@@ -169,7 +170,7 @@ airport sub-pages, the AUX pages, the SUSP key (built from the Pilot's Guide) an
    navigation map, flight plan, direct-to, nearest airports, utility, user waypoint information; the rest above are missing.
 3. **Missing pages and softkeys:** nearest airport RNWY/FREQ/APR/LD APR, MAP PROFILE and AIRWAYS, Map Setup's Airways
    and Profile groups, the AUX pages (system setup, utility and its scheduler, trip planning, GPS status, system
-   status), the user waypoint pages. Done. Left: WPT airport INFO-2, the flight plan catalog, the procedures page softkeys.
-4. **Flows:** arrivals and departures, holds (partial: no EFC time or entries, no procedure holding legs), duplicate waypoints, airways in the flight plan. SUSP and missed approach
-   sequencing are done.
+   status), the user waypoint pages. Done. Left: WPT airport INFO-2, the flight plan catalog.
+4. **Flows:** holds (partial: no EFC time or entries, no procedure holding legs), duplicate waypoints, airways in the flight plan. SUSP and missed approach
+   sequencing, departures and arrivals are done.
 5. **Later, by request:** the audio panel. Keyboard typing, display failures and the autopilot are done.

@@ -1,16 +1,19 @@
-// PROC: the PROCEDURES menu, SELECT APPROACH and NOT APPROVED FOR GPS, as the v13 trainer has them. FG1000 has no
-// procedures page. DOM-free, so the MFD page and the PFD window share it and the tests can run it.
+// PROC: the PROCEDURES menu, SELECT APPROACH and NOT APPROVED FOR GPS, as the v13 trainer has them, and SELECT ARRIVAL
+// and SELECT DEPARTURE as the Pilot's Guide steps through them. FG1000 has no procedures page. DOM-free, so the MFD
+// page and the PFD window share it and the tests can run it.
 import { clamp } from "./page.js";
-import { approachPatch, approachPoints, gpsApproved, loadedApproach, missedPatch, nearest, routePoint, vtfPatch, type Airport, type Procedure } from "./nav.js";
+import { approachPatch, gpsApproved, loadedApproach, missedPatch, nearest, procedurePatch, procedurePoints, procKind, routePoint, vtfPatch, type Airport, type Procedure, type ProcKind } from "./nav.js";
 import { minView, ROLE, stepBaro, toggleBaro, type AprRow } from "./apr-info.js";
 import type { LatLon, MapPoint } from "./map.js";
 
 export const PROC_MENU = ["ACTIVATE VECTOR-TO-FINAL", "ACTIVATE APPROACH", "ACTIVATE MISSED APPROACH", "SELECT APPROACH", "SELECT ARRIVAL", "SELECT DEPARTURE"];
 const SELECT_APPROACH = 3;
+/** The SELECT items' procedure lists. */
+const SELECT: Record<number, ProcKind> = { 3: "APR", 4: "STAR", 5: "SID" };
 
 /** What the flow reads and where it sends its changes. */
 export interface ProcHost {
-  s(): LatLon & { route: (string | MapPoint)[]; points: MapPoint[]; airports: Airport[]; procedures: Procedure[]; minimums?: number | null };
+  s(): LatLon & { route: (string | MapPoint)[]; activeLeg: number; points: MapPoint[]; airports: Airport[]; procedures: Procedure[]; minimums?: number | null };
   change(patch: object): void;
   close(): void;
 }
@@ -18,43 +21,64 @@ export interface ProcHost {
 /** Spells an identifier with the FMS knob: the inner turns the character, the outer moves along. */
 export type Speller = { editing: boolean; readonly value: string; inner(d: number): void; outer(d: number): boolean; ent(): string | null; cancel(): void };
 
+type Grp = "APT" | "APR" | "RWY" | "TRANS" | "MIN" | "MINALT" | "LOAD" | "ACTIVATE";
+// The cursor's stops in order (Pilot's Guide): an approach's transition, then minimums; a departure's runway, then its
+// transition; an arrival's transition, then its runway. Departures and arrivals have no ACTIVATE?.
+const ORDER: Record<ProcKind, Grp[]> = {
+  APR: ["APT", "APR", "TRANS", "MIN", "MINALT", "LOAD", "ACTIVATE"],
+  SID: ["APT", "APR", "RWY", "TRANS", "LOAD"],
+  STAR: ["APT", "APR", "TRANS", "RWY", "LOAD"],
+};
+
 export class ProcFlow {
   airport: string | null = null;
   view: "menu" | "select" | "ask" = "menu";
   item = SELECT_APPROACH;
+  /** The procedures SELECT lists: approaches, arrivals (STAR) or departures (SID). */
+  kind: ProcKind = "APR";
   yes = true;
   /** The activation NOT APPROVED FOR GPS asks about, and the view NO goes back to. */
   pending: { act: () => void; from: "menu" | "select" } | null = null;
-  grp: "APT" | "APR" | "TRANS" | "MIN" | "MINALT" | "LOAD" | "ACTIVATE" = "APR";
+  grp: Grp = "APR";
+  /** The selected procedure, transition and runway. */
   apr = 0;
   trans = 0;
+  rwy = 0;
   /** BARO minimums, feet; null is off. Loading the approach sets the PFD's (Pilot's Guide). */
   baro: number | null = null;
 
   constructor(private h: ProcHost, readonly entry: Speller = noSpeller) {}
 
-  /** Opens on the PROCEDURES menu. SELECT APPROACH opens on the destination: the last airport in the flight plan, else the nearest. */
+  // The flight plan's airports: the first is the departure airport, the last the destination.
+  private planAirports() {
+    const s = this.h.s();
+    return s.route.map((r) => routePoint(r, s.points, s.airports)).filter((p) => p?.type === "APT");
+  }
+
+  /** Opens on the PROCEDURES menu. SELECT APPROACH and SELECT ARRIVAL open on the destination (the last airport in the
+   * flight plan), SELECT DEPARTURE on the departure airport (the first); either, else the nearest. */
   open() {
     const s = this.h.s();
-    const apts = s.route.map((r) => routePoint(r, s.points, s.airports)).filter((p) => p?.type === "APT");
+    const apts = this.planAirports();
     this.airport = apts[apts.length - 1]?.id ?? nearest(s.airports, s.lat, s.lon, 0, 1)[0]?.item.id ?? null;
-    [this.view, this.item, this.grp, this.apr, this.trans, this.pending, this.baro] = ["menu", SELECT_APPROACH, "APR", 0, 0, null, s.minimums ?? null];
+    [this.view, this.item, this.kind, this.grp, this.apr, this.trans, this.rwy, this.pending, this.baro] = ["menu", SELECT_APPROACH, "APR", "APR", 0, 0, 0, null, s.minimums ?? null];
     this.entry.cancel();
   }
 
   /** LD APR (Nearest Airports): SELECT APPROACH on `name` at `airport`, at its transitions (LOAD? with only one).
    * False when there is no procedure data for it. */
   loadApproach(airport: string, name: string): boolean {
-    const i = this.h.s().procedures.filter((p) => p.airport === airport).findIndex((p) => p.name === name);
+    this.kind = "APR";
+    const i = this.h.s().procedures.filter((p) => p.airport === airport && !p.kind).findIndex((p) => p.name === name);
     if (i < 0) return false;
-    [this.airport, this.view, this.apr, this.trans, this.pending, this.baro] = [airport, "select", i, 0, null, this.h.s().minimums ?? null];
+    [this.airport, this.view, this.apr, this.trans, this.rwy, this.pending, this.baro] = [airport, "select", i, 0, 0, null, this.h.s().minimums ?? null];
     this.entry.cancel();
     this.grp = this.transitions().length > 1 ? "TRANS" : "MIN";
     return true;
   }
 
   procs(): Procedure[] {
-    return this.h.s().procedures.filter((p) => p.airport === this.airport);
+    return this.h.s().procedures.filter((p) => p.airport === this.airport && procKind(p) === this.kind);
   }
 
   transitions() {
@@ -62,16 +86,25 @@ export class ProcFlow {
     return p ? Object.keys(p.transitions) : [];
   }
 
+  /** A departure's or arrival's runway transitions. */
+  runways() {
+    return Object.keys(this.procs()[this.apr]?.runways ?? {});
+  }
+
+  private points() {
+    const p = this.procs()[this.apr];
+    return p ? procedurePoints(p, this.transitions()[this.trans], this.runways()[this.rwy]) : [];
+  }
+
   private loaded() {
     return loadedApproach(this.h.s().route);
   }
 
-  /** The ACTIVATE items need a loaded approach, ACTIVATE MISSED APPROACH one with missed approach legs; SELECT ARRIVAL
-   * and SELECT DEPARTURE are not ported. */
+  /** The ACTIVATE items need a loaded approach, ACTIVATE MISSED APPROACH one with missed approach legs. */
   enabled(i: number) {
     const a = this.loaded();
     if (i === 2) return !!a?.pts.some((p) => typeof p !== "string" && p.role === "MISSED");
-    return i === SELECT_APPROACH || (i < SELECT_APPROACH && a !== null);
+    return i >= SELECT_APPROACH || a !== null;
   }
 
   // v13 trainer: activating an approach the GPS may not fly asks NOT APPROVED FOR GPS first, YES selected.
@@ -84,6 +117,12 @@ export class ProcFlow {
   /** Whether the small knob would spell the airport (keyboard typing goes there). */
   typing() {
     return this.view === "select" && (this.entry.editing || this.grp === "APT");
+  }
+
+  // The large knob's stops, as ENT's: a transition or runway only when there is a choice, the minimum altitude only with minimums on.
+  private order() {
+    return ORDER[this.kind].filter((g) => (g !== "TRANS" || this.transitions().length > 1) && (g !== "RWY" || this.runways().length > 1) &&
+      (g !== "MINALT" || this.baro !== null));
   }
 
   fms(outer: boolean, d: number) {
@@ -100,19 +139,18 @@ export class ProcFlow {
       this.yes = !this.yes;
       return;
     }
-    // The large knob's stops, as ENT's: the transition only when there is a choice, the minimum altitude only with minimums on.
-    const order = (["APT", "APR", "TRANS", "MIN", "MINALT", "LOAD", "ACTIVATE"] as const).filter((g) =>
-      (g !== "TRANS" || this.transitions().length > 1) && (g !== "MINALT" || this.baro !== null));
+    const order = this.order();
     if (this.entry.editing) {
       if (outer) this.entry.outer(d);
       else this.entry.inner(d);
     } else if (outer) this.grp = order[clamp(order.indexOf(this.grp) + (d > 0 ? 1 : -1), 0, order.length - 1)];
     else if (this.grp === "APT") this.entry.inner(d);
-    else if (this.grp === "APR") [this.apr, this.trans] = [clamp(this.apr + d, 0, Math.max(0, this.procs().length - 1)), 0];
+    else if (this.grp === "APR") [this.apr, this.trans, this.rwy] = [clamp(this.apr + d, 0, Math.max(0, this.procs().length - 1)), 0, 0];
     else if (this.grp === "TRANS") this.trans = clamp(this.trans + d, 0, Math.max(0, this.transitions().length - 1));
+    else if (this.grp === "RWY") this.rwy = clamp(this.rwy + d, 0, Math.max(0, this.runways().length - 1));
     else if (this.grp === "MIN") this.baro = toggleBaro(this.baro, this.h.s().airports.find((a) => a.id === this.airport)?.elev ?? 0);
     else if (this.grp === "MINALT" && this.baro !== null) this.baro = stepBaro(this.baro, d);
-    else this.grp = d > 0 ? "ACTIVATE" : "LOAD";
+    else if (this.kind === "APR") this.grp = d > 0 ? "ACTIVATE" : "LOAD";
   }
 
   ent() {
@@ -127,14 +165,13 @@ export class ProcFlow {
     const p = this.procs()[this.apr];
     if (this.entry.editing) {
       const v = this.entry.ent();
-      if (v) [this.airport, this.apr, this.trans, this.grp] = [v, 0, 0, "APR"];
-    } else if (this.grp === "APT") this.grp = "APR";
-    else if (this.grp === "APR") this.grp = this.transitions().length > 1 ? "TRANS" : "MIN";
-    else if (this.grp === "TRANS") this.grp = "MIN";
-    else if (this.grp === "MIN") this.grp = this.baro === null ? "LOAD" : "MINALT";
-    else if (this.grp === "MINALT") this.grp = "LOAD";
-    else if (this.grp === "ACTIVATE" && p) this.confirm(p.name, () => this.load(true));
-    else this.load(this.grp === "ACTIVATE");
+      if (v) [this.airport, this.apr, this.trans, this.rwy, this.grp] = [v, 0, 0, 0, "APR"];
+    } else if (this.grp === "ACTIVATE" && p) this.confirm(p.name, () => this.load(true));
+    else if (this.grp === "LOAD" || this.grp === "ACTIVATE") this.load(this.grp === "ACTIVATE");
+    else {
+      const order = this.order();
+      this.grp = order[order.indexOf(this.grp) + 1] ?? "LOAD";
+    }
   }
 
   clr() {
@@ -144,12 +181,20 @@ export class ProcFlow {
     else this.h.close();
   }
 
+  /** SELECT APPROACH, SELECT ARRIVAL or SELECT DEPARTURE: the menu's items, and the loading page's APR, STAR and DP
+   * softkeys. A departure opens on the plan's departure airport, the others on its destination. */
+  select(kind: ProcKind) {
+    const apts = this.planAirports();
+    if (kind === "SID" && apts[0]) this.airport = apts[0].id;
+    else if (kind !== "SID" && apts.length) this.airport = apts[apts.length - 1]!.id;
+    [this.view, this.kind, this.grp, this.apr, this.trans, this.rwy] = ["select", kind, "APR", 0, 0, 0];
+    this.entry.cancel();
+  }
+
   // ACTIVATE VECTOR-TO-FINAL, ACTIVATE APPROACH and ACTIVATE MISSED APPROACH act on the approach already loaded.
   private menuItem() {
-    if (this.item === SELECT_APPROACH) {
-      this.view = "select";
-      return;
-    }
+    const kind = SELECT[this.item];
+    if (kind) return this.select(kind);
     const a = this.loaded();
     if (!a || !this.enabled(this.item)) return;
     const item = this.item;
@@ -172,29 +217,36 @@ export class ProcFlow {
 
   // Adds the approach after the en route waypoints (replacing an approach loaded before), as the G1000 does. ACTIVATE
   // with the VECTORS transition is vector-to-final: the final approach fix is active, its leg on the final course.
+  // A departure goes after its airport, an arrival before the approach (see procedurePatch).
   private load(activate: boolean) {
     const p = this.procs()[this.apr];
     if (!p) return;
     const s = this.h.s();
+    const pts = this.points();
+    if (p.kind) {
+      this.h.change(procedurePatch(s.route, s.activeLeg, p, pts));
+      this.h.close();
+      return;
+    }
     const name = this.transitions()[this.trans];
-    const pts = approachPoints(p, name);
     const patch = approachPatch(s.route, pts, !activate ? "load" : name === "VECTORS" ? "vectors" : "activate", { lat: s.lat, lon: s.lon });
     this.h.change({ ...patch, minimums: this.baro }); // the page opened on the PFD's minimums: OFF here turns them off
     this.h.close();
   }
 
-  /** What the approach loading page draws (as WPT - APPROACH INFORMATION's boxes); `crsr` is the FMS cursor being on.
-   * `points`: the approach from the selected transition on, to preview on the map. */
+  /** What the loading page draws (as WPT - APPROACH INFORMATION's boxes); `crsr` is the FMS cursor being on.
+   * `points`: the procedure from the selected runway or transition on, to preview on the map. */
   loading(crsr: boolean) {
-    const on = (g: ProcFlow["grp"]) => crsr && this.view === "select" && this.grp === g;
+    const on = (g: Grp) => crsr && this.view === "select" && this.grp === g;
     const procs = this.procs();
-    const p = procs[this.apr];
-    const points = p ? approachPoints(p, this.transitions()[this.trans]) : [];
+    const points = this.points();
     return {
+      kind: this.kind,
       apt: this.entry.editing ? this.entry.value : this.airport ?? "____",
       aptCur: on("APT") || this.entry.editing,
       approaches: procs.length ? procs.map((x, i): AprRow => ({ label: x.name, cur: on("APR") && i === this.apr })) : [{ label: "NONE", cur: false, dim: true }],
-      transitions: this.transitions().map((label, i): AprRow => ({ label, cur: on("TRANS") && i === this.trans })),
+      transitions: this.transitions().map((label, i): AprRow => ({ label, cur: on("TRANS") && i === this.trans, sel: i === this.trans })),
+      runways: this.runways().map((label, i): AprRow => ({ label, cur: on("RWY") && i === this.rwy, sel: i === this.rwy })),
       min: minView(this.baro, on("MIN"), on("MINALT")),
       sequence: points.map((x): AprRow => ({ label: x.id, role: ROLE[x.role ?? ""] ?? "", cur: false })),
       load: on("LOAD"),

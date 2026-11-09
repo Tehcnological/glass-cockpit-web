@@ -25,7 +25,7 @@ test("PROC opens on SELECT APPROACH, with the plan's destination", () => {
   assert.equal(h.flow.view, "menu");
   assert.equal(PROC_MENU[h.flow.item], "SELECT APPROACH");
   assert.equal(h.flow.airport, "KAAA");
-  assert.deepEqual(PROC_MENU.map((_, i) => h.flow.enabled(i)), [false, false, false, true, false, false], "nothing loaded yet");
+  assert.deepEqual(PROC_MENU.map((_, i) => h.flow.enabled(i)), [false, false, false, true, true, true], "nothing loaded yet");
 });
 
 test("ACTIVATE an approach the GPS may not fly asks first, then loads it", () => {

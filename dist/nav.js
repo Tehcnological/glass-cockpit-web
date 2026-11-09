@@ -1,6 +1,7 @@
 // Navigation data the pages show, and the arithmetic they share. The host supplies the data (instrumentready.com uses
 // FAA NASR and CIFP); FlightGear reads its own navigation database instead.
 import { mod } from "./page.js";
+export const procKind = (p) => p.kind ?? "APR";
 /** Initial great-circle bearing (true) and distance in nm. */
 export function bearingDistance(lat1, lon1, lat2, lon2) {
     const r = Math.PI / 180;
@@ -64,8 +65,20 @@ export function planName(legs) {
 export function approachPoints(p, transition) {
     const legs = [...(p.transitions[transition] ?? []), ...p.legs];
     return legs
-        .filter((l, i) => i === 0 || l.fix !== legs[i - 1].fix)
+        .filter(once)
         .map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, role: l.role, approach: p.name }));
+}
+const once = (l, i, legs) => i === 0 || l.fix !== legs[i - 1].fix;
+/** A procedure's fixes as flight plan points: an approach's as `approachPoints`; a SID's from `runway` through its common
+ * legs to `transition`, a STAR's from `transition` through them to `runway`, marked `departure` or `arrival` with its
+ * name (a fix shared by two parts once). An unknown runway or transition adds none. */
+export function procedurePoints(p, transition = "", runway = "") {
+    if (!p.kind)
+        return approachPoints(p, transition);
+    const [t, r] = [p.transitions[transition] ?? [], p.runways?.[runway] ?? []];
+    const legs = p.kind === "SID" ? [...r, ...p.legs, ...t] : [...t, ...p.legs, ...r];
+    const mark = p.kind === "SID" ? { departure: p.name } : { arrival: p.name };
+    return legs.filter(once).map((l) => ({ id: l.fix, type: "WPT", lat: l.lat, lon: l.lon, alt: l.alt, ...mark }));
 }
 /** Whether the GPS may fly an approach (by `approachName`'s names): RNAV (GPS) and GPS approaches. The rest ask NOT APPROVED FOR GPS. */
 export function gpsApproved(name) {
@@ -109,9 +122,40 @@ export function approachPatch(route0, pts, mode, here) {
         return { route, activeLeg: enroute.length, directFrom: here, vtf: false, susp: false };
     return { route, ...vtfPatch(enroute.length, pts, here), susp: false };
 }
-/** A fix entered by hand (WAYPOINT ENTRY, DIRECT TO) is an ordinary waypoint, even when picked from a loaded approach. */
+/** A route entry PROC loaded as part of a departure (SID) or an arrival (STAR). */
+export const isDeparture = (r) => typeof r !== "string" && r.departure !== undefined;
+export const isArrival = (r) => typeof r !== "string" && r.arrival !== undefined;
+/**
+ * PROC's change to the flight plan for a departure or arrival `p` (its `pts`), replacing one loaded before: a SID's
+ * fixes after its airport (the airport first when the plan does not have it), a STAR's before the approach, else at the
+ * end. The active waypoint stays active; before takeoff, flying the leg from the departure airport, the departure's first
+ * fix becomes the active one, as it does when the active fix was one of those replaced.
+ */
+export function procedurePatch(route0, active, p, pts) {
+    const sid = p.kind === "SID";
+    const mine = sid ? isDeparture : isArrival;
+    const route = cancelParallel(route0); // editing the plan cancels Parallel Track (Pilot's Guide)
+    // An active leg past the plan's end (an empty plan's default of 1) counts as its last entry.
+    const activeLeg = Math.max(0, Math.min(active, route.length - 1));
+    const removed = route.slice(0, activeLeg).filter(mine).length;
+    const kept = route.filter((r) => !mine(r));
+    let k = activeLeg - removed;
+    let at = sid ? kept.findIndex((r) => (typeof r === "string" ? r : r.id) === p.airport) + 1 : kept.findIndex(isApproach);
+    if (sid && !at) {
+        kept.unshift(p.airport);
+        [at, k] = [1, k + 1];
+    }
+    if (!sid && at < 0)
+        at = kept.length;
+    const replaced = route[activeLeg] !== undefined && mine(route[activeLeg]);
+    const after = sid ? k > at || (k === at && removed > 0) : k >= at;
+    const leg = replaced ? at : after ? k + pts.length : k;
+    const out = [...kept.slice(0, at), ...pts, ...kept.slice(at)];
+    return { route: out, activeLeg: Math.min(leg, Math.max(0, out.length - 1)), ...(replaced && { directFrom: null }) };
+}
+/** A fix entered by hand (WAYPOINT ENTRY, DIRECT TO) is an ordinary waypoint, even when picked from a loaded procedure. */
 export function asWaypoint(p) {
-    const { approach: _a, role: _r, ...w } = p;
+    const { approach: _a, role: _r, departure: _d, arrival: _ar, ...w } = p;
     return w;
 }
 /** How waypoint `p` goes into the flight plan: by id when the host's data has it, an approach fix as a plain
@@ -330,8 +374,9 @@ export function parallelTrack(s, side, nm) {
 }
 /** A hold leg: an entry of its own after the fix it holds at, at the fix's position, with `hold`. */
 export const isHold = (r) => typeof r === "object" && r.hold !== undefined;
-// The hold leg for `fix`: its id and position; it goes with an approach the fix came from, but has no role of its own.
-const holdLeg = (fix, hold) => ({ id: fix.id, type: fix.type, lat: fix.lat, lon: fix.lon, hold, ...(fix.approach !== undefined && { approach: fix.approach }) });
+// The hold leg for `fix`: its id and position; it goes with a procedure the fix came from, but has no role of its own.
+const holdLeg = (fix, hold) => ({ id: fix.id, type: fix.type, lat: fix.lat, lon: fix.lon, hold,
+    ...Object.fromEntries(["approach", "departure", "arrival"].filter((m) => fix[m] !== undefined).map((m) => [m, fix[m]])) });
 /** Hold At Waypoint: `hold` at the plan's entry `at`, as a hold leg after it (replacing a hold already there). */
 export function holdAtWaypoint(s, at, hold) {
     // Editing the plan cancels Parallel Track (Pilot's Guide).

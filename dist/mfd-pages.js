@@ -4,7 +4,7 @@
 import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, mapUp, rangeLabel } from "./map.js";
 import { SETUP_GROUPS } from "./map-setup.js";
-import { bearingDistance, cancelDirectTo, cancelParallel, deleteEntry, directToPatch, findPoint, isHold, isParallel, latLon, nearest, planEntry, planName, routePoint, vtfEdit } from "./nav.js";
+import { bearingDistance, cancelDirectTo, cancelParallel, deleteEntry, directToPatch, findPoint, isHold, isParallel, latLon, nearest, planEntry, planName, procKind, routePoint, vtfEdit } from "./nav.js";
 import { FPL_TOOLS, FplTool, holdRow, toolEnabled } from "./fpl-tools.js";
 import { BLANK, CYAN, IdEntry, ListView, NS, dimKey, esc, firstRow, key } from "./ui.js";
 import { airportInfoMenu, destination, firstOption, fplMenu, gpsStatusMenu, nearestVorMenu, stepMenu, tripMenu } from "./page-menu.js";
@@ -591,25 +591,23 @@ function trainerWindow(root) {
         tab.insertAdjacentHTML("afterend", `<path d="M${bx},${by}V${by - 9}H${bx + 5}M${end},${by - 9}V${by}" style="fill:none;stroke:${WINDOW_FRAME};stroke-width:1"/>`);
     }
 }
-// WPT - APPROACH INFORMATION's boxes: title, top, rows shown. Fixed, so the sequence box gets what is left.
-const APR_BOXES = { AIRPORT: [77, 2], APPROACHES: [166, 5], TRANSITIONS: [338, 3], MINIMUMS: [458, 1], SEQUENCE: [524, 7] };
-/** Draws WPT - APPROACH INFORMATION's window from `AprInfo.view` (our own layout: FG1000 has no such page). With `ask`,
- * the approach loading page's: the sequence box shorter, LOAD? and ACTIVATE? under it. */
+/**
+ * Draws WPT - APPROACH, DEPARTURE or ARRIVAL INFORMATION's window from `AprInfo.view` (our own layout: FG1000 has no
+ * such page). Boxes are fixed, so the sequence box gets what is left. An approach has its transitions and minimums; a
+ * departure or arrival one-row RUNWAY and TRANSITION fields in their place (a departure's runway first, an arrival's
+ * transition) and a longer sequence. With `ask`, the loading page's: the sequence box shorter, LOAD? (and an
+ * approach's ACTIVATE?) under it.
+ */
 function aprPanel(v, use, name, ask) {
     let out = windowRect(725, 54, 309, 688, PANEL_GREY);
-    // shortcut: the loading page's sequence shows its first 5 fixes (it is not a cursor stop there); the map shows them all.
-    const rowsOf = (title) => (ask && title === "SEQUENCE" ? 5 : APR_BOXES[title][1]);
-    const box = (title) => {
-        const [y] = APR_BOXES[title];
-        const n = rowsOf(title);
+    const box = (title, y, n) => {
         out += tabbedBox(730.5, y, 289, n * 26 + 16, title);
         return (i) => y + 30 + i * 26;
     };
-    // A list scrolled to keep the cursor (or the first row) in view.
-    const list = (title, rows, fill) => {
-        const row = box(title);
-        const n = rowsOf(title);
-        const at = Math.max(0, rows.findIndex((r) => r.cur));
+    // A list scrolled to keep the cursor (or the selected, or the first row) in view.
+    const list = (title, y, n, rows, fill) => {
+        const row = box(title, y, n);
+        const at = Math.max(0, rows.findIndex((r) => r.cur || r.sel));
         const top = clamp(at - n + 1, 0, Math.max(0, rows.length - n));
         rows.slice(top, top + n).forEach((r, i) => {
             out += panelText(r.label, 740, row(i), "start", r.cur ? "#000000" : fill(r), r.cur);
@@ -617,30 +615,42 @@ function aprPanel(v, use, name, ask) {
                 out += panelText(r.role, 1010, row(i), "end", r.cur ? "#000000" : "#ffffff");
         });
     };
-    const apt = box("AIRPORT");
+    const apt = box("AIRPORT", 77, 2);
     out += panelText(v.apt, 740, apt(0), "start", v.aptCur ? "#000000" : CYAN, v.aptCur) + panelText(use, 1010, apt(0), "end", CYAN) +
         panelText(name, 740, apt(1) - 2, "start", "#ffffff");
-    list("APPROACHES", v.approaches, (r) => (r.dim ? "#808080" : CYAN));
-    list("TRANSITIONS", v.transitions, () => CYAN);
-    const min = box("MINIMUMS");
-    out += panelText(v.min.mode, 740, min(0), "start", v.min.cur ? "#000000" : CYAN, v.min.cur) +
-        panelText(v.min.alt, 1010, min(0), "end", v.min.altCur ? "#000000" : v.min.mode === "OFF" ? "#808080" : CYAN, v.min.altCur);
-    list("SEQUENCE", v.sequence, () => "#ffffff");
+    list({ APR: "APPROACHES", SID: "DEPARTURES", STAR: "ARRIVALS" }[v.kind], 166, 5, v.approaches, (r) => (r.dim ? "#808080" : CYAN));
+    if (v.kind === "APR") {
+        list("TRANSITIONS", 338, 3, v.transitions, () => CYAN);
+        const min = box("MINIMUMS", 458, 1);
+        out += panelText(v.min.mode, 740, min(0), "start", v.min.cur ? "#000000" : CYAN, v.min.cur) +
+            panelText(v.min.alt, 1010, min(0), "end", v.min.altCur ? "#000000" : v.min.mode === "OFF" ? "#808080" : CYAN, v.min.altCur);
+        // shortcut: the loading page's sequence shows its first 5 fixes (it is not a cursor stop there); the map shows them all.
+        list("SEQUENCE", 524, ask ? 5 : 7, v.sequence, () => "#ffffff");
+    }
+    else {
+        const fields = [["RUNWAY", v.runways], ["TRANSITION", v.transitions]];
+        if (v.kind === "STAR")
+            fields.reverse();
+        fields.forEach(([title, rows], i) => list(title, 338 + i * 66, 1, rows, () => CYAN));
+        list("SEQUENCE", 470, ask ? 7 : 9, v.sequence, () => "#ffffff");
+    }
     if (ask)
-        out += panelText("LOAD?", 874, 696, "middle", ask.load ? "#000000" : "#ffffff", ask.load) +
-            panelText("ACTIVATE?", 874, 726, "middle", ask.activate ? "#000000" : "#ffffff", ask.activate);
+        out += panelText("LOAD?", 874, 696, "middle", ask.load ? "#000000" : "#ffffff", ask.load);
+    if (ask && v.kind === "APR")
+        out += panelText("ACTIVATE?", 874, 726, "middle", ask.activate ? "#000000" : "#ffffff", ask.activate);
     return out;
 }
 // AirportInfo: identifier, airport details, runways and frequencies. Its softkeys (Pilot's Guide) show the airport's
-// other pages: APR its approaches (WPT - APPROACH INFORMATION, drawn here in place of FG1000's boxes), INFO-1 back.
-// DP, STAR and WX are dim: no departure, arrival or weather data. INFO-2 (the AOPA directory) is not ported.
+// other pages: DP, STAR and APR its departures, arrivals and approaches (WPT - DEPARTURE, ARRIVAL and APPROACH
+// INFORMATION, drawn here in place of FG1000's boxes; DP and STAR grey where it has none), INFO-1 back. WX is dim: no
+// weather data. INFO-2 (the AOPA directory) is not ported.
 class AirportInfoPage extends MapPage {
     id = null;
     grp = "ID";
     rwy = 0;
     entry = new IdEntry(this.p, 4);
     freqs = new ListView(this.p, ["FreqLabel", "Freq"], 7, "Freq", false, { trough: "FreqScrollBar", thumb: "FreqScroll" });
-    view = "INFO";
+    /** INFO, or a procedure view (the approach view is "APR"). */ view = "INFO";
     apr = new AprInfo(new IdEntry(this.p, 4));
     /** FG1000's boxes, and the approach window drawn in their place. */ info;
     panel;
@@ -656,10 +666,15 @@ class AirportInfoPage extends MapPage {
         host.append(this.info, this.panel);
     }
     get title() {
-        return this.view === "APR" ? "WPT - APPROACH INFORMATION" : super.title;
+        const t = { INFO: "", APR: "APPROACH", SID: "DEPARTURE", STAR: "ARRIVAL" }[this.view];
+        return t ? `WPT - ${t} INFORMATION` : super.title;
     }
     ctx() {
         return { airport: this.apt, procedures: this.s.procedures };
+    }
+    /** Whether the airport has departures (SID) or arrivals (STAR) to show. */
+    has(kind) {
+        return this.s.procedures.some((p) => p.airport === this.apt?.id && procKind(p) === kind);
     }
     setView(v) {
         if (v === this.view)
@@ -667,19 +682,21 @@ class AirportInfoPage extends MapPage {
         [this.view, this.crsr] = [v, false];
         this.entry.cancel();
         this.apr.clr();
-        // Pilot's Guide: the approach page opens on the airport page's airport.
-        if (v === "APR")
-            [this.apr.grp, this.apr.apr, this.apr.trans, this.apr.seq] = ["APT", 0, 0, 0];
+        // Pilot's Guide: the procedure pages open on the airport page's airport.
+        if (v !== "INFO")
+            [this.apr.kind, this.apr.grp, this.apr.apr, this.apr.trans, this.apr.rwy, this.apr.seq] = [v, "APT", 0, 0, 0, 0];
     }
     keys() {
+        const view = (label, v) => (v === "APR" || this.has(v) ? key(label, () => this.setView(v), this.view === v) : dimKey(label));
         return this.m.topKeys({
-            4: key("INFO-1", () => this.setView("INFO"), this.view === "INFO"), 5: dimKey("DP"), 6: dimKey("STAR"),
-            7: key("APR", () => this.setView("APR"), this.view === "APR"), 8: dimKey("WX"),
+            4: key("INFO-1", () => this.setView("INFO"), this.view === "INFO"), 5: view("DP", "SID"), 6: view("STAR", "STAR"),
+            7: view("APR", "APR"), 8: dimKey("WX"),
         });
     }
     // View Destination Airport shows the flight plan's last airport on the INFO view.
     pageMenu() {
-        return airportInfoMenu(destination(this.s.route, this.s.airports), { airport: (id) => this.showWaypoint(id), approach: () => this.setView("APR") });
+        const show = (v) => (this.has(v) ? () => this.setView(v) : undefined);
+        return airportInfoMenu(destination(this.s.route, this.s.airports), { airport: (id) => this.showWaypoint(id), approach: () => this.setView("APR"), departure: show("SID"), arrival: show("STAR") });
     }
     get apt() {
         const a = this.s.airports;
@@ -707,10 +724,10 @@ class AirportInfoPage extends MapPage {
         this.apr.grp = "APT";
     }
     typing() {
-        return this.view === "APR" ? this.apr.typing() : this.entry.editing || this.grp === "ID";
+        return this.view !== "INFO" ? this.apr.typing() : this.entry.editing || this.grp === "ID";
     }
     fms(outer, d) {
-        if (this.view === "APR") {
+        if (this.view !== "INFO") {
             this.apr.fms(this.ctx(), outer, d);
             return true;
         }
@@ -731,7 +748,7 @@ class AirportInfoPage extends MapPage {
         return true;
     }
     ent() {
-        if (this.view === "APR") {
+        if (this.view !== "INFO") {
             if (!this.crsr)
                 return;
             const v = this.apr.ent(this.ctx());
@@ -756,8 +773,8 @@ class AirportInfoPage extends MapPage {
     draw() {
         const a = this.apt;
         this.info.style.display = this.view === "INFO" ? "inline" : "none";
-        this.panel.style.display = this.view === "APR" ? "inline" : "none";
-        if (this.view === "APR") {
+        this.panel.style.display = this.view !== "INFO" ? "inline" : "none";
+        if (this.view !== "INFO") {
             this.panel.innerHTML = aprPanel(this.apr.view(this.ctx(), this.crsr), a?.use ?? "", (a?.name ?? "").toUpperCase());
             cursorBoxes(this.panel);
             this.drawOwnMap(this.apr.preview(this.ctx()));
@@ -1294,7 +1311,8 @@ class DirectToPage extends MapPage {
 }
 // PROC: FG1000 has no procedures page. The PROCEDURES window over the page (v13 trainer), then, as the Pilot's Guide
 // has it, SELECT APPROACH opens PROC - APPROACH LOADING: a page of its own, the approach previewed on its map beside
-// WPT - APPROACH INFORMATION's boxes, with LOAD? and ACTIVATE? under them. The flow is in procedures.ts, shared with the PFD.
+// WPT - APPROACH INFORMATION's boxes, with LOAD? and ACTIVATE? under them; SELECT ARRIVAL and SELECT DEPARTURE open
+// PROC - ARRIVAL and DEPARTURE LOADING the same way, with LOAD? only. The flow is in procedures.ts, shared with the PFD.
 class ProceduresPage extends MfdPage {
     entry;
     flow;
@@ -1334,7 +1352,7 @@ class ProceduresPage extends MfdPage {
         return (f.view === "ask" ? f.pending?.from ?? "select" : f.view) === "menu";
     }
     get title() {
-        return this.windowed ? super.title : "PROC - APPROACH LOADING";
+        return this.windowed ? super.title : `PROC - ${{ APR: "APPROACH", SID: "DEPARTURE", STAR: "ARRIVAL" }[this.flow.kind]} LOADING`;
     }
     open() {
         this.flow.open();
@@ -1345,8 +1363,14 @@ class ProceduresPage extends MfdPage {
         this.flow.loadApproach(airport, name);
         this.crsr = true;
     }
+    // The loading pages' softkeys (Pilot's Guide): DP, STAR and APR switch between them, GO BACK leaves. shortcut: their
+    // slots are assumed (the airport page's for DP, STAR and APR, the eleventh for GO BACK); check them against the trainer.
     keys() {
-        return this.m.topKeys();
+        const f = this.flow;
+        if (this.windowed)
+            return this.m.topKeys();
+        const sel = (label, kind) => key(label, () => f.select(kind), f.kind === kind);
+        return this.m.topKeys({ 5: sel("DP", "SID"), 6: sel("STAR", "STAR"), 7: sel("APR", "APR"), 10: key("GO BACK", () => this.m.close()) });
     }
     toggleCrsr() {
         this.crsr = true;

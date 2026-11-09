@@ -37,7 +37,7 @@ export interface MfdState extends Knobs {
     /** Airways for the map's AIRWAYS key; their fixes must be in `points`. */ airways: Airway[];
     /** For the NRST and WPT airport pages, DIRECT TO and PROC. */ airports: Airport[];
     /** ARTCC, FSS and weather frequencies for NRST - NEAREST FREQUENCIES. */ stations: Station[];
-    /** Approaches PROC can load, for the airports in `airports`. */ procedures: Procedure[];
+    /** Approaches, departures and arrivals PROC can load, for the airports in `airports`. */ procedures: Procedure[];
     /** Flight plan in order: ids of `points` or `airports`, or points of its own (approach fixes). FPL, DIRECT TO and PROC change it. */
     route: (string | MapPoint)[];
     /** Index into `route` of the active waypoint; the leg into it is magenta. */ activeLeg: number;
