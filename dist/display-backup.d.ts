@@ -1,4 +1,6 @@
 import type { RadioFailure } from "./surround.js";
+/** Inline style for an svg that is a control surface: clicks work it, so its text does not select. */
+export declare const NO_SELECT = "user-select:none;-webkit-user-select:none";
 export interface DisplayBackupOptions {
     /** Called with the new mode when the button is pushed. */ onChange?: (reversionary: boolean) => void;
 }

@@ -3,6 +3,8 @@
 import type { RadioFailure } from "./surround.js";
 
 const NS = "http://www.w3.org/2000/svg";
+/** Inline style for an svg that is a control surface: clicks work it, so its text does not select. */
+export const NO_SELECT = "user-select:none;-webkit-user-select:none";
 
 export interface DisplayBackupOptions {
   /** Called with the new mode when the button is pushed. */ onChange?: (reversionary: boolean) => void;
@@ -31,7 +33,7 @@ export class DisplayBackup {
 
   constructor(container: HTMLElement, private options: DisplayBackupOptions = {}) {
     container.innerHTML =
-      `<svg xmlns="${NS}" viewBox="0 0 100 100" role="img" aria-label="Display backup"><defs>` +
+      `<svg xmlns="${NS}" viewBox="0 0 100 100" role="img" aria-label="Display backup" style="${NO_SELECT}"><defs>` +
       `<radialGradient id="db-red" cx="0.4" cy="0.35" r="0.7"><stop offset="0" stop-color="#ff6b6b"/><stop offset="0.6" stop-color="#d40000"/><stop offset="1" stop-color="#7a0000"/></radialGradient>` +
       `<radialGradient id="db-rim" cx="0.5" cy="0.4" r="0.6"><stop offset="0.7" stop-color="#808080"/><stop offset="1" stop-color="#1a1a1a"/></radialGradient></defs>` +
       `<g style="cursor:pointer" role="button" aria-label="DISPLAY BACKUP">` +

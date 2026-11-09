@@ -2,6 +2,7 @@
 // FG1000 window (Dialogs/fascia.svg, screen at 186,45 of the 1407 x 918 bezel, per Nasal/GUI.nas).
 import BEZEL from "./svg/bezel.js";
 import { clipRect } from "./page.js";
+import { NO_SELECT } from "./display-backup.js";
 import type { Input } from "./bezel.js";
 
 // From dist/, the font in src/fonts/ (both ship in the package; README "Font").
@@ -36,7 +37,8 @@ export function scopeIds(markup: string, tag: string): string {
 
 export function buildDisplay(container: HTMLElement, pages: string[], label: string, { bezel }: DisplayOptions) {
   const tag = `glass-d${++displayCount}-`;
-  container.innerHTML = `<svg xmlns="${NS}" viewBox="${bezel ? "1 132 1407 918" : "0 0 1024 768"}" role="img"></svg>`;
+  // A display is a control surface (clicks and double clicks work its keys and knobs), so its text does not select.
+  container.innerHTML = `<svg xmlns="${NS}" viewBox="${bezel ? "1 132 1407 918" : "0 0 1024 768"}" role="img" style="${NO_SELECT}"></svg>`;
   const svg = container.querySelector("svg")!;
   svg.setAttribute("aria-label", label);
   if (bezel) {
