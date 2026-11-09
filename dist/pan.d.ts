@@ -1,6 +1,20 @@
-import type { LatLon, MapGeometry } from "./map.js";
+import type { LatLon, MapGeometry, MapPoint } from "./map.js";
 /** Pixels the pointer moves for one joystick click. */
 export declare const PAN_STEP = 12;
+/** Pilot's Guide: with no joystick input for about a minute, pan mode ends and the map recenters on the aircraft. */
+export declare const PAN_IDLE_MS = 60000;
+/** ENT with the pointer on a waypoint: the WPT page for its type. User waypoints have none (UserWPTInfo has no data here). */
+export declare const PAN_WPT_PAGES: Partial<Record<MapPoint["type"], string>>;
+/** Pan mode's idle timer: one timeout, started with pan mode, restarted by each joystick move, stopped when pan ends. */
+export declare class PanIdle {
+    private end;
+    private t;
+    constructor(end: () => void);
+    /** Call on every redraw: starts the timer when pan mode has started, stops it when pan mode has ended. */
+    sync(panning: boolean): void;
+    moved(): void;
+    stop(): void;
+}
 /** `center`: the map's center; `x`, `y`: the pointer, in pixels from the map window's center; `up`: the map's rotation,
  * held while panning so a heading-up map does not turn under the pointer; `from`: while measuring (Measure
  * Bearing/Distance), the start point the info bar measures from. */
@@ -44,3 +58,5 @@ export declare function panInfo(p: Pan, v: PanView, here: LatLon, points: (LatLo
     lat: number;
     lon: number;
 };
+/** The point under the pointer (the closest within a few pixels), or undefined. */
+export declare function panUnder<T extends LatLon>(p: Pan, v: PanView, points: T[]): T | undefined;

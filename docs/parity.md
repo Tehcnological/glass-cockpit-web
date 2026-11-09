@@ -36,7 +36,7 @@ Garmin art, screenshots, data or manual text is copied.
 | COM dual knob / push | Tune standby; push: COM1/COM2 box | Done |
 | CRS/BARO / push | Course, baro; push: course to the station | Done |
 | RANGE | Map range, PFD inset or MFD map | Done |
-| Joystick push | Pilot's Guide and trainer: the map pointer and an info bar (lat/lon, bearing and distance from the aircraft, ground elevation; the name of an object under it); again removes it and recenters. RANGE while panning recenters on the pointer. NXi: the PFD inset pans too | Partial: MFD navigation map and PFD inset. Missing: the flashing pointer, elevation, airspace info, ENT for waypoint info, the 60 s idle recenter, panning on the flight plan page |
+| Joystick push | Pilot's Guide and trainer: the map pointer and an info bar (lat/lon, bearing and distance from the aircraft, ground elevation; the name of an object under it); again removes it and recenters. RANGE while panning recenters on the pointer. NXi: the PFD inset pans too | Partial: MFD navigation map, the flight plan page's map and PFD inset, with the flashing pointer, ENT for waypoint info (MFD; airports, VORs, NDBs and intersections, not user waypoints) and the 60 s idle recenter. Missing: elevation, airspace info (no terrain or airspace data) |
 | Joystick 8 ways | Moves the pointer; at the map's edge the map scrolls | Done |
 | DIRECT TO | Direct-to window; again closes on the PFD | Done |
 | FPL | PFD: flight plan window toggles. MFD: FPL page, again goes back | Done |

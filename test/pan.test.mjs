@@ -1,7 +1,7 @@
 // Map pan mode (joystick), as on the v13 trainer.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { panInfo, panMarkup, panMeasureFrom, panMove, panPoint, panProject, panStart, panTarget, PAN_STEP } from "../dist/pan.js";
+import { PanIdle, panInfo, panMarkup, panMeasureFrom, panMove, panPoint, panProject, panStart, panTarget, panUnder, PAN_IDLE_MS, PAN_STEP, PAN_WPT_PAGES } from "../dist/pan.js";
 
 // 100 px a nm, north up, a 400 x 300 px map.
 const view = { w: 400, h: 300, scale: 100, up: 0, lat: 0 };
@@ -83,4 +83,53 @@ test("measuring draws a dashed line from the start to the pointer", () => {
   const svg = panMarkup(p, info, g, 18, panProject(p, here, view));
   assert.match(svg, /<line x1="200" y1="150" x2="300" y2="150"[^>]*stroke-dasharray/);
   assert.doesNotMatch(panMarkup(p, info, g, 18), /<line/, "no line when panning");
+});
+
+// Pilot's Guide: the map pointer flashes. An SVG animation with no id, so the per-display id scoping is untouched.
+test("the pointer flashes, about once a second, shown longer than hidden; the info bar does not", () => {
+  const info = { label: "MAP POINTER", dis: "1.0NM", brg: "090°", lat: 0, lon: 0 };
+  const svg = panMarkup(panStart(here), info, { x: 0, y: 0, w: 400, h: 300, cx: 200, cy: 150 }, 18);
+  const m = svg.match(/<path[^>]*>(<animate [^>]*\/>)<\/path>/);
+  assert.ok(m, "the animation is on the pointer");
+  assert.match(m[1], /attributeName="visibility"/);
+  assert.match(m[1], /values="visible;hidden"/);
+  assert.match(m[1], /calcMode="discrete"/);
+  assert.match(m[1], /dur="1s"/);
+  assert.match(m[1], /repeatCount="indefinite"/);
+  const shown = Number(m[1].match(/keyTimes="0;([\d.]+)"/)[1]);
+  assert.ok(shown > 0.5 && shown < 1, "visible longer than hidden");
+  assert.equal(svg.match(/<animate/g).length, 1);
+  assert.doesNotMatch(svg, /\sid="/);
+});
+
+test("the point under the pointer, for ENT's waypoint information", () => {
+  const p = { center: here, x: 0, y: 0 };
+  const on = { id: "ON", type: "VOR", lat: 0, lon: 0 };
+  assert.equal(panUnder(p, view, [{ id: "FAR", type: "FIX", lat: 1, lon: 1 }, on]), on);
+  assert.equal(panUnder(p, view, [{ id: "FAR", type: "FIX", lat: 1, lon: 1 }]), undefined);
+});
+
+test("ENT opens the WPT page that fits the point; user waypoints have none here", () => {
+  assert.deepEqual(PAN_WPT_PAGES, { APT: "AirportInfo", VOR: "VORInfo", NDB: "NDBInfo", FIX: "IntersectionInfo" });
+  assert.equal(PAN_WPT_PAGES.WPT, undefined);
+});
+
+test("60 s with no joystick input ends pan mode", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  assert.equal(PAN_IDLE_MS, 60_000);
+  let ended = 0;
+  const idle = new PanIdle(() => ended++);
+  idle.sync(true); // pan mode starts
+  idle.sync(true); // redraws do not restart it
+  t.mock.timers.tick(PAN_IDLE_MS - 1);
+  assert.equal(ended, 0);
+  idle.moved(); // a joystick move restarts it
+  t.mock.timers.tick(PAN_IDLE_MS - 1);
+  assert.equal(ended, 0);
+  t.mock.timers.tick(1);
+  assert.equal(ended, 1);
+  idle.sync(true); // pan mode again
+  idle.sync(false); // ended by the push: the timer goes with it
+  t.mock.timers.tick(PAN_IDLE_MS * 2);
+  assert.equal(ended, 1);
 });

@@ -56,6 +56,8 @@ export class MfdPage {
     /** Redrawn every second (a clock on the page). */ live = false;
     /** The navigation map behind the page: the whole map, or the map beside the page's data. */
     navMap = null;
+    /** A page whose own map pans (the flight plan page's): the map window and the layer the pointer goes in. */
+    panWindow = null;
     p;
     root;
     get s() {
@@ -108,6 +110,10 @@ export class MfdPage {
     selected() {
         return null;
     }
+    /** WPT pages: shows waypoint `id` (pan mode's ENT), if this page has it. */
+    showWaypoint(_id) {
+        return false;
+    }
     /** The MENU key's PAGE MENU options, or null for a page without one here. */
     /** Where the navigation map draws the nearest airport line, if this page has one. */
     nearestLine() {
@@ -122,15 +128,17 @@ export class MfdPage {
 class MapPage extends MfdPage {
     geom;
     g;
+    /** Where the map goes: under the range legend. */ before;
     constructor(m, name, screen, geom) {
         super(m, name, screen);
         this.geom = geom;
         // Under the range legend (DIRECT TO has no legend group, AirportInfo no legend).
-        const before = this.p.el("Legend") ?? this.p.el("RangeDisplay") ?? this.root.querySelector('[id="Background"]');
-        this.g = mapGroup(screen, before, geom);
+        this.before = this.p.el("Legend") ?? this.p.el("RangeDisplay") ?? this.root.querySelector('[id="Background"]');
+        this.g = mapGroup(screen, this.before, geom);
     }
     drawOwnMap(preview) {
-        this.m.drawMap(this.g, this.geom, this.center() ?? undefined, preview);
+        const pan = this.panWindow && this.m.ui.pan;
+        this.m.drawMap(this.g, this.geom, pan ? pan.center : this.center() ?? undefined, preview, pan ? pan.up : undefined);
         this.p.text("RangeDisplay", rangeLabel(this.s.range));
         this.p.text("OrientationDisplay", this.s.orientation);
     }
@@ -448,6 +456,13 @@ class NavInfoPage extends MapPage {
     center() {
         return this.point() ?? null;
     }
+    showWaypoint(id) {
+        if (!this.s.points.some((p) => p.type === this.type && p.id === id))
+            return false;
+        this.id = id;
+        this.entry.cancel();
+        return true;
+    }
     selected() {
         return this.point()?.id ?? null;
     }
@@ -660,6 +675,14 @@ class AirportInfoPage extends MapPage {
     }
     center() {
         return this.apt ?? null;
+    }
+    showWaypoint(id) {
+        if (!this.s.airports.some((a) => a.id === id))
+            return false;
+        this.setView("INFO");
+        [this.id, this.grp, this.rwy, this.freqs.sel] = [id, "ID", 0, 0];
+        this.entry.cancel();
+        return true;
     }
     selected() {
         return this.apt?.id ?? null;
@@ -906,6 +929,8 @@ class FlightPlanPage extends MapPage {
         super(m, "ActiveFlightPlanNarrow", screen, FPL_MAP);
         this.entry = entry;
         this.tools = tools;
+        // Pilot's Guide: the joystick pans this page's map too, with the navigation map's pointer and info bar.
+        this.panWindow = { geom: FPL_MAP, layer: mapGroup(screen, this.before, FPL_MAP) };
     }
     legs() {
         return this.s.route.map((r) => resolve(this.s, r));
