@@ -529,13 +529,44 @@ const tabbedBox = (x, y, w, h, title) => {
     const end = x + 12 + title.length * 8.5; // Saira Semi Condensed capitals at 14.5px
     return `<rect x="${x}" y="${y}" width="${w}" height="${h}" style="fill:#000000;stroke:none"/>` +
         `<path d="M${x},${y + h}V${y - 9}H${x + 5}M${end},${y - 9}V${y}H${x + w}V${y + h}H${x}" style="fill:none;stroke:${WINDOW_FRAME};stroke-width:1"/>` +
-        `<text x="${x + 8}" y="${y - 3}" fill="#ffffff" style="font-family:'Liberation Sans',sans-serif;font-size:14.5px">${title}</text>`;
+        `<text x="${x + 8}" y="${y - 3}" fill="#ffffff" style="font-family:'Liberation Sans',sans-serif;font-size:14.5px">${esc(title)}</text>`;
 };
-/** Greys an FG1000 window page's background (#181818) and title tabs (#4b4b4b) to the trainer's window grey. */
+/** Redraws an FG1000 window page (DIRECT TO, waypoint entry) as the trainer's: its background (#181818) grey in the
+ * trainer's frame, and each box's title tab (a #4b4b4b or #1a3030 rect across the box's top edge) a stepped title above
+ * the box, as tabbedBox draws one. Other grey rects (map labels, the waypoint submenu) take the window grey. */
 function trainerWindow(root) {
-    for (const e of root?.querySelectorAll("rect, path") ?? [])
-        if (/fill:#(181818|4b4b4b)/.test(e.getAttribute("style") ?? ""))
-            e.style.fill = PANEL_GREY;
+    if (!root)
+        return;
+    const n = (e, k) => Number(e?.getAttribute(k));
+    const has = (e, fill) => fill.test(e.getAttribute("style") ?? "");
+    const rects = [...root.querySelectorAll("rect")];
+    const texts = [...root.querySelectorAll("text")];
+    for (const e of root.querySelectorAll("rect, path"))
+        if (has(e, /fill:#181818/))
+            Object.assign(e.style, { fill: PANEL_GREY, stroke: WINDOW_FRAME, strokeWidth: "3" });
+    for (const tab of rects) {
+        if (!has(tab, /fill:#(4b4b4b|1a3030)/))
+            continue;
+        const [x, y, w, h] = ["x", "y", "width", "height"].map((k) => n(tab, k));
+        // A tab is title-high; the waypoint submenu, also #4b4b4b, is not.
+        const box = h <= 25 ? rects.find((b) => has(b, /fill:#000000/) && n(b, "x") < x && Math.abs(n(b, "y") - (y + h / 2)) < 3) : undefined;
+        const title = texts.find((t) => {
+            const at = t.hasAttribute("x") ? t : t.querySelector("tspan");
+            return n(at, "x") >= x && n(at, "x") <= x + w && n(at, "y") >= y && n(at, "y") <= y + h;
+        });
+        if (!box || !title) {
+            if (has(tab, /fill:#4b4b4b/))
+                tab.style.fill = PANEL_GREY;
+            continue;
+        }
+        const [bx, by] = [n(box, "x"), n(box, "y")];
+        const at = title.hasAttribute("x") ? title : title.querySelector("tspan");
+        tab.style.display = "none";
+        title.setAttribute("transform", `translate(${bx + 8 - n(at, "x")} ${by - 3 - n(at, "y")})`);
+        Object.assign(title.style, { fontSize: "14.5px", stroke: "none" });
+        const end = bx + 12 + (title.textContent ?? "").length * 8.5; // as tabbedBox
+        tab.insertAdjacentHTML("afterend", `<path d="M${bx},${by}V${by - 9}H${bx + 5}M${end},${by - 9}V${by}" style="fill:none;stroke:${WINDOW_FRAME};stroke-width:1"/>`);
+    }
 }
 // WPT - APPROACH INFORMATION's boxes: title, top, rows shown. Fixed, so the sequence box gets what is left.
 const APR_BOXES = { AIRPORT: [77, 2], APPROACHES: [166, 5], TRANSITIONS: [338, 3], MINIMUMS: [458, 1], SEQUENCE: [524, 7] };
@@ -1317,6 +1348,7 @@ class ProceduresPage extends MfdPage {
 // MENU: the page's PAGE MENU, a window over the page (v13 trainer). Either FMS knob moves the cursor, skipping dim
 // options; ENT carries out the option; CLR, MENU or pushing the FMS knob closes it.
 const MENU_ROWS = 8;
+const menuText = (t, x, y, anchor = "start", id = "") => `<text ${id && `id="PageMenu${id}"`} x="${x}" y="${y}" fill="#ffffff" text-anchor="${anchor}" style="font-size:19.35px">${t}</text>`;
 export class PageMenuPage extends MfdPage {
     options = [];
     at = 0;
@@ -1326,11 +1358,9 @@ export class PageMenuPage extends MfdPage {
         const g = document.createElementNS(NS, "g");
         g.id = "Page-PageMenu";
         g.style.display = "none";
-        const style = `font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px`;
-        const text = (t, x, y, anchor = "start", id = "") => `<text ${id && `id="PageMenu${id}"`} x="${x}" y="${y}" fill="#ffffff" text-anchor="${anchor}" style="${style}">${t}</text>`;
         let rows = "";
         for (let i = 0; i < MENU_ROWS; i++)
-            rows += text("", 744, 150 + i * 27, "start", `Option${i}`);
+            rows += menuText("", 744, 150 + i * 27, "start", `Option${i}`);
         g.innerHTML = `<g id="PageMenuFrame"/>` + rows;
         after.after(g);
         this.root = g;
@@ -1347,12 +1377,10 @@ export class PageMenuPage extends MfdPage {
         this.at = firstOption(options.map((o) => !!o.act));
         // v13 trainer: the window fits its options
         const bottom = 120.5 + Math.min(Math.max(options.length, 1), MENU_ROWS) * 27 + 12;
-        const text = (t, y) => `<text x="874" y="${y}" fill="#ffffff" text-anchor="middle" style="font-family:'Liberation Sans Narrow','Arial Narrow',sans-serif;font-stretch:condensed;font-size:19.35px">${t}</text>`;
         this.root.querySelector("#PageMenuFrame").innerHTML =
-            `<rect x="725" y="54" width="309" height="${bottom + 82 - 54}" style="fill:${WINDOW_BG};stroke:${WINDOW_FRAME};stroke-width:3"/>` +
-                `<rect x="727.5" y="56.5" width="304" height="${bottom + 77 - 54}" style="fill:none;stroke:#606060;stroke-width:1"/>` + // the frame's bevel
-                text("PAGE MENU", 82) + tabbedBox(734.5, 120.5, 290, bottom - 120.5, "OPTIONS") +
-                text("Press the FMS CRSR knob to", bottom + 37) + text("return to base page", bottom + 62);
+            windowRect(725, 54, 309, bottom + 28, WINDOW_BG) + menuText("PAGE MENU", 874, 82, "middle") +
+                tabbedBox(734.5, 120.5, 290, bottom - 120.5, "OPTIONS") +
+                menuText("Press the FMS CRSR knob to", 874, bottom + 37, "middle") + menuText("return to base page", 874, bottom + 62, "middle");
     }
     fms(_outer, d) {
         this.at = stepMenu(this.options.map((o) => !!o.act), this.at, d);
@@ -1522,7 +1550,7 @@ const greyBox = (title, rows) => ({ title, rows: rows.map(([label, value]) => ({
 function panelColumn(x, w, y, boxes, rowH = 23) {
     let out = "";
     for (const b of boxes) {
-        out += tabbedBox(x + 0.5, y + 0.5, w, b.rows.length * rowH + 12, esc(b.title));
+        out += tabbedBox(x + 0.5, y + 0.5, w, b.rows.length * rowH + 12, b.title);
         b.rows.forEach((r, i) => {
             const ry = y + 24 + i * rowH; // centered in the box: Saira sits lower than Liberation
             const fill = (on, normal) => (on ? "#000000" : r.dim ? "#808080" : normal);
@@ -1814,6 +1842,7 @@ class SystemStatusPage extends PanelPage {
         return this.m.topKeys({ 7: key(`${this.db} DB`, () => (this.db = this.db === "MFD1" ? "PFD1" : "MFD1")), 8: dimKey("ANN TEST") });
     }
     draw() {
+        // shortcut: Saira has no ✓, so the browser draws it from a system font; draw it as a path if that shows.
         this.paint([{ title: "LRU INFO", rows: LRUS.map((label) => ({ label, value: "✓", color: "#00ff00" })) }], [
             greyBox("AIRFRAME", [["AIRFRAME", "____"]]),
             greyBox(`${this.db} DATABASE`, [["BASEMAP", "____"], ["NAVIGATION", "____"], ["OBSTACLE", "____"], ["TERRAIN", "____"]]),

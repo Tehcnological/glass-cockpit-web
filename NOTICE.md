@@ -9,7 +9,7 @@ From FlightGear's [fgdata](https://gitlab.com/flightgear/fgdata):
 
 Also included:
 
-- `src/fonts/SairaSemiCondensed-Medium.ttf`: Saira Semi Condensed Medium, Copyright 2016 The Saira Project Authors, unmodified from [google/fonts](https://github.com/google/fonts/tree/main/ofl/sairasemicondensed), under the SIL Open Font License 1.1 (`src/fonts/OFL.txt`), not the GPL. `scripts/build-svg.mjs` embeds it as `src/svg/font.ts`. It replaces Liberation Sans Narrow, the font FG1000's SVGs name.
+- `src/fonts/SairaSemiCondensed-Medium.ttf`: Saira Semi Condensed Medium, Copyright 2016 The Saira Project Authors, unmodified from [google/fonts](https://github.com/google/fonts/tree/main/ofl/sairasemicondensed), under the SIL Open Font License 1.1 (`src/fonts/OFL.txt`), not the GPL. The displays load it from that file. It replaces Liberation Sans Narrow, the font FG1000's SVGs name.
 
 Not included:
 

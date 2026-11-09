@@ -1,9 +1,11 @@
 // Builds the SVG for one display unit: the 1024 x 768 screen, optionally inside the bezel FlightGear draws for its
 // FG1000 window (Dialogs/fascia.svg, screen at 186,45 of the 1407 x 918 bezel, per Nasal/GUI.nas).
 import BEZEL from "./svg/bezel.js";
-import FONT from "./svg/font.js";
 import { clipRect } from "./page.js";
 import type { Input } from "./bezel.js";
+
+// From dist/, the font in src/fonts/ (both ship in the package; README "Font").
+const FONT = new URL("../src/fonts/SairaSemiCondensed-Medium.ttf", import.meta.url).href;
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -51,10 +53,12 @@ export function buildDisplay(container: HTMLElement, pages: string[], label: str
     }
   }
   // Departs from FG1000 (Liberation Sans Narrow, not bundled): every screen text in Saira Semi Condensed, an open font
-  // close to the v13 trainer's, bundled so it looks the same on every machine. The bezel keeps its own lettering.
+  // close to the v13 trainer's, bundled so it looks the same on every machine. The bezel keeps its own lettering. Digits
+  // are tabular, as Liberation's are, so readouts hold still. A file, not a data: URI, so a site's CSP can keep
+  // font-src 'self': bundlers (Vite, webpack 5) emit it as an asset.
   const style = svg.appendChild(document.createElementNS(NS, "style"));
   style.textContent = `@font-face{font-family:"Saira Semi Condensed";src:url(${FONT}) format("truetype")}` +
-    `.gcw-screen text,.gcw-screen tspan{font-family:"Saira Semi Condensed",sans-serif!important;font-stretch:normal!important}`;
+    `.gcw-screen text,.gcw-screen tspan{font-family:"Saira Semi Condensed",sans-serif!important;font-stretch:normal!important;font-variant-numeric:tabular-nums}`;
   const screen = svg.appendChild(document.createElementNS(NS, "g"));
   screen.setAttribute("class", "gcw-screen");
   if (bezel) screen.setAttribute("transform", "translate(187 177)");

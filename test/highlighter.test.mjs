@@ -31,3 +31,13 @@ test("a row left black by the cursor goes back to its template color", () => {
   hl.set(row, false);
   assert.equal(row.style.fill, "");
 });
+
+test("a span runs the cursor box across the row instead of hugging the text", () => {
+  const boxes = [];
+  globalThis.document = { createElementNS: () => { const b = el(); boxes.push(b); return b; } };
+  const hl = new Highlighter();
+  hl.set(el(), true, { x: 738, w: 283 });
+  hl.set(el(), true);
+  assert.deepEqual([boxes[0].attrs.x, boxes[0].attrs.width], ["738", "283"]);
+  assert.deepEqual([boxes[1].attrs.x, boxes[1].attrs.width], ["-2", "14"]);
+});
