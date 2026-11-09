@@ -124,3 +124,19 @@ export declare class Afcs {
     private overspeed;
     private draw;
 }
+/**
+ * A toy for the demos, not flight dynamics (this package's own; FG1000 has none): `dt` seconds of the aircraft flying
+ * toward the command bars `fd` at fixed power. Pitch moves up to 3°/s, roll 8°/s, airspeed 2 kt/s; the host clamps `dt`.
+ */
+export declare function toyFly(ac: Pick<AfcsInput, "pitch" | "roll" | "ias" | "alt" | "heading" | "course" | "cdiDots">, fd: {
+    pitch: number;
+    roll: number;
+}, dt: number): {
+    pitch: number;
+    roll: number;
+    ias: number;
+    vsi: number;
+    alt: number;
+    heading: number;
+    cdiDots: number;
+};

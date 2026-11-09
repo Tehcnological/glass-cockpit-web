@@ -17,10 +17,10 @@
 <script type="module">
   import { GlassPfd, GlassMfd } from "./dist/glass-pfd.js";
   import { DisplayBackup, displayModes } from "./dist/display-backup.js";
-  import { Afcs, AFCS_KEYS } from "./dist/afcs.js";
+  import { Afcs, AFCS_KEYS, toyFly } from "./dist/afcs.js";
   import { RADIOS } from "./dist/surround.js";
   // The GFC 700: its keys are on the MFD (and on the second PFD in its place), its annunciations on the PFDs. With the
-  // autopilot engaged, the loop below flies the sliders toward the command bars (a toy model, not flight dynamics). Once
+  // autopilot engaged, the loop below flies the sliders toward the command bars (`toyFly`, a toy model, not flight dynamics). Once
   // the AHRS has aligned it runs its preflight test (PFT above the airspeed tape); a host would sound a tone when it passes.
   const afcs = new Afcs({ maxSpeed: 140, onPreflightPass: () => console.log("GFC 700 preflight test passed") });
   let out = null;
@@ -132,7 +132,6 @@
   cws.onpointerup = cws.onpointerleave = () => (afcs.cws(false), update());
   // Every frame while the autopilot flies: move toward the command bars. Otherwise, while the AFCS shows anything, redraw
   // 10 times a second (annunciations flash); once it shows nothing, one last full redraw. The sliders follow 10 times a second.
-  const toward = (v, target, rate) => v + Math.max(-rate, Math.min(rate, target - v));
   let last = performance.now(), drawnAt = 0, formAt = 0, shown = false, moved = false;
   const syncForm = () => {
     for (const k of ["pitch", "roll", "ias", "vsi", "alt", "heading", "cdiDots"]) f.elements[k].value = ac[k];
@@ -140,7 +139,7 @@
   };
   const fly = (now) => {
     requestAnimationFrame(fly);
-    const dt = Math.min(0.1, (now - last) / 1000), rad = Math.PI / 180; // a background tab pauses frames: no jump after
+    const dt = Math.min(0.1, (now - last) / 1000); // a background tab pauses frames: no jump after
     last = now;
     const moving = !!(out?.ap && out.fd);
     if (moved && !moving) syncForm(); // the autopilot let go: the sliders show where it left the aircraft
@@ -150,13 +149,7 @@
     if (!moving && now - drawnAt < 100) return;
     drawnAt = now;
     if (moving) {
-      ac.pitch = toward(ac.pitch, out.fd.pitch, 3 * dt);
-      ac.roll = toward(ac.roll, out.fd.roll, 8 * dt);
-      ac.ias = toward(ac.ias, Math.max(55, 105 - 3 * (ac.pitch - 1)), 2 * dt); // fixed power: nose up slows
-      ac.vsi = ac.ias * 101.3 * Math.tan((ac.pitch - 1) * rad);
-      ac.alt += (ac.vsi * dt) / 60;
-      ac.heading = (ac.heading + ((1091 * Math.tan(ac.roll * rad)) / (ac.ias + 6)) * dt + 360) % 360;
-      ac.cdiDots = Math.max(-2.4, Math.min(2.4, ac.cdiDots - Math.sin((ac.heading - ac.course) * rad) * (ac.ias / 3600) * dt / 0.3));
+      Object.assign(ac, toyFly(ac, out.fd, dt));
       if (now - formAt >= 100) (formAt = now), syncForm();
     }
     update(true);

@@ -585,3 +585,19 @@ export class Afcs {
         };
     }
 }
+/**
+ * A toy for the demos, not flight dynamics (this package's own; FG1000 has none): `dt` seconds of the aircraft flying
+ * toward the command bars `fd` at fixed power. Pitch moves up to 3°/s, roll 8°/s, airspeed 2 kt/s; the host clamps `dt`.
+ */
+export function toyFly(ac, fd, dt) {
+    const rad = Math.PI / 180;
+    const toward = (v, target, rate) => v + clamp(target - v, -rate, rate);
+    const pitch = toward(ac.pitch, fd.pitch, 3 * dt);
+    const roll = toward(ac.roll, fd.roll, 8 * dt);
+    const ias = toward(ac.ias, Math.max(55, 105 - 3 * (pitch - 1)), 2 * dt); // fixed power: nose up slows
+    const vsi = ias * 101.3 * Math.tan((pitch - 1) * rad);
+    const alt = ac.alt + (vsi * dt) / 60;
+    const heading = (ac.heading + ((1091 * Math.tan(roll * rad)) / (ias + 6)) * dt + 360) % 360;
+    const cdiDots = clamp(ac.cdiDots - Math.sin((heading - ac.course) * rad) * (ias / 3600) * dt / 0.3, -2.4, 2.4);
+    return { pitch, roll, ias, vsi, alt, heading, cdiDots };
+}
