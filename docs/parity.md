@@ -59,7 +59,7 @@ Garmin art, screenshots, data or manual text is copied.
 | INSET | OFF, DCLTR, WX LGND, TRAFFIC, TOPO, TERRAIN, PRECIP, METAR, BACK | Partial: weather, topo and terrain keys No data |
 | PFD | SYN VIS, DFLTS, WIND, DME, BRG1, HSI FRMT, BRG2, ALT UNIT, STD BARO, BACK | Partial: SYN VIS No data; HSI FRMT (arc HSI) missing |
 | XPDR | STBY, ON, ALT, VFR, CODE, IDENT, BACK; CODE: digits 0 to 7, BKSP | Done |
-| OBS, SUSP | OBS; becomes SUSP, lit, while waypoint sequencing is suspended at the missed approach point (Pilot's Guide) | Done (no SUSP at a hold yet) |
+| OBS, SUSP | OBS; becomes SUSP, lit, while waypoint sequencing is suspended at the missed approach point or a hold (Pilot's Guide) | Done |
 | Unusual attitude | Past +30°/-20° pitch or 65° bank (Pilot's Guide): the PFD declutters, its windows and inset go, and their keys dim | Done |
 
 ## PFD windows
@@ -139,7 +139,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Direct-to, including from a page's cursor or the pan pointer | Done |
 | PROC: activate vector-to-final, approach, missed; NOT APPROVED FOR GPS | Done on the MFD |
 | PROC: select arrival, select departure | Missing |
-| Hold at waypoint / present position | Partial: PAGE MENU windows (inbound course, turns, time or distance legs, LOAD?), a hold leg in the plan with a racetrack on the map, Remove Hold, `sequenceLeg` keeps a hold active; Hold At Waypoint MFD only (no PFD cursor); no EFC time, no entry procedures, no SUSP |
+| Hold at waypoint / present position | Partial: PAGE MENU windows (inbound course, turns, time or distance legs, LOAD?), a hold leg in the plan with a racetrack on the map, Remove Hold, `sequenceLeg` keeps a hold active; Hold At Waypoint MFD only (no PFD cursor); an active hold suspends sequencing and SUSP resumes on the leg after it; no EFC time, no entry procedures; procedure holding legs (CIFP HF, HM, HA) are not holds yet, as the navdata has no hold course, turn or leg length |
 | Airways (load, collapse, expand) | Missing (airway data is there since `buildNasr` airways; the flight plan cannot load them yet) |
 | Duplicate waypoint picker | Missing |
 | Approach suspend (SUSP) and missed approach sequencing | Done (`susp`; the host sequences the plan and must hold at the MAP while `susp` is set) |
@@ -170,6 +170,6 @@ airport sub-pages, the AUX pages, the SUSP key (built from the Pilot's Guide) an
 3. **Missing pages and softkeys:** nearest airport RNWY/FREQ/APR/LD APR, MAP PROFILE and AIRWAYS, Map Setup's Airways
    and Profile groups, the AUX pages (system setup, utility and its scheduler, trip planning, GPS status, system
    status), the user waypoint pages. Done. Left: WPT airport INFO-2, the flight plan catalog, the procedures page softkeys.
-4. **Flows:** arrivals and departures, holds (partial: no SUSP at a hold, no EFC time or entries), duplicate waypoints, airways in the flight plan. SUSP and missed approach
+4. **Flows:** arrivals and departures, holds (partial: no EFC time or entries, no procedure holding legs), duplicate waypoints, airways in the flight plan. SUSP and missed approach
    sequencing are done.
 5. **Later, by request:** the audio panel. Keyboard typing, display failures and the autopilot are done.

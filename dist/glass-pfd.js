@@ -16,7 +16,7 @@ import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange } from "./map.js";
 import { ProcFlow, PROC_MENU } from "./procedures.js";
 import { MIN_BLANK, minView, stepBaro } from "./apr-info.js";
 import { PanIdle, panInfo, panMarkup, panMove, panStart, panTarget } from "./pan.js";
-import { bearingDistance, bestApproach, directToPatch, cancelDirectTo, findPoint, latLon, missedPatch, nearest, nrstFreq, planName, routePoint, suspended } from "./nav.js";
+import { bearingDistance, bestApproach, directToPatch, cancelDirectTo, findPoint, latLon, nearest, nrstFreq, planName, resumePatch, routePoint, suspended } from "./nav.js";
 import { alertsKey, seenAlerts } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
 import { BLANK as blank, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key as k, screenBox } from "./ui.js";
@@ -478,12 +478,12 @@ export class GlassPfd {
             case "top": {
                 const cdi = ["GPS", "NAV1", "NAV2"];
                 // v13 trainer: OBS is dim with no flight plan (FG1000 always offers it); while on, it stays so it can be turned off.
-                // Pilot's Guide (FG1000 has no SUSP): suspended at the missed approach point the key reads SUSP, lit, and sequences
-                // onto the missed approach from the MAP; with no missed approach it stays suspended.
+                // Pilot's Guide (FG1000 has no SUSP): suspended at the missed approach point or a hold the key reads SUSP, lit, and
+                // sequences onto the missed approach from the MAP, or the leg after the hold (`resumePatch`).
                 return [
                     s.reversionary ? k("ENGINE", () => this.go("engine")) : blank,
                     off(k("INSET", () => { u.inset = true; this.go("inset"); })), blank, off(k("PFD", () => this.go("pfd"))),
-                    s.susp ? k("SUSP", () => { const p = missedPatch(s.route, null); if (p)
+                    s.susp ? k("SUSP", () => { const p = resumePatch(s); if (p)
                         this.change(p); }, true)
                         : s.route.length || s.obs ? k("OBS", () => this.change({ obs: !s.obs }), s.obs) : dimKey("OBS"),
                     // PFDInstrumentsController.incrCDISource: GPS, NAV1, NAV2.

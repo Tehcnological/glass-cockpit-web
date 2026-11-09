@@ -39,7 +39,7 @@ export interface MfdState extends Knobs {
     /** Index into `route` of the active waypoint; the leg into it is magenta. */ activeLeg: number;
     /** Set by DIRECT TO: where the direct leg to the active waypoint starts. */ directFrom: LatLon | null;
     /** Vector-to-final is active (PROC): the active waypoint is the final approach fix, on the final course. */ vtf: boolean;
-    /** Waypoint sequencing is suspended at the approach's missed approach point (the PFD's SUSP); set as the aircraft passes the MAP. */ susp: boolean;
+    /** Waypoint sequencing is suspended (the PFD's SUSP): set as the aircraft passes the approach's missed approach point, or while a hold is active. */ susp: boolean;
     /** Barometric minimums, feet; null is off. Not drawn here: PROC's approach loading sets them for the PFD (reported through `onChange`). */ minimums: number | null;
     engine: Engine;
     /** Which NAV shows green as the CDI source. */ cdiSource: CdiSource;
