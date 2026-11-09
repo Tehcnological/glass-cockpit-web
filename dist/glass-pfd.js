@@ -21,12 +21,12 @@ import { alertsKey, seenAlerts } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
 import { BLANK as blank, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key as k, screenBox } from "./ui.js";
 import { firstOption, fplMenu, stepMenu } from "./page-menu.js";
-import { FPL_TOOLS, FplTool, toolEnabled } from "./fpl-tools.js";
+import { FPL_TOOLS, FplTool, holdRow, toolEnabled } from "./fpl-tools.js";
 import { vsiPointer, vsiText } from "./vsi.js";
 import { uaIgnores, unusualAttitude } from "./unusual-attitude.js";
 export { unusualAttitude };
 export { GlassMfd } from "./glass-mfd.js";
-export { gpsApproved, vtfLeg } from "./nav.js";
+export { gpsApproved, sequenceLeg, vtfLeg } from "./nav.js";
 export { DisplayBackup, displayModes } from "./display-backup.js";
 export { Afcs, AFCS_KEYS } from "./afcs.js";
 const DEFAULTS = {
@@ -516,7 +516,8 @@ export class GlassPfd {
     }
     // FMS knob in a window: the outer ring moves the cursor, the inner changes the field (NRST: both scroll the list).
     /** The PAGE MENU options, the flight plan's or the DIRECT TO window's; those without `patch` or `tool` are dim. */
-    // Create ATK Offset Waypoint needs the waypoint under a cursor, which this flight plan window does not have yet.
+    // Create ATK Offset Waypoint and Hold At Waypoint need the waypoint under a cursor, which this flight plan window does
+    // not have yet (dim here; they work on the MFD). Hold At Present Position works.
     pageMenu() {
         if (this.ui.menuOf === "DTO")
             return [{ label: "Cancel Direct-To NAV", patch: cancelDirectTo(this.state) }];
@@ -723,6 +724,10 @@ export class GlassPfd {
             const prev = legs[i - 1];
             const leg = prev && p ? bearingDistance(prev.lat, prev.lon, p.lat, p.lon) : null;
             const flown = i < s.activeLeg;
+            if (p?.hold) {
+                const h = holdRow(p.hold);
+                return { ID: h.Leg, Type: "", DTK: h.DTK, DIS: h.DIS };
+            }
             return {
                 ID: (p?.id ?? String(s.route[i])).slice(0, 7),
                 Type: (p?.role ?? "").slice(0, 4).toLowerCase(), // v13 trainer: faf, map (FG1000 has no roles)

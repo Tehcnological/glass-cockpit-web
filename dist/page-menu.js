@@ -1,6 +1,6 @@
 // PAGE MENU: the MENU key's options for a page, as the v13 trainer lists them. Options this package cannot carry out
 // are dim, as the softkeys are; the cursor skips them. DOM-free, so it can be tested on its own.
-import { cancelParallel, isApproach } from "./nav.js";
+import { cancelParallel, isApproach, isHold } from "./nav.js";
 /** The next option the cursor can stop on in direction `d`, or `at` at either end. */
 export function stepMenu(enabled, at, d) {
     for (let i = at + d; i >= 0 && i < enabled.length; i += d)
@@ -25,9 +25,11 @@ export function fplMenu(route, activeLeg) {
     const a = enroute.length < route.length;
     const kept = route.slice(0, activeLeg).filter((r) => !isApproach(r)).length;
     const patches = {};
-    // Inverting drops the approach, as the G1000 does, and flies the first leg.
-    if (enroute.length > 1)
-        patches["Invert Flight Plan"] = { route: [...enroute].reverse(), activeLeg: 1, directFrom: null, vtf: false };
+    // Inverting drops the approach, as the G1000 does, and flies the first leg. It drops holds too (our choice: a hold
+    // would come before its fix).
+    const inverted = enroute.filter((r) => !isHold(r)).reverse();
+    if (inverted.length > 1)
+        patches["Invert Flight Plan"] = { route: inverted, activeLeg: 1, directFrom: null, vtf: false };
     if (route.length)
         patches["Delete Flight Plan"] = { route: [], activeLeg: 0, directFrom: null, vtf: false };
     if (a) {

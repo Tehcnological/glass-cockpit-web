@@ -66,7 +66,7 @@ Garmin art, screenshots, data or manual text is copied.
 
 | Window | Status |
 | --- | --- |
-| Flight plan (FPL) | Partial: shown and its PAGE MENU works (Invert, Delete, Remove Approach, Closest Point of FPL, Parallel Track); no cursor editing on the PFD, so no ATK offset there |
+| Flight plan (FPL) | Partial: shown and its PAGE MENU works (Invert, Delete, Remove Approach, Closest Point of FPL, Parallel Track, Hold At Present Position); no cursor editing on the PFD, so no ATK offset or Hold At Waypoint there |
 | PROC (PROCEDURES, SELECT APPROACH and so on) | Done (the MFD's flow, in the NRST window's place) |
 | DIRECT TO | Done (no VNV fields) |
 | NRST | Done |
@@ -117,7 +117,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Page | Options | Status |
 | --- | --- | --- |
 | Navigation map | Map Setup (orientation, auto zoom, track vector, wind vector, nav range ring, fuel range, field of view, topo, airways, land, aviation, traffic, weather groups), Declutter, Measure Bearing/Distance, Show/Hide Profile View, Show Chart | Partial: Map Setup (Map group: orientation, track vector; Airways group; Profile group grey), Declutter, Measure Bearing/Distance (no elevation), Show/Hide Profile View |
-| Active flight plan | Activate Leg, Load Waypoint, Store Flight Plan, Invert Flight Plan, Delete Flight Plan, Create ATK Offset Waypoint, Parallel Track, Closest Point of FPL, Collapse/Expand Airways, Hold At Wpt, Hold At Present Position, Remove Departure/Arrival/Approach, Enable/Cancel VNV, VNV Direct-To, Select VNV Profile Window | Partial: Invert, Delete, Remove Approach, Closest Point of FPL, Parallel Track (no overlap cancel, no VNV), Create ATK Offset Waypoint (10 nm / 1 nm knob steps) |
+| Active flight plan | Activate Leg, Load Waypoint, Store Flight Plan, Invert Flight Plan, Delete Flight Plan, Create ATK Offset Waypoint, Parallel Track, Closest Point of FPL, Collapse/Expand Airways, Hold At Wpt, Hold At Present Position, Remove Departure/Arrival/Approach, Enable/Cancel VNV, VNV Direct-To, Select VNV Profile Window | Partial: Invert, Delete, Remove Approach, Closest Point of FPL, Parallel Track (no overlap cancel, no VNV), Create ATK Offset Waypoint (10 nm / 1 nm knob steps), Hold At Wpt (MFD only; Remove Hold on a hold), Hold At Present Position (no EFC time) |
 | Flight plan catalog | Create New, Activate, Invert & Activate, Copy, Edit, Delete, Delete All | Missing (no stored plans) |
 | Direct-to window | Cancel Direct-To NAV, Clear Vertical Constraints | Partial: Cancel Direct-To NAV (no VNV) |
 | Airport information | View Destination Airport, Show Directory/Departure/Arrival/Approach/Weather Page, View NOTAMs, Chart Mode On | Missing |
@@ -139,7 +139,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Direct-to, including from a page's cursor or the pan pointer | Done |
 | PROC: activate vector-to-final, approach, missed; NOT APPROVED FOR GPS | Done on the MFD |
 | PROC: select arrival, select departure | Missing |
-| Hold at waypoint / present position | Missing |
+| Hold at waypoint / present position | Partial: PAGE MENU windows (inbound course, turns, time or distance legs, LOAD?), a hold leg in the plan with a racetrack on the map, Remove Hold, `sequenceLeg` keeps a hold active; Hold At Waypoint MFD only (no PFD cursor); no EFC time, no entry procedures, no SUSP |
 | Airways (load, collapse, expand) | Missing (airway data is there since `buildNasr` airways; the flight plan cannot load them yet) |
 | Duplicate waypoint picker | Missing |
 | Approach suspend (SUSP) and missed approach sequencing | Missing |

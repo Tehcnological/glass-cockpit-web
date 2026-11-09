@@ -287,3 +287,59 @@ export function parallelTrack(s, side, nm) {
     }
     return out;
 }
+/** A hold leg: an entry of its own after the fix it holds at, at the fix's position, with `hold`. */
+export const isHold = (r) => typeof r === "object" && r.hold !== undefined;
+// The hold leg for `fix`: its id and position; it goes with an approach the fix came from, but has no role of its own.
+const holdLeg = (fix, hold) => ({ id: fix.id, type: fix.type, lat: fix.lat, lon: fix.lon, hold, ...(fix.approach !== undefined && { approach: fix.approach }) });
+/** Hold At Waypoint: `hold` at the plan's entry `at`, as a hold leg after it (replacing a hold already there). */
+export function holdAtWaypoint(s, at, hold) {
+    // Editing the plan cancels Parallel Track (Pilot's Guide).
+    const route = cancelParallel(s.route);
+    const fix = routePoint(route[at] ?? "", s.points, s.airports);
+    if (!fix)
+        return null;
+    if (isHold(route[at + 1])) {
+        route[at + 1] = holdLeg(fix, hold);
+        return { route, activeLeg: s.activeLeg, vtf: s.vtf };
+    }
+    route.splice(at + 1, 0, holdLeg(fix, hold));
+    return { route, activeLeg: at + 1 <= s.activeLeg ? s.activeLeg + 1 : s.activeLeg, ...vtfEdit(s.vtf, at + 1, s.activeLeg) };
+}
+/** Hold At Present Position: a user waypoint here (to add to `points`), flown direct, with `hold` after it, before the active waypoint. */
+export function holdAtPresentPosition(s, hold) {
+    const route = cancelParallel(s.route);
+    // shortcut: named PPOS and a digit, our own; upgrade if the trainer shows its scheme.
+    const point = { id: userName("PPOS", [...route, ...s.points]), type: "WPT", lat: s.lat, lon: s.lon };
+    const at = Math.min(s.activeLeg, route.length);
+    route.splice(at, 0, point.id, holdLeg(point, hold));
+    return { points: [...s.points, point], route, activeLeg: at, directFrom: { lat: s.lat, lon: s.lon }, vtf: false };
+}
+/**
+ * The active leg once the aircraft reaches the active waypoint (the host sequences the plan): the next one, except
+ * that a hold stays active until the pilot removes it or activates another leg. Reaching a hold fix makes its hold active.
+ */
+export const sequenceLeg = (route, activeLeg) => isHold(route[activeLeg]) ? activeLeg : Math.min(activeLeg + 1, Math.max(0, route.length - 1));
+/** CLR (or Remove Hold) on the plan's entry `at`: deletes it, and a fix's hold with it. Deleting the active leg resumes on the one after. */
+export function deleteEntry(s, at) {
+    const route0 = cancelParallel(s.route); // editing the plan cancels Parallel Track (Pilot's Guide)
+    const n = !isHold(route0[at]) && isHold(route0[at + 1]) ? 2 : 1;
+    const route = route0.filter((_, i) => i < at || i >= at + n);
+    const activeLeg = Math.min(s.activeLeg - Math.max(0, Math.min(n, s.activeLeg - at)), Math.max(0, route.length - 1));
+    return { route, activeLeg: Math.max(0, activeLeg), ...vtfEdit(s.vtf, at, s.activeLeg) };
+}
+/**
+ * A hold's racetrack, our own drawing: the fix, the end of the turn there, the end of the outbound leg and the start of
+ * the inbound leg, with the turn radius `r` in nm. Standard rate turns (180 degrees a minute) at `gs` knots; legs of
+ * the hold's distance, or its time at `gs`.
+ */
+export function holdTrack(fix, h, magVar, gs) {
+    const r = gs / (60 * Math.PI);
+    const len = h.distance ?? (gs * (h.time ?? 1)) / 60;
+    const a = ((h.course + magVar) * Math.PI) / 180;
+    const [ux, uy] = [Math.sin(a), Math.cos(a)]; // inbound, east and north
+    const k = h.turn === "R" ? 1 : -1;
+    const [vx, vy] = [k * uy, -k * ux]; // right of the inbound course is (uy, -ux)
+    const { from } = local(fix);
+    const at = (along, across) => from([ux * along + vx * across, uy * along + vy * across]);
+    return { pts: [at(0, 0), at(0, 2 * r), at(-len, 2 * r), at(-len, 0)], r };
+}

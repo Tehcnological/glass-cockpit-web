@@ -1,6 +1,7 @@
 // The navigation map shared by the MFD map page and the PFD inset: FG1000's map layers (Nasal/canvas/map/*.symbol.nas,
 // NavigationMapStyles.nas, ConfigStore.nas; Copyright 2018 Stuart Buchanan, GPL-2.0-or-later) drawn from the points given.
 import { clipRect, TEXT_GLIDE } from "./page.js";
+import { holdTrack, type Hold } from "./nav.js";
 
 export interface MapPoint {
   id: string;
@@ -18,6 +19,7 @@ export interface MapPoint {
   /** Flight plan legs: the fix's role in an approach (see `ProcLeg`). */ role?: string;
   /** Flight plan legs: the approach PROC loaded this fix from, e.g. "ILS RWY 36". */ approach?: string;
   /** Flight plan legs: Parallel Track's point, offset from this flight plan entry (see `parallelTrack`). */ parallel?: string | MapPoint;
+  /** Flight plan legs: a hold leg, after the fix it holds at and at its position (see `Hold`, `holdAtWaypoint`). */ hold?: Hold;
 }
 /** A position only. */
 export interface LatLon { lat: number; lon: number }
@@ -84,7 +86,7 @@ export function symbolPoints(s: MapData, declutter = 0): MapPoint[] {
   const preview = s.preview ?? [];
   const pinned = new Set([...route, ...preview].map((p) => p.id));
   const onAirway = new Set((s.airways ?? []).flatMap((a) => a.points));
-  const extra = route.filter((r) => !byId.has(r.id));
+  const extra = route.filter((r) => !byId.has(r.id) && !r.hold); // a hold leg draws as its fix
   const drawn = new Set([...byId.keys(), ...extra.map((p) => p.id)]);
   return [...s.points, ...extra, ...preview.filter((p) => !drawn.has(p.id))].filter((p) =>
     pinned.has(p.id) || (declutter <= DECLUTTER[p.type] && (s.range <= LAYER_RANGE[p.type] || onAirway.has(p.id))));
@@ -178,6 +180,15 @@ const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer]
     const [x2, y2] = xy(route[i]);
     out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${i === s.activeLeg ? "#ff00ff" : "#ffffff"}" stroke-width="2"/>`;
   }
+  // Holds: a racetrack of our own drawing, in the leg's color. Under 30 kt (on the ground, or no groundspeed, as on the
+  // PFD inset) it is sized for 90 kt.
+  route.forEach((p, i) => {
+    if (!p.hold) return;
+    const { pts, r } = holdTrack(p, p.hold, s.magVar ?? 0, (s.groundspeed ?? 0) < 30 ? 90 : s.groundspeed!);
+    const [a, b, c, d] = pts.map((q) => xy(q).join(" "));
+    const arc = `A${r * scale} ${r * scale} 0 0 ${p.hold.turn === "R" ? 1 : 0}`; // right turns clockwise on the screen
+    out += `<path d="M${a}${arc} ${b}L${c}${arc} ${d}Z" fill="none" stroke="${i === s.activeLeg ? "#ff00ff" : "#ffffff"}" stroke-width="2"/>`;
+  });
   // Airways: low grey (the roads' shade), high green (Pilot's Guide); their fixes show at any range.
   for (const a of s.airways ?? []) {
     for (let i = 1; i < a.points.length; i++) {

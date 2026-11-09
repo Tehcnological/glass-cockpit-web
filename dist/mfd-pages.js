@@ -4,8 +4,8 @@
 import { Page, clamp, deg3, mod } from "./page.js";
 import { mapGroup, mapUp, rangeLabel } from "./map.js";
 import { SETUP_GROUPS } from "./map-setup.js";
-import { bearingDistance, cancelDirectTo, cancelParallel, directToPatch, findPoint, isParallel, latLon, nearest, planEntry, planName, routePoint, vtfEdit } from "./nav.js";
-import { FPL_TOOLS, FplTool, toolEnabled } from "./fpl-tools.js";
+import { bearingDistance, cancelDirectTo, cancelParallel, deleteEntry, directToPatch, findPoint, isHold, isParallel, latLon, nearest, planEntry, planName, routePoint, vtfEdit } from "./nav.js";
+import { FPL_TOOLS, FplTool, holdRow, toolEnabled } from "./fpl-tools.js";
 import { BLANK, CYAN, IdEntry, ListView, NS, dimKey, esc, firstRow, key } from "./ui.js";
 import { firstOption, fplMenu, stepMenu } from "./page-menu.js";
 import { panStart } from "./pan.js";
@@ -884,12 +884,16 @@ class FlightPlanPage extends MapPage {
     entry;
     tools;
     // PAGE MENU (v13 trainer's options): Invert, Delete and Remove Approach work here, and Closest Point of FPL, Parallel
-    // Track and Create ATK Offset Waypoint (on the waypoint under the cursor) open their windows; the rest are dim.
+    // Track, Create ATK Offset Waypoint and Hold At Waypoint (on the waypoint under the cursor) and Hold At Present
+    // Position open their windows; the rest are dim. With the cursor on a hold, Remove Hold takes Hold At Waypoint's place.
     pageMenu() {
         // Each option's change is worked out again from the state when ENT carries it out (the host may have moved on).
         const now = (label) => fplMenu(this.s.route, this.s.activeLeg).find((o) => o.label === label)?.patch;
         const sel = this.crsr ? this.rows.sel : null;
-        return fplMenu(this.s.route, this.s.activeLeg).map(({ label, patch }) => FPL_TOOLS.includes(label) ? {
+        return fplMenu(this.s.route, this.s.activeLeg).map(({ label, patch }) => label === "Hold At Waypoint" && sel !== null && isHold(this.s.route[sel]) ? {
+            label: "Remove Hold",
+            act: () => this.clr(),
+        } : FPL_TOOLS.includes(label) ? {
             label,
             act: toolEnabled(label, this.s, sel) ? () => this.m.open(this.tools().open(label, sel ?? 0)) : undefined,
         } : {
@@ -918,7 +922,9 @@ class FlightPlanPage extends MapPage {
             this.rows.move(d, this.s.route.length + 1);
         else {
             // handleWaypointEntry: the new waypoint goes after the selected one (on the empty last row, at the end).
-            const at = Math.min(this.rows.sel + 1, this.s.route.length);
+            let at = Math.min(this.rows.sel + 1, this.s.route.length);
+            if (isHold(this.s.route[at]))
+                at++; // after a hold, not between it and its fix
             this.m.open(this.entry);
             this.entry.open((p) => this.insert(at, p), d);
         }
@@ -944,9 +950,7 @@ class FlightPlanPage extends MapPage {
         const at = this.rows.sel;
         if (!this.crsr || at >= s.route.length)
             return;
-        const route = cancelParallel(s.route).filter((_, i) => i !== at);
-        const activeLeg = clamp(at < s.activeLeg ? s.activeLeg - 1 : s.activeLeg, 0, Math.max(0, route.length - 1));
-        this.m.change({ route, activeLeg, ...vtfEdit(s.vtf, at, s.activeLeg) });
+        this.m.change(deleteEntry(s, at)); // a fix's hold goes with it
     }
     draw() {
         const s = this.s;
@@ -954,6 +958,9 @@ class FlightPlanPage extends MapPage {
         const rows = legs.map((p, i) => {
             const prev = legs[i - 1];
             const leg = prev && p ? bearingDistance(prev.lat, prev.lon, p.lat, p.lon) : null;
+            // A hold leg, under its fix: HOLD, its inbound course and its turns (our own row; see holdRow).
+            if (p?.hold)
+                return { Header: "", ...holdRow(p.hold), ALT: "" };
             return {
                 Header: "",
                 Leg: p ? p.id.slice(0, 7) : String(s.route[i]),

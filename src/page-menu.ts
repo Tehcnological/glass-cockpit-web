@@ -1,6 +1,6 @@
 // PAGE MENU: the MENU key's options for a page, as the v13 trainer lists them. Options this package cannot carry out
 // are dim, as the softkeys are; the cursor skips them. DOM-free, so it can be tested on its own.
-import { cancelParallel, isApproach } from "./nav.js";
+import { cancelParallel, isApproach, isHold } from "./nav.js";
 import type { LatLon, MapPoint } from "./map.js";
 
 /** One option: no `act` (or `patch`) means dim. */
@@ -34,8 +34,10 @@ export function fplMenu(route: Route, activeLeg: number): { label: string; patch
   const a = enroute.length < route.length;
   const kept = route.slice(0, activeLeg).filter((r) => !isApproach(r)).length;
   const patches: Partial<Record<(typeof FPL_OPTIONS)[number], FplPatch>> = {};
-  // Inverting drops the approach, as the G1000 does, and flies the first leg.
-  if (enroute.length > 1) patches["Invert Flight Plan"] = { route: [...enroute].reverse(), activeLeg: 1, directFrom: null, vtf: false };
+  // Inverting drops the approach, as the G1000 does, and flies the first leg. It drops holds too (our choice: a hold
+  // would come before its fix).
+  const inverted = enroute.filter((r) => !isHold(r)).reverse();
+  if (inverted.length > 1) patches["Invert Flight Plan"] = { route: inverted, activeLeg: 1, directFrom: null, vtf: false };
   if (route.length) patches["Delete Flight Plan"] = { route: [], activeLeg: 0, directFrom: null, vtf: false };
   if (a) {
     const patch: FplPatch = { route: enroute, activeLeg: Math.min(kept, Math.max(0, enroute.length - 1)), vtf: false };

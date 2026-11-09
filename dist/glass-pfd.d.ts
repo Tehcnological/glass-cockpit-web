@@ -10,7 +10,7 @@ export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
 export type { Checklist } from "./mfd-pages.js";
 export type { MapPoint, Airspace, LatLon } from "./map.js";
 export type { Airport, Runway, Freq, Station, Procedure, ProcLeg } from "./nav.js";
-export { gpsApproved, vtfLeg } from "./nav.js";
+export { gpsApproved, sequenceLeg, vtfLeg, type Hold } from "./nav.js";
 export type { Radio, Radios, RadioFailure } from "./surround.js";
 export { DisplayBackup, displayModes, type DisplayMode } from "./display-backup.js";
 export type { DisplayOptions } from "./display.js";
