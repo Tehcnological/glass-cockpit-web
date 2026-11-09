@@ -92,7 +92,7 @@ test("direct-to and loading an approach cancel parallel track", async () => {
   const { approachPatch, directToPatch } = await import("../dist/nav.js");
   const route = parallelTrack({ ...s, activeLeg: 2 }, "R", 6);
   const p = { ...s, route };
-  assert.deepEqual(directToPatch(p, C), { route: s.route, activeLeg: 2, directFrom: { lat: 0, lon: 0.5 }, vtf: false });
+  assert.deepEqual(directToPatch(p, C), { route: s.route, activeLeg: 2, directFrom: { lat: 0, lon: 0.5 }, vtf: false, susp: false });
   assert.deepEqual(approachPatch(route, [pt("IF", 2, 2, { approach: "X" })], "load", s).route.slice(0, 4), s.route);
 });
 
@@ -115,7 +115,7 @@ test("inverting the plan or removing the approach cancels parallel track", async
 test("direct-to an offset waypoint cancels parallel track and flies to its original", async () => {
   const { directToPatch } = await import("../dist/nav.js");
   const route = parallelTrack({ ...s, activeLeg: 2 }, "R", 6);
-  assert.deepEqual(directToPatch({ ...s, route }, route[2]), { route: s.route, activeLeg: 2, directFrom: { lat: 0, lon: 0.5 }, vtf: false });
+  assert.deepEqual(directToPatch({ ...s, route }, route[2]), { route: s.route, activeLeg: 2, directFrom: { lat: 0, lon: 0.5 }, vtf: false, susp: false });
 });
 
 test("an offset before the active waypoint lies on the inbound leg even when the aircraft is off course", () => {

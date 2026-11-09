@@ -59,7 +59,7 @@ Garmin art, screenshots, data or manual text is copied.
 | INSET | OFF, DCLTR, WX LGND, TRAFFIC, TOPO, TERRAIN, PRECIP, METAR, BACK | Partial: weather, topo and terrain keys No data |
 | PFD | SYN VIS, DFLTS, WIND, DME, BRG1, HSI FRMT, BRG2, ALT UNIT, STD BARO, BACK | Partial: SYN VIS No data; HSI FRMT (arc HSI) missing |
 | XPDR | STBY, ON, ALT, VFR, CODE, IDENT, BACK; CODE: digits 0 to 7, BKSP | Done |
-| OBS, SUSP | OBS; becomes SUSP during an approach | Partial: SUSP not ported |
+| OBS, SUSP | OBS; becomes SUSP, lit, while waypoint sequencing is suspended at the missed approach point (Pilot's Guide) | Done (SUSP at a hold waits for holds) |
 | Unusual attitude | Past +30°/-20° pitch or 65° bank (Pilot's Guide): the PFD declutters, its windows and inset go, and their keys dim | Done |
 
 ## PFD windows
@@ -142,7 +142,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Hold at waypoint / present position | Missing |
 | Airways (load, collapse, expand) | Missing (airway data is there since `buildNasr` airways; the flight plan cannot load them yet) |
 | Duplicate waypoint picker | Missing |
-| Approach suspend (SUSP) and missed approach sequencing | Missing |
+| Approach suspend (SUSP) and missed approach sequencing | Done (`susp`; the host sequences the plan and must hold at the MAP while `susp` is set) |
 | VNAV | Missing |
 
 ## From the Line Maintenance Manual
@@ -160,7 +160,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 ## Not checked on the trainer yet
 
 Each needs a pass on the trainer before it is built: the page menus above against the trainer's lists, the WPT
-airport sub-pages, the AUX pages, the SUSP key and hold entry. Read the Pilot's Guide first.
+airport sub-pages, the AUX pages, the SUSP key (built from the Pilot's Guide) and hold entry. Read the Pilot's Guide first.
 
 ## Phases
 
@@ -170,6 +170,6 @@ airport sub-pages, the AUX pages, the SUSP key and hold entry. Read the Pilot's 
 3. **Missing pages and softkeys:** nearest airport RNWY/FREQ/APR/LD APR, MAP PROFILE and AIRWAYS, Map Setup's Airways
    and Profile groups, the AUX pages (system setup, utility and its scheduler, trip planning, GPS status, system
    status). Done. Left: WPT airport INFO-2, user waypoint pages, the flight plan catalog, the procedures page softkeys.
-4. **Flows:** SUSP and missed approach sequencing, arrivals and departures, holds, duplicate waypoints, airways in the
-   flight plan.
+4. **Flows:** arrivals and departures, holds, duplicate waypoints, airways in the flight plan. SUSP and missed approach
+   sequencing are done.
 5. **Later, by request:** the audio panel. Keyboard typing, display failures and the autopilot are done.

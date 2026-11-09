@@ -10,6 +10,8 @@ export interface ProcHost {
         airports: Airport[];
         procedures: Procedure[];
         minimums?: number | null;
+        activeLeg: number;
+        directFrom?: LatLon | null;
     };
     change(patch: object): void;
     close(): void;

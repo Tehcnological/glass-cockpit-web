@@ -1,7 +1,7 @@
 // PROC: the PROCEDURES menu, SELECT APPROACH and NOT APPROVED FOR GPS, as the v13 trainer has them. FG1000 has no
 // procedures page. DOM-free, so the MFD page and the PFD window share it and the tests can run it.
 import { clamp } from "./page.js";
-import { approachPatch, approachPoints, gpsApproved, loadedApproach, nearest, routePoint, vtfPatch } from "./nav.js";
+import { approachPatch, approachPoints, gpsApproved, loadedApproach, missedPatch, nearest, pastMap, routePoint, vtfPatch } from "./nav.js";
 import { minView, ROLE, stepBaro, toggleBaro } from "./apr-info.js";
 export const PROC_MENU = ["ACTIVATE VECTOR-TO-FINAL", "ACTIVATE APPROACH", "ACTIVATE MISSED APPROACH", "SELECT APPROACH", "SELECT ARRIVAL", "SELECT DEPARTURE"];
 const SELECT_APPROACH = 3;
@@ -176,13 +176,13 @@ export class ProcFlow {
             this.h.change(vtfPatch(a.start, a.pts, here));
         else if (item === 1)
             this.h.change({ activeLeg: a.start, directFrom: here, vtf: false });
+        // Pilot's Guide: as SUSP, the first missed approach leg; past the missed approach point, from the aircraft.
         else
-            this.h.change({ activeLeg: a.start + a.pts.findIndex((p) => typeof p !== "string" && p.role === "MISSED"), directFrom: null, vtf: false });
+            this.h.change(missedPatch(s.route, pastMap(s) ? here : null)); // enabled: the approach has missed approach legs
         this.h.close();
     }
     // Adds the approach after the en route waypoints (replacing an approach loaded before), as the G1000 does. ACTIVATE
     // with the VECTORS transition is vector-to-final: the final approach fix is active, its leg on the final course.
-    // shortcut: the missed approach legs follow the missed approach point with no suspend.
     load(activate) {
         const p = this.procs()[this.apr];
         if (!p)
