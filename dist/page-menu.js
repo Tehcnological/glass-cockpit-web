@@ -1,6 +1,6 @@
 // PAGE MENU: the MENU key's options for a page, as the v13 trainer lists them. Options this package cannot carry out
 // are dim, as the softkeys are; the cursor skips them. DOM-free, so it can be tested on its own.
-import { cancelParallel, holdAtPresentPosition, isApproach, isHold } from "./nav.js";
+import { cancelParallel, isApproach, isHold, userName } from "./nav.js";
 /** The next option the cursor can stop on in direction `d`, or `at` at either end. */
 export function stepMenu(enabled, at, d) {
     for (let i = at + d; i >= 0 && i < enabled.length; i += d)
@@ -66,7 +66,9 @@ export const tripMenu = (mode) => [
  * gives it to `add`. It is named as Hold At Present Position names its PPOS points (nav.ts's `userName`).
  */
 export function gpsStatusMenu(s, add) {
-    // holdAtPresentPosition's new point only; its route and hold are dropped (the hold is any valid one).
-    const ppos = () => holdAtPresentPosition({ ...s(), activeLeg: 0 }, { course: 0, turn: "R", time: 1 }).points.at(-1);
+    const ppos = () => {
+        const { route, points, lat, lon } = s();
+        return { id: userName("PPOS", [...route, ...points]), type: "WPT", lat, lon };
+    };
     return [{ label: "Set WPT to Present Position", act: () => add(ppos()) }];
 }

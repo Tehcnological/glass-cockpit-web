@@ -1,6 +1,6 @@
 // PAGE MENU: the MENU key's options for a page, as the v13 trainer lists them. Options this package cannot carry out
 // are dim, as the softkeys are; the cursor skips them. DOM-free, so it can be tested on its own.
-import { cancelParallel, holdAtPresentPosition, isApproach, isHold, type Airport } from "./nav.js";
+import { cancelParallel, isApproach, isHold, userName, type Airport } from "./nav.js";
 import type { LatLon, MapPoint } from "./map.js";
 
 /** One option: no `act` (or `patch`) means dim. */
@@ -79,7 +79,9 @@ export const tripMenu = (mode: (manual: boolean) => void): MenuOption[] => [
  * gives it to `add`. It is named as Hold At Present Position names its PPOS points (nav.ts's `userName`).
  */
 export function gpsStatusMenu(s: () => LatLon & { route: Route; points: MapPoint[]; airports: Airport[] }, add: (p: MapPoint) => void): MenuOption[] {
-  // holdAtPresentPosition's new point only; its route and hold are dropped (the hold is any valid one).
-  const ppos = () => holdAtPresentPosition({ ...s(), activeLeg: 0 }, { course: 0, turn: "R", time: 1 }).points.at(-1)!;
+  const ppos = (): MapPoint => {
+    const { route, points, lat, lon } = s();
+    return { id: userName("PPOS", [...route, ...points]), type: "WPT", lat, lon };
+  };
   return [{ label: "Set WPT to Present Position", act: () => add(ppos()) }];
 }

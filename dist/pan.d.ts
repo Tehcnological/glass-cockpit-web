@@ -3,7 +3,8 @@ import type { LatLon, MapGeometry, MapPoint } from "./map.js";
 export declare const PAN_STEP = 12;
 /** Pilot's Guide: with no joystick input for about a minute, pan mode ends and the map recenters on the aircraft. */
 export declare const PAN_IDLE_MS = 60000;
-/** ENT with the pointer on a waypoint: the WPT page for its type. User waypoints have none (UserWPTInfo has no data here). */
+/** ENT with the pointer on a waypoint: the WPT page for its type. WPT is a user waypoint in `points`; the plan's own
+ * points (approach fixes, ATK offsets) are not on that page, so ENT passes to the page. */
 export declare const PAN_WPT_PAGES: Partial<Record<MapPoint["type"], string>>;
 /** Pan mode's idle timer: one timeout, started with pan mode, restarted by each joystick move, stopped when pan ends. */
 export declare class PanIdle {

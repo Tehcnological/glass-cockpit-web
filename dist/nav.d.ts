@@ -201,6 +201,8 @@ export declare function vtfEdit(vtf: boolean, at: number, activeLeg: number): {
     vtf: boolean;
     directFrom?: null;
 };
+/** A user waypoint name from `id` not already among `taken`: `id` and a digit. */
+export declare function userName(id: string, taken: Route): string;
 /**
  * Closest Point of FPL (Pilot's Guide): the point on the plan nearest the reference waypoint `ref`, as a user waypoint
  * named apart from the plan's and `points`, with the true bearing and distance to it from `ref`. Null with no leg.

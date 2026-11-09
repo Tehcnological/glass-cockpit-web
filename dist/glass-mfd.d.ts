@@ -108,7 +108,7 @@ export declare class GlassMfd {
     private panPoints;
     private panInfo;
     /** Pilot's Guide: ENT with the pointer on a waypoint opens its WPT page. False when there is none to open (no point
-     * under the pointer, a user waypoint, or one the WPT pages do not list, such as an approach fix of the plan's own). */
+     * under the pointer, or one the WPT pages do not list, such as an approach fix or ATK offset of the plan's own). */
     private panWaypoint;
     /** Pan mode: the pointer, and the info bar across the top of the map (layout from the v13 trainer, drawn here). */
     private drawPan;

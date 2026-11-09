@@ -429,7 +429,7 @@ export class GlassMfd {
         return panInfo(this.ui.pan, this.panView(), this.ui.pan.from ?? s, this.panPoints(), s.magVar);
     }
     /** Pilot's Guide: ENT with the pointer on a waypoint opens its WPT page. False when there is none to open (no point
-     * under the pointer, a user waypoint, or one the WPT pages do not list, such as an approach fix of the plan's own). */
+     * under the pointer, or one the WPT pages do not list, such as an approach fix or ATK offset of the plan's own). */
     panWaypoint() {
         const q = panUnder(this.ui.pan, this.panView(), this.panPoints());
         const name = q && PAN_WPT_PAGES[q.type];

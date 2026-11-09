@@ -285,7 +285,7 @@ const ids = (route: Route) => new Set(route.map((r) => (typeof r === "string" ? 
 
 /** A user waypoint name from `id` not already among `taken`: `id` and a digit. */
 // shortcut: the Pilot's Guide only says the name comes from the reference's; upgrade if the trainer shows its scheme.
-function userName(id: string, taken: Route): string {
+export function userName(id: string, taken: Route): string {
   const used = ids(taken);
   for (let n = 1; ; n++) if (!used.has(`${id.slice(0, 5)}${n}`)) return `${id.slice(0, 5)}${n}`;
 }
