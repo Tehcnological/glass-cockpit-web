@@ -28,7 +28,7 @@ export { unusualAttitude };
 export { GlassMfd } from "./glass-mfd.js";
 export { gpsApproved, sequenceLeg, vtfLeg } from "./nav.js";
 export { DisplayBackup, displayModes } from "./display-backup.js";
-export { Afcs, AFCS_KEYS, PFT_S } from "./afcs.js";
+export { Afcs, AFCS_KEYS, PFT_S, toyFly } from "./afcs.js";
 /** How long the AHRS aligns at power-up, seconds (Line Maintenance Manual: 40 to 60 s). */
 export const AHRS_ALIGN_S = 45;
 /** How long air data is invalid at power-up, seconds. Assumed: the manuals give the AHRS's time only, and the ADC is

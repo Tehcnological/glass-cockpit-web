@@ -8,7 +8,9 @@
 // Autopilot: the MFD's GFC 700 keys come out as a `key` event for the host's `Afcs`; its `update` gives `afcs` (the
 // annunciations) and `fd` (the command bars) to pass back to the PFD. `afcsKeys` on the PFD in the MFD's place draws them there.
 // The preflight test (PFT) and its `pft` and `onPreflightPass` options are the host's `Afcs`'s; `afcs` carries its alert.
-// `startup` is the PFD's AHRS alignment at power-up, seconds (the package's default when not given; 0 skips it).
+// `startup` is the PFD's AHRS alignment at power-up, seconds (the package's default when not given; 0 skips it). The PFD
+// emits `aligned` once when it ends; until then the host passes `failed.attitude` to `Afcs.update`, so the autopilot stays off.
+// A host imports `Afcs` from `glass-cockpit-web/afcs`, which does not load the displays.
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { AfcsDisplay, AfcsKey, GlassMfd, GlassPfd, MfdState, PfdOptions, PfdState } from "glass-cockpit-web";
 import type { FlightState } from "./state";
@@ -27,7 +29,7 @@ const props = withDefaults(defineProps<{
   afcsKeys: undefined,
   startup: undefined,
 });
-const emit = defineEmits<{ change: [patch: Partial<FlightState>]; mfd: [patch: Partial<MfdState>]; key: [key: AfcsKey] }>();
+const emit = defineEmits<{ change: [patch: Partial<FlightState>]; mfd: [patch: Partial<MfdState>]; key: [key: AfcsKey]; aligned: [] }>();
 const box = ref<HTMLDivElement>();
 let pfd: GlassPfd | undefined;
 let mfd: GlassMfd | undefined;
@@ -55,6 +57,7 @@ onMounted(async () => {
   // the rest (CDI source and the like) stays in the display. `mfd.selectedAlt`, when given, is shared by both units.
   const pick = (patch: object, from: object) => Object.fromEntries(Object.entries(patch).filter(([k]) => k in from));
   const onChange = (patch: object) => {
+    if ("aligning" in patch) emit("aligned");
     const back = pick(patch, props.state);
     if (Object.keys(back).length) emit("change", back);
     // The flight plan's keys, user waypoints (`points`) and minimums (PROC's approach loading sets the PFD's) always go

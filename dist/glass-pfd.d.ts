@@ -15,7 +15,7 @@ export type { Radio, Radios, RadioFailure } from "./surround.js";
 export { DisplayBackup, displayModes, type DisplayMode } from "./display-backup.js";
 export type { DisplayOptions } from "./display.js";
 export type { Control, Input } from "./bezel.js";
-export { Afcs, AFCS_KEYS, PFT_S, type AfcsKey, type AfcsSwitch, type AfcsInput, type AfcsOutput, type AfcsDisplay, type AfcsField, type AfcsOptions } from "./afcs.js";
+export { Afcs, AFCS_KEYS, PFT_S, toyFly, type AfcsKey, type AfcsSwitch, type AfcsInput, type AfcsOutput, type AfcsDisplay, type AfcsField, type AfcsOptions } from "./afcs.js";
 export type CdiSource = "GPS" | "NAV1" | "NAV2" | "OFF";
 export type BrgSource = "OFF" | "NAV1" | "NAV2" | "GPS" | "ADF";
 /** What a bearing source points at: a station or waypoint, its bearing (magnetic) and distance (nm). */
