@@ -13,6 +13,7 @@ import { PROC_MENU, ProcFlow } from "./procedures.js";
 import { AprInfo } from "./apr-info.js";
 import { Scheduler } from "./scheduler.js";
 import { densityAltitude, fuelStats, sunTimes, tripLeg, trueAirspeed } from "./trip-planning.js";
+import { createUser, deleteUsers, moveUser, nearestUsers, renameUser, stepPosition, userWaypoints } from "./user-wpt.js";
 import { SETUP_FIELDS, UTILITY_FIELDS, Utility, airportMatches, clockText, ete, hms, setupValue, stepSetup } from "./aux-pages.js";
 // Surround.PAGE_GROUPS
 export const PAGE_GROUPS = [
@@ -1017,7 +1018,7 @@ const SCROLL_AVAILABLE = "#80ffff";
 const SCROLL_UNAVAILABLE = "#eeeeee";
 // The waypoint submenu of DIRECT TO and WAYPOINT ENTRY (WaypointSubmenuGroup), opened by turning the inner knob left on
 // the identifier before typing. The inner knob picks the list, the outer moves into it and scrolls, ENT takes the
-// waypoint, CLR closes it. There are no user waypoints or airways here, so USER and AIRWAY are empty.
+// waypoint, CLR closes it. USER lists the user waypoints (`points` of type WPT); AIRWAY is empty (not ported).
 class WaypointSubmenu {
     p;
     m;
@@ -1044,6 +1045,7 @@ class WaypointSubmenu {
             case "FPL": return s.route.map((r) => (typeof r === "string" ? r : r.id));
             case "NRST": return nearest(s.airports, s.lat, s.lon, 0).map((n) => n.item.id);
             case "RECENT": return this.m.ui.recent;
+            case "USER": return userWaypoints(s.points).map((p) => p.id);
         }
         return [];
     }
@@ -1884,6 +1886,210 @@ class SystemStatusPage extends PanelPage {
         ]);
     }
 }
+/** A page's own window down the right side, in the approach window's style; `g` redrawn only when it changed. */
+function sidePanel(g, boxes, drawn, extra = "") {
+    const out = windowRect(725, 54, 309, 688, PANEL_GREY) + panelColumn(730, 289, 75, boxes) + extra;
+    if (out !== drawn) {
+        g.innerHTML = out;
+        cursorBoxes(g);
+    }
+    return out;
+}
+/** "N33°25.92'" as degrees and minutes, for the cursor's two stops. */
+const degMin = (t) => [t.slice(0, t.indexOf("°") + 1), t.slice(t.indexOf("°") + 1)];
+// WPT - USER WPT INFORMATION (Pilot's Guide). FG1000 has no such page or SVG, so it is drawn here in the approach
+// window's style beside its own map, centered on the waypoint. The large FMS knob moves the cursor: the identifier,
+// latitude degrees and minutes, longitude degrees and minutes, then the user waypoint list. The small knob spells an
+// identifier (ENT shows that user waypoint, or under a new name creates one at the aircraft's position) or steps the
+// position a degree or a minute, applied at once (the Pilot's Guide's ENT to accept is not kept). ENT on the list shows
+// that waypoint. The reference box (the nearest VOR's radial and the nearest airport's bearing to the waypoint, with
+// distances) is display only; the comment is the point's `name`, not editable here.
+const USER_FIELDS = ["id", "latDeg", "latMin", "lonDeg", "lonMin"];
+const USER_LIST_ROWS = 15;
+class UserWptPage extends PanelPage {
+    id = null;
+    at = 0;
+    entry = new IdEntry(this.p, 6);
+    /** PAGE MENU's Rename User Waypoint: ENT on the identifier renames the waypoint shown. */
+    renaming = false;
+    panel;
+    mapG;
+    drawn = "";
+    constructor(m, name, screen, after) {
+        super(m, name, screen, after);
+        this.panel = this.g.appendChild(document.createElementNS(NS, "g"));
+        this.mapG = mapGroup(screen, this.panel, INFO_MAP);
+    }
+    users() {
+        return userWaypoints(this.s.points);
+    }
+    /** The waypoint shown: the one picked, else the nearest. */
+    point() {
+        const u = this.users();
+        return u.find((p) => p.id === this.id) ?? nearestUsers(this.s)[0]?.item ?? u[0];
+    }
+    center() {
+        return this.point() ?? null;
+    }
+    showWaypoint(id) {
+        if (!this.users().some((p) => p.id === id))
+            return false;
+        this.id = id;
+        this.entry.cancel();
+        return true;
+    }
+    selected() {
+        return this.point()?.id ?? null;
+    }
+    typing() {
+        return this.at === 0;
+    }
+    toggleCrsr() {
+        super.toggleCrsr();
+        this.at = 0;
+        this.clr();
+    }
+    fms(outer, d) {
+        if (outer) {
+            if (!this.entry.outer(d))
+                this.at = clamp(this.at + d, 0, USER_FIELDS.length + this.users().length - 1);
+            return true;
+        }
+        const f = USER_FIELDS[this.at];
+        const p = this.point();
+        if (f === "id")
+            this.entry.inner(d);
+        else if (f && p)
+            this.m.change(moveUser(this.s, p.id, stepPosition(p, f.startsWith("lat") ? "lat" : "lon", f.endsWith("Deg") ? d : d / 60)));
+        return true;
+    }
+    ent() {
+        if (!this.crsr)
+            return;
+        if (this.at >= USER_FIELDS.length) {
+            const row = this.users()[this.at - USER_FIELDS.length];
+            if (row)
+                [this.id, this.at] = [row.id, 0];
+            return;
+        }
+        if (this.at !== 0 || !this.entry.editing)
+            return;
+        const [v, p, renaming] = [this.entry.ent(), this.point(), this.renaming];
+        this.renaming = false;
+        if (!v)
+            return;
+        // A name already taken, or not a waypoint's, changes nothing.
+        const patch = renaming ? p && renameUser(this.s, p.id, v) : this.users().some((x) => x.id === v) ? {} : createUser(this.s, v, this.s);
+        if (!patch)
+            return;
+        if (Object.keys(patch).length)
+            this.m.change(patch);
+        this.id = v;
+    }
+    clr() {
+        this.entry.cancel();
+        this.renaming = false;
+    }
+    // v13 trainer's options. Waypoint Setup (temporary waypoints and their auto-delete) is not ported: grey.
+    pageMenu() {
+        const p = this.point();
+        const name = (renaming) => () => {
+            [this.crsr, this.at, this.renaming] = [true, 0, renaming];
+            this.entry.cancel();
+        };
+        const del = (ids) => () => {
+            this.m.change(deleteUsers(this.s, ids()));
+            this.id = null;
+        };
+        return [
+            { label: "Create New User Waypoint", act: name(false) },
+            { label: "Delete User Waypoint", act: p && del(() => [p.id]) },
+            { label: "Rename User Waypoint", act: p && name(true) },
+            { label: "Delete All User Waypoints", act: p && del(() => this.users().map((x) => x.id)) },
+            { label: "Waypoint Setup" },
+            { label: "Use Present Position", act: p && (() => {
+                    const patch = moveUser(this.s, p.id, this.s); // null if the host removed it while the menu was open
+                    if (patch)
+                        this.m.change(patch);
+                }) },
+        ];
+    }
+    draw() {
+        const s = this.s;
+        const p = this.point();
+        const users = this.users();
+        const on = (i) => this.crsr && this.at === i;
+        const lat = p ? degMin(latLon(p.lat, "N", "S")) : ["___°", "__.__'"];
+        const lon = p ? degMin(latLon(p.lon, "E", "W")) : ["____°", "__.__'"];
+        const vor = p && radial(s, p);
+        const apt = p && nearest(s.airports, p.lat, p.lon, 0, 1)[0]?.item;
+        const fromApt = apt && p && bearingDistance(apt.lat, apt.lon, p.lat, p.lon);
+        const sel = this.at >= USER_FIELDS.length ? this.at - USER_FIELDS.length : Math.max(0, users.indexOf(p));
+        const top = firstRow(sel, users.length, USER_LIST_ROWS);
+        const list = users.slice(top, top + USER_LIST_ROWS).map((u, i) => ({
+            label: u.id, value: dis(bearingDistance(s.lat, s.lon, u.lat, u.lon).dist), color: "#ffffff",
+            cur: on(USER_FIELDS.length + top + i) ? "label" : undefined,
+        }));
+        this.drawn = sidePanel(this.panel, [
+            { title: "USER WAYPOINT", rows: [
+                    { label: this.entry.editing ? this.entry.value : p?.id ?? "______", value: this.renaming ? "RENAME" : "", color: "#ffffff", cur: on(0) ? "label" : undefined },
+                    { label: (p?.name ?? "").toUpperCase() },
+                ] },
+            { title: "REFERENCE", rows: [
+                    { label: vor ? vor.vor.id : "____", mid: vor ? brg(vor.brg) : "", value: vor ? dis(vor.dist) : "", color: "#ffffff" },
+                    { label: apt ? apt.id : "____", mid: fromApt ? brg(mod(fromApt.brg - s.magVar, 360)) : "", value: fromApt ? dis(fromApt.dist) : "", color: "#ffffff" },
+                ] },
+            { title: "LOCATION", rows: [
+                    { label: "LAT", mid: lat[0], value: lat[1], cur: on(1) ? "mid" : on(2) ? "value" : undefined },
+                    { label: "LON", mid: lon[0], value: lon[1], cur: on(3) ? "mid" : on(4) ? "value" : undefined },
+                ] },
+            { title: "USER WAYPOINT LIST", rows: list.length ? list : [{ label: "NONE" }] },
+        ], this.drawn, panelText(rangeLabel(s.range), 715, 80, "end", "#ffffff"));
+        this.m.drawMap(this.mapG, INFO_MAP, p);
+    }
+}
+// NRST - NEAREST USER WPTS (Pilot's Guide). FG1000 has no such page or SVG, so it is drawn here in the approach
+// window's style beside the navigation map: up to 25 user waypoints within 200 nm, nearest first, and the selected
+// one's position. With the cursor on, the FMS knob selects one, ENT opens its WPT page and DIRECT TO takes it.
+const NRST_USER_ROWS = 15;
+class NearestUserPage extends PanelPage {
+    info;
+    navMap = "partial";
+    sel = 0;
+    drawn = "";
+    constructor(m, name, screen, after, info) {
+        super(m, name, screen, after);
+        this.info = info;
+    }
+    items() {
+        return nearestUsers(this.s);
+    }
+    fms(_outer, d) {
+        this.sel = clamp(this.sel + d, 0, Math.max(0, this.items().length - 1));
+        return true;
+    }
+    ent() {
+        const p = this.crsr ? this.items()[this.sel]?.item : undefined;
+        if (p && this.info().showWaypoint(p.id))
+            this.m.go("WPTPageGroup", "UserWPTInfo");
+    }
+    selected() {
+        return this.crsr ? this.items()[this.sel]?.item.id ?? null : null;
+    }
+    draw() {
+        const items = this.items();
+        this.sel = clamp(this.sel, 0, Math.max(0, items.length - 1));
+        const top = firstRow(this.sel, items.length, NRST_USER_ROWS);
+        const rows = items.slice(top, top + NRST_USER_ROWS).map((n, i) => ({
+            label: n.item.id, mid: brg(n.brg), value: dis(n.dist), color: "#ffffff", cur: this.crsr && top + i === this.sel ? "label" : undefined,
+        }));
+        const p = items[this.sel]?.item;
+        this.drawn = sidePanel(this.g, [
+            { title: "USER WAYPOINTS", rows: rows.length ? rows : [{ label: "NONE WITHIN 200NM" }] },
+            { title: "LOCATION", rows: [{ label: "LAT", value: p ? latLon(p.lat, "N", "S") : "" }, { label: "LON", value: p ? latLon(p.lon, "E", "W") : "" }] },
+        ], this.drawn);
+    }
+}
 /** Builds every page. Their SVGs (src/svg/mfd-pages.ts) must be in `screen`; they are measured here, so it must be visible. */
 export function makePages(m, screen) {
     const roots = [...screen.querySelectorAll('[id^="Page-"]')];
@@ -1892,6 +2098,7 @@ export function makePages(m, screen) {
     const waypointEntry = new WaypointEntryPage(m, screen);
     const top = roots[roots.length - 1].parentNode;
     const utility = new UtilityPage(m, "Utility", screen, top);
+    let userInfo;
     const make = (name) => {
         switch (name) {
             case "NavigationMap": return new NavigationMapPage(m, name, screen, () => mapSetup);
@@ -1905,6 +2112,8 @@ export function makePages(m, screen) {
             case "NDBInfo": return new NavInfoPage(m, name, screen, "NDB", 3);
             case "IntersectionInfo": return new NavInfoPage(m, name, screen, "FIX", 5);
             case "AirportInfo": return new AirportInfoPage(m, screen);
+            case "UserWPTInfo": return (userInfo = new UserWptPage(m, name, screen, top));
+            case "NearestUserWaypoints": return new NearestUserPage(m, name, screen, top, () => userInfo);
             case "Utility": return utility;
             case "SystemSetup": return new SystemSetupPage(m, name, screen, top);
             case "TripPlanning": return new TripPlanningPage(m, name, screen, top);

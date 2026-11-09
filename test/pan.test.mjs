@@ -109,9 +109,8 @@ test("the point under the pointer, for ENT's waypoint information", () => {
   assert.equal(panUnder(p, view, [{ id: "FAR", type: "FIX", lat: 1, lon: 1 }]), undefined);
 });
 
-test("ENT opens the WPT page that fits the point; user waypoints have none here", () => {
-  assert.deepEqual(PAN_WPT_PAGES, { APT: "AirportInfo", VOR: "VORInfo", NDB: "NDBInfo", FIX: "IntersectionInfo" });
-  assert.equal(PAN_WPT_PAGES.WPT, undefined);
+test("ENT opens the WPT page that fits the point", () => {
+  assert.deepEqual(PAN_WPT_PAGES, { APT: "AirportInfo", VOR: "VORInfo", NDB: "NDBInfo", FIX: "IntersectionInfo", WPT: "UserWPTInfo" });
 });
 
 test("60 s with no joystick input ends pan mode", (t) => {

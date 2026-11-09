@@ -36,7 +36,7 @@ Garmin art, screenshots, data or manual text is copied.
 | COM dual knob / push | Tune standby; push: COM1/COM2 box | Done |
 | CRS/BARO / push | Course, baro; push: course to the station | Done |
 | RANGE | Map range, PFD inset or MFD map | Done |
-| Joystick push | Pilot's Guide and trainer: the map pointer and an info bar (lat/lon, bearing and distance from the aircraft, ground elevation; the name of an object under it); again removes it and recenters. RANGE while panning recenters on the pointer. NXi: the PFD inset pans too | Partial: MFD navigation map, the flight plan page's map and PFD inset, with the flashing pointer, ENT for waypoint info (MFD; airports, VORs, NDBs and intersections, not user waypoints) and the 60 s idle recenter. Missing: elevation, airspace info (no terrain or airspace data) |
+| Joystick push | Pilot's Guide and trainer: the map pointer and an info bar (lat/lon, bearing and distance from the aircraft, ground elevation; the name of an object under it); again removes it and recenters. RANGE while panning recenters on the pointer. NXi: the PFD inset pans too | Partial: MFD navigation map, the flight plan page's map and PFD inset, with the flashing pointer, ENT for waypoint info (MFD; airports, VORs, NDBs, intersections and user waypoints) and the 60 s idle recenter. Missing: elevation, airspace info (no terrain or airspace data) |
 | Joystick 8 ways | Moves the pointer; at the map's edge the map scrolls | Done |
 | DIRECT TO | Direct-to window; again closes on the PFD | Done |
 | FPL | PFD: flight plan window toggles. MFD: FPL page, again goes back | Done |
@@ -85,7 +85,7 @@ Garmin art, screenshots, data or manual text is copied.
 | MAP | Stormscope, weather data link, TAWS | No data |
 | WPT | Airport information | Partial: info and APPROACH INFORMATION (APR) done; departure, arrival and weather (DP, STAR, WX) grey with no data; INFO-2 directory missing |
 | WPT | Intersection, NDB, VOR information | Done |
-| WPT | User waypoint information | Missing (user waypoints exist, from Closest Point of FPL and ATK offsets, but have no page) |
+| WPT | User waypoint information | Partial: identifier (FMS knob or keyboard; ENT on a new name creates one at the aircraft), the user waypoint list, position (degrees and minutes on the small knob, applied at once rather than on ENT), reference (nearest VOR radial and airport bearing, display only), map. Missing: editing the comment (shows `name`), reference waypoint (RAD/RAD, RAD/DIS) entry, temporary waypoints. Our own layout: FG1000 has no such page |
 | AUX | Utility | Partial: timers, trip statistics and scheduler done (times stepped, not typed); flight data logger missing |
 | AUX | Trip planning | Partial: AUTO and MANUAL, flight plan mode; WPTS mode and ESA missing |
 | AUX | GPS status, system status | Partial: aircraft position and LRUs; no satellite, RAIM, SBAS, version or database data |
@@ -97,7 +97,7 @@ Garmin art, screenshots, data or manual text is copied.
 | NRST | Airports | Done |
 | NRST | Intersections, NDB, VOR | Done (VOR and FREQ keys on NEAREST VOR) |
 | NRST | Frequencies | Done |
-| NRST | User waypoints, airspaces | Missing / No data |
+| NRST | User waypoints, airspaces | User waypoints Done (up to 25 within 200 nm, bearing and distance, position; ENT opens the WPT page, DIRECT TO takes the selected one; our own layout). Airspaces: No data |
 
 ## MFD softkeys
 
@@ -122,7 +122,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | Direct-to window | Cancel Direct-To NAV, Clear Vertical Constraints | Partial: Cancel Direct-To NAV (no VNV) |
 | Airport information | View Destination Airport, Show Directory/Departure/Arrival/Approach/Weather Page, View NOTAMs, Chart Mode On | Missing |
 | Approach loading (PROC) | Load Approach, Load & Activate Approach | Done through PROC: PROC - APPROACH LOADING page with map preview and BARO minimums |
-| User waypoint information | Create New User Waypoint, Delete User Waypoint, Rename User Waypoint, Delete All User Waypoints, Waypoint Setup (temporary or normal), Use Present Position | Missing |
+| User waypoint information | Create New User Waypoint, Delete User Waypoint, Rename User Waypoint, Delete All User Waypoints, Waypoint Setup (temporary or normal), Use Present Position | Partial: all but Waypoint Setup (grey: no temporary waypoints). Deleting a waypoint in the flight plan removes it from the plan too |
 | Nearest airports | Select Airport/Runway/Frequency/Approach Window, Load Approach | Done |
 | Nearest VOR | Select VOR Window, Select Frequency Window | Missing |
 | Nearest airspaces | Select Alerts Window | Missing / No data |
@@ -166,10 +166,10 @@ airport sub-pages, the AUX pages, the SUSP key (built from the Pilot's Guide) an
 
 1. **Controls that did nothing:** joystick pan mode, COM squelch, PFD DIRECT TO and PROC, long presses. Done.
 2. **Page menus:** read each page's options off the trainer, then wire the ones this package can carry out. Partial:
-   navigation map, flight plan, direct-to, nearest airports, utility; the rest above are missing.
+   navigation map, flight plan, direct-to, nearest airports, utility, user waypoint information; the rest above are missing.
 3. **Missing pages and softkeys:** nearest airport RNWY/FREQ/APR/LD APR, MAP PROFILE and AIRWAYS, Map Setup's Airways
    and Profile groups, the AUX pages (system setup, utility and its scheduler, trip planning, GPS status, system
-   status). Done. Left: WPT airport INFO-2, user waypoint pages, the flight plan catalog, the procedures page softkeys.
+   status), the user waypoint pages. Done. Left: WPT airport INFO-2, the flight plan catalog, the procedures page softkeys.
 4. **Flows:** arrivals and departures, holds (partial: no SUSP at a hold, no EFC time or entries), duplicate waypoints, airways in the flight plan. SUSP and missed approach
    sequencing are done.
 5. **Later, by request:** the audio panel. Keyboard typing, display failures and the autopilot are done.
