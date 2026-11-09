@@ -32,7 +32,8 @@ test("ACTIVATE an approach the GPS may not fly asks first, then loads it", () =>
   h.flow.open();
   h.flow.ent(); // SELECT APPROACH
   assert.equal(h.flow.view, "select");
-  h.flow.ent(); // the ILS, one transition: on to LOAD?
+  h.flow.ent(); // the ILS, one transition: on to MINIMUMS
+  h.flow.ent(); // minimums off: on to LOAD?
   assert.equal(h.flow.grp, "LOAD");
   h.flow.fms(true, 1);
   h.flow.ent(); // ACTIVATE?
@@ -59,6 +60,60 @@ test("LD APR opens SELECT APPROACH on that airport and approach, at the transiti
   assert.equal(h.flow.loadApproach("KAAA", "RNAV (GPS) RWY 36"), true);
   assert.deepEqual([h.flow.view, h.flow.airport, h.flow.apr, h.flow.grp], ["select", "KAAA", 1, "TRANS"]);
   assert.equal(h.flow.loadApproach("KAAA", "ILS RWY 36"), true);
-  assert.equal(h.flow.grp, "LOAD", "one transition: straight to LOAD?");
+  assert.equal(h.flow.grp, "MIN", "one transition: straight to MINIMUMS");
   assert.equal(h.flow.loadApproach("KAAA", "VOR RWY 18"), false, "no procedure data for it");
+});
+
+// Pilot's Guide, approach loading: the transition (if more than one), then MINIMUMS (ENT skips them), then LOAD?.
+test("SELECT APPROACH steps approach, transition, minimums, then LOAD?", () => {
+  const h = host();
+  h.s.procedures[0].transitions = { VECTORS: [], ABC: [] };
+  h.flow.open();
+  h.flow.ent();
+  const steps = [];
+  for (let i = 0; i < 4; i++) {
+    steps.push(h.flow.grp);
+    h.flow.ent();
+  }
+  assert.deepEqual(steps, ["APR", "TRANS", "MIN", "LOAD"]);
+  assert.equal(h.changes.length, 1, "ENT on LOAD? loads it");
+});
+
+test("BARO minimums: on at the field elevation, 10 ft steps, and loading sets them", () => {
+  const h = host();
+  h.s.airports[0].elev = 1135;
+  h.flow.open();
+  h.flow.ent();
+  h.flow.ent(); // to MINIMUMS
+  h.flow.fms(false, 1); // BARO
+  assert.equal(h.flow.baro, 1200);
+  h.flow.ent();
+  assert.equal(h.flow.grp, "MINALT");
+  h.flow.fms(false, -2);
+  h.flow.ent();
+  assert.equal(h.flow.grp, "LOAD");
+  h.flow.ent();
+  assert.equal(h.changes[0].minimums, 1180);
+});
+
+test("minimums left off do not change the PFD's", () => {
+  const h = host();
+  h.flow.open();
+  h.flow.ent();
+  h.flow.ent();
+  h.flow.ent();
+  h.flow.ent();
+  assert.equal("minimums" in h.changes[0], false);
+});
+
+test("the loading page's view: approaches, the fix sequence with roles, and LOAD? under the cursor", () => {
+  const h = host();
+  h.flow.open();
+  h.flow.ent();
+  h.flow.ent();
+  h.flow.ent();
+  const v = h.flow.loading(true);
+  assert.deepEqual(v.approaches.map((r) => [r.label, r.cur]), [["ILS RWY 36", false], ["RNAV (GPS) RWY 36", false]]);
+  assert.deepEqual(v.sequence.map((r) => [r.label, r.role]), [["ONEIF", "IF"], ["TWOFA", "FAF"], ["RW36", "MAP"], ["THREE", "MA"]]);
+  assert.deepEqual([v.load, v.activate, v.min.mode], [true, false, "OFF"]);
 });

@@ -12,6 +12,7 @@ export interface AprRow {
     dim?: boolean;
     role?: string;
 }
+export declare const ROLE: Record<string, string>;
 export declare class AprInfo {
     readonly entry: Speller;
     grp: Grp;

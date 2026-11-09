@@ -971,6 +971,8 @@ export class GlassPfd {
         rows.push({ label: apt ? apt.name.toUpperCase() : "", cells: [] });
         rows.push({ label: "", cells: [{ text: procs[f.apr]?.name ?? "NONE", right: end, cur: g === "APR" && procs.length > 0 }] });
         rows.push({ label: "TRANS", cells: [{ text: f.transitions()[f.trans] ?? "", right: end, cur: g === "TRANS" }] });
+        const min = f.loading(true).min;
+        rows.push({ label: "MINIMUMS", cells: [{ text: min.mode, right: 170, cur: g === "MIN" }, { text: min.alt, right: end, cur: g === "MINALT" }] });
         rows.push({ label: "LOAD?", cells: [], cur: g === "LOAD" }, { label: "ACTIVATE?", cells: [], cur: g === "ACTIVATE" });
       }
     } else if (u.window === "MENU") {

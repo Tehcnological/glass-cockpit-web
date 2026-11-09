@@ -3,7 +3,7 @@
 import { clamp } from "./page.js";
 import { approachPoints } from "./nav.js";
 // The sequence box's role labels. shortcut: our own wording for the missed approach; change it if the trainer differs.
-const ROLE = { IAF: "IAF", IF: "IF", FAF: "FAF", MAP: "MAP", MISSED: "MA" };
+export const ROLE = { IAF: "IAF", IF: "IF", FAF: "FAF", MAP: "MAP", MISSED: "MA" };
 export class AprInfo {
     entry;
     grp = "APT";

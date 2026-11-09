@@ -32,7 +32,7 @@ function draw(s: FlightState) {
     heading: s.heading, turnRate: s.turnRate * 3, headingBug: s.headingBug, course: s.course, from: s.from, gs: s.gs,
     cdiDots: s.cdi * 2, // the PFD's CDI is two dots each side
     bearings: { ...nav?.bearings, ...(s.adf !== null && { ADF: { id: "", bearing: s.heading + s.adf } }) },
-    ...pickKeys(m, ["lat", "lon", "points", "airspaces", "route", "activeLeg", "directFrom", "vtf", "airports", "procedures", "magVar", "selectedAlt"]),
+    ...pickKeys(m, ["lat", "lon", "points", "airspaces", "route", "activeLeg", "directFrom", "vtf", "airports", "procedures", "magVar", "selectedAlt", "minimums"]),
     ...nav && { radios: nav.radios },
     reversionary: props.reversionary, ...m.engine && { engine: m.engine },
   });
@@ -47,8 +47,9 @@ onMounted(async () => {
   const onChange = (patch: object) => {
     const back = pick(patch, props.state);
     if (Object.keys(back).length) emit("change", back);
-    // The flight plan's keys and user waypoints (`points`) always go back, so a host that never set `vtf` still shares it.
-    const map = pick(patch, { route: 0, activeLeg: 0, directFrom: 0, vtf: 0, points: 0, ...props.mfd });
+    // The flight plan's keys, user waypoints (`points`) and minimums (PROC's approach loading sets the PFD's) always go
+    // back, so a host that never set `vtf` still shares it.
+    const map = pick(patch, { route: 0, activeLeg: 0, directFrom: 0, vtf: 0, points: 0, minimums: 0, ...props.mfd });
     if (Object.keys(map).length) emit("mfd", map);
   };
   if (props.unit === "mfd") mfd = new lib.GlassMfd(box.value!, { bezel: props.bezel, onChange });

@@ -10,7 +10,7 @@ type Grp = "APT" | "APR" | "TRANS" | "MIN" | "MINALT" | "SEQ";
 export interface AprRow { label: string; cur: boolean; dim?: boolean; role?: string }
 
 // The sequence box's role labels. shortcut: our own wording for the missed approach; change it if the trainer differs.
-const ROLE: Record<string, string> = { IAF: "IAF", IF: "IF", FAF: "FAF", MAP: "MAP", MISSED: "MA" };
+export const ROLE: Record<string, string> = { IAF: "IAF", IF: "IF", FAF: "FAF", MAP: "MAP", MISSED: "MA" };
 
 export class AprInfo {
   grp: Grp = "APT";
