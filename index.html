@@ -20,8 +20,9 @@
   import { Afcs, AFCS_KEYS } from "./dist/afcs.js";
   import { RADIOS } from "./dist/surround.js";
   // The GFC 700: its keys are on the MFD (and on the second PFD in its place), its annunciations on the PFDs. With the
-  // autopilot engaged, the loop below flies the sliders toward the command bars (a toy model, not flight dynamics).
-  const afcs = new Afcs({ maxSpeed: 140 });
+  // autopilot engaged, the loop below flies the sliders toward the command bars (a toy model, not flight dynamics). Once
+  // the AHRS has aligned it runs its preflight test (PFT above the airspeed tape); a host would sound a tone when it passes.
+  const afcs = new Afcs({ maxSpeed: 140, onPreflightPass: () => console.log("GFC 700 preflight test passed") });
   let out = null;
   const afcsKey = (i) => { if (AFCS_KEYS.includes(i.control)) afcs.press(i.control), update(); };
   // DISPLAY BACKUP, or a failed display, puts the MFD's place in reversionary mode: a second PFD, laid over the MFD so it
@@ -134,7 +135,7 @@
     const moving = !!(out?.ap && out.fd);
     if (moved && !moving) syncForm(); // the autopilot let go: the sliders show where it left the aircraft
     moved = moving;
-    if (!out || (!out.fd && !out.display.status.text)) return void (shown && ((shown = false), update()));
+    if (!out || (!out.fd && !out.display.status.text && !out.display.alert.text)) return void (shown && ((shown = false), update()));
     shown = true;
     if (!moving && now - drawnAt < 100) return;
     drawnAt = now;

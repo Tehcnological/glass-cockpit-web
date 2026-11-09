@@ -1,16 +1,16 @@
 // GFC 700 flight director and autopilot (Pilot's Guide, AFCS section).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Afcs } from "../dist/afcs.js";
+import { Afcs, PFT_S } from "../dist/afcs.js";
 
 const RADIOS = { nav1: { active: 113.9, standby: 110.1 }, nav2: { active: 109.3, standby: 110.1 }, com1: { active: 118, standby: 118 }, com2: { active: 118, standby: 118 } };
 const S = {
   pitch: 2, roll: 0, heading: 90, ias: 100, alt: 3000, vsi: 0, headingBug: 90, course: 90, selectedAlt: 5000, cdiSource: "NAV1",
   cdiDots: 0, cdiValid: true, gs: null, gpsMode: "ENR", radios: RADIOS, failed: {}, vnv: null,
 };
-// An AFCS with the aircraft in `s`, the last update at `t` ms.
-const setup = (s = {}) => {
-  const a = new Afcs();
+// An AFCS with the aircraft in `s`, the last update at `t` ms; no preflight test unless `options` asks for one.
+const setup = (s = {}, options = { pft: 0 }) => {
+  const a = new Afcs(options);
   let t = 0;
   let state = { ...S, ...s };
   let out = a.update(state, t);
@@ -304,4 +304,60 @@ test("review: retuning the VOR in VAPP reverts to ROL with VAPP armed", () => {
   const u = setup();
   u.press("APR");
   assert.deepEqual(modes(u.fly({ radios: { ...RADIOS, nav1: { active: 116.8, standby: 110.1 } } })).slice(0, 2), ["VAPP", "ROL"]);
+});
+
+// Preflight test and AFCS status alerts (Pilot's Guide, AFCS status alerts).
+const alert = (o) => [o.display.alert.text, o.display.alert.color];
+
+test("PFT: a few seconds by default, starting once attitude is valid; AP, FD and the other keys do nothing meanwhile", () => {
+  assert.ok(PFT_S > 0 && PFT_S <= 10);
+  let passed = 0;
+  const u = setup({ failed: { attitude: true } }, { onPreflightPass: () => passed++ });
+  assert.deepEqual(alert(u.out), ["", "white"], "not while the AHRS aligns");
+  u.fly({}, 45000);
+  assert.deepEqual(alert(u.fly({ failed: {} }, 100)), ["PFT", "white"]);
+  for (const k of ["AP", "FD", "HDG", "GA", "AP_DISC"]) u.press(k);
+  u.a.cws(true);
+  u.a.cws(false);
+  let o = u.fly({}, PFT_S * 1000 - 100);
+  assert.equal(o.display.alert.text, "PFT");
+  assert.equal(o.ap, false);
+  assert.equal(o.fd, null);
+  assert.deepEqual(modes(o), ["", "", "", "", "", ""]);
+  assert.equal(passed, 0);
+  o = u.fly({}, 100);
+  assert.deepEqual(alert(o), ["", "white"]);
+  assert.equal(passed, 1, "reported once, for the host's tone");
+  u.fly({ failed: { attitude: true } }, 100);
+  u.fly({ failed: {} }, 100);
+  assert.equal(u.fly({}, PFT_S * 1000).display.alert.text, "", "not run again");
+  assert.equal(passed, 1);
+  assert.equal(u.press("AP").ap, true);
+});
+
+test("PFT: 0 skips it; a failed test shows PFT in red and keeps the autopilot and flight director off", () => {
+  let passed = 0;
+  const u = setup({}, { pft: 0, onPreflightPass: () => passed++ });
+  assert.equal(u.out.display.alert.text, "");
+  assert.equal(passed, 0);
+  assert.equal(u.press("AP").ap, true);
+  const f = setup({ faults: { pft: true } }, { pft: 0 });
+  assert.deepEqual(alert(f.out), ["PFT", "red"]);
+  assert.equal(f.press("AP").ap, false);
+  assert.equal(f.press("FD").fd, null);
+});
+
+test("ROLL, PTCH and SYS: red, the autopilot disconnects automatically and cannot engage; the flight director stays", () => {
+  for (const [fault, text] of [["roll", "ROLL"], ["pitch", "PTCH"], ["system", "SYS"]]) {
+    const u = setup();
+    u.press("AP");
+    const o = u.fly({ faults: { [fault]: true } });
+    assert.deepEqual(alert(o), [text, "red"]);
+    assert.equal(o.ap, false);
+    assert.deepEqual(o.display.status, { text: "AP", color: "red", flash: true });
+    assert.equal(o.display.lateralActive.text, "ROL");
+    assert.equal(u.press("AP_DISC", "AP").ap, false);
+    assert.equal(u.fly({ faults: {} }).display.alert.text, "");
+    assert.equal(u.press("AP").ap, true);
+  }
 });

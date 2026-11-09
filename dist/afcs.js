@@ -2,6 +2,8 @@ import { clamp, mod } from "./page.js";
 import { isLocalizer } from "./radio.js";
 /** The AFCS keys on the MFD's bezel, as bezel Controls. */
 export const AFCS_KEYS = ["AP", "FD", "HDG", "ALT", "NAV", "VNV", "APR", "BC", "VS", "FLC", "NOSE_UP", "NOSE_DN"];
+/** How long the preflight test runs, seconds. Assumed: the Pilot's Guide gives no time, only that it runs at power-up. */
+export const PFT_S = 5;
 // Pilot's Guide limits and steps.
 const PITCH = [-15, 20];
 const ROLL = 22;
@@ -44,18 +46,23 @@ export class Afcs {
     flash = {};
     s = START;
     now = 0;
+    /** When the preflight test ends, ms: null until attitude is valid, 0 once it has passed. */
+    pftEnd;
     constructor(options = {}) {
         this.options = options;
+        this.pftEnd = (options.pft ?? PFT_S) > 0 ? null : 0;
     }
     /** An AFCS key on the bezel, or a switch on the yoke or panel. Acts on the state the last `update` was given. */
     press(key) {
         const s = this.s;
+        if (this.testing)
+            return; // the autopilot and flight director cannot engage until the preflight test passes
         if (key === "AP_DISC")
             return this.ap ? this.disconnect(false) : void delete this.flash.ap; // also acknowledges
         if (key === "AP") {
             if (this.ap)
                 return this.disconnect(false);
-            if (s.failed.attitude)
+            if (s.failed.attitude || this.servoFault)
                 return;
             this.ap = true;
             delete this.flash.ap;
@@ -95,6 +102,8 @@ export class Afcs {
     }
     /** The control wheel steering button, held down (true) and released. */
     cws(down) {
+        if (this.testing)
+            return;
         if (down && !this.fdOn && !this.ap)
             this.activate();
         this.held = down;
@@ -106,6 +115,16 @@ export class Afcs {
         const prev = this.s;
         this.s = s;
         this.now = now;
+        if (this.pftEnd === null && !s.failed.attitude)
+            this.pftEnd = now + (this.options.pft ?? PFT_S) * 1000;
+        if (this.pftEnd && now >= this.pftEnd && !s.faults?.pft) {
+            this.pftEnd = 0;
+            this.options.onPreflightPass?.();
+        }
+        if (this.ap && this.servoFault)
+            this.disconnect(true);
+        if (this.testing && this.fdOn)
+            this.off();
         if (s.failed.attitude) {
             // Invalid attitude: the flight director cannot compute its modes; the autopilot disconnects with a red AP.
             if (this.ap)
@@ -128,6 +147,15 @@ export class Afcs {
             this.verticalTransitions(prev);
         }
         return { fd: this.command(), ap: this.ap && !this.held, display: this.draw() };
+    }
+    /** The preflight test is running, or has failed. */
+    get testing() {
+        return this.pftEnd !== 0 || !!this.s.faults?.pft;
+    }
+    /** A ROLL, PTCH or SYS failure: no autopilot. */
+    get servoFault() {
+        const f = this.s.faults;
+        return !!(f?.roll || f?.pitch || f?.system);
     }
     // Key handling.
     /** Flight director on in its default modes, Roll Hold and Pitch Hold. */
@@ -526,9 +554,12 @@ export class Afcs {
         const blank = { text: "", color: "white", flash: false };
         const field = (text, color, f) => f && f.until > now ? { text, color: f.color, flash: true } : { text, color, flash: false };
         const ap = this.flash.ap && this.flash.ap.until > now ? this.flash.ap : undefined;
+        const f = this.s.faults;
+        const alert = field(f?.system ? "SYS" : f?.pitch ? "PTCH" : f?.roll ? "ROLL" : this.pftEnd || f?.pft ? "PFT" : "", // nothing until it starts
+        f?.system || f?.pitch || f?.roll || f?.pft ? "red" : "white");
         const status = this.ap ? field(this.held ? "CWS" : "AP", this.held ? "white" : "green") : ap ? field("AP", ap.color, ap) : blank;
         if (!this.fdOn) {
-            return { lateralArmed: blank, lateralActive: blank, status, verticalActive: blank, verticalReference: blank, verticalArmed: blank, airspeedRef: null, maxspd: false };
+            return { lateralArmed: blank, lateralActive: blank, status, verticalActive: blank, verticalReference: blank, verticalArmed: blank, airspeedRef: null, maxspd: false, alert };
         }
         const r = this.ref;
         const reference = this.vert === "ALT" || this.vert === "ALTS" || this.vert === "ALTV" ? `${r.alt}FT`
@@ -550,6 +581,7 @@ export class Afcs {
             verticalArmed: { text: armed, color: "white", flash: pending },
             airspeedRef: this.vert === "FLC" ? r.spd : null,
             maxspd: this.overspeed(),
+            alert,
         };
     }
 }

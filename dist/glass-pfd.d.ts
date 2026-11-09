@@ -15,7 +15,7 @@ export type { Radio, Radios, RadioFailure } from "./surround.js";
 export { DisplayBackup, displayModes, type DisplayMode } from "./display-backup.js";
 export type { DisplayOptions } from "./display.js";
 export type { Control, Input } from "./bezel.js";
-export { Afcs, AFCS_KEYS, type AfcsKey, type AfcsSwitch, type AfcsInput, type AfcsOutput, type AfcsDisplay, type AfcsField, type AfcsOptions } from "./afcs.js";
+export { Afcs, AFCS_KEYS, PFT_S, type AfcsKey, type AfcsSwitch, type AfcsInput, type AfcsOutput, type AfcsDisplay, type AfcsField, type AfcsOptions } from "./afcs.js";
 export type CdiSource = "GPS" | "NAV1" | "NAV2" | "OFF";
 export type BrgSource = "OFF" | "NAV1" | "NAV2" | "GPS" | "ADF";
 /** What a bearing source points at: a station or waypoint, its bearing (magnetic) and distance (nm). */
@@ -191,6 +191,7 @@ export declare class GlassPfd {
     private startup;
     /** The AHRS alignment box, over FG1000's attitude red X. */ private alignBox;
     /** FG1000's ATTITUDE FAIL text, which the alignment box replaces. */ private alignText;
+    /** The AFCS status alert box above the airspeed tape (PFT, ROLL, PTCH, SYS). */ private alertBox;
     private ui;
     /** Pan mode ends after a minute with no joystick input, as on the MFD. */
     private idle;
@@ -243,7 +244,8 @@ export declare class GlassPfd {
     private speedStrip;
     private ladderWindow;
     private updateFD;
-    /** The AFCS status box, and FLC's airspeed reference (cyan, with its bug) or MAXSPD (flashing yellow) above the tape. */
+    /** The AFCS status box, FLC's airspeed reference (cyan, with its bug) or MAXSPD (flashing yellow) above the tape, and
+     * the AFCS status alert above that. */
     private updateAfcs;
     private updateIAS;
     private updateVSI;
