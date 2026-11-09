@@ -1866,7 +1866,7 @@ class TripPlanningPage extends PanelPage {
 class GpsStatusPage extends PanelPage {
     rx = 1;
     sbas = false;
-    /** RAIM PREDICTION's waypoint: P.POS, or the user waypoint Set WPT to Present Position made. */ raimWpt = "P.POS";
+    /** RAIM PREDICTION's waypoint: P.POS, or the user waypoint Set WPT to Present Position made while `points` has it. */ raimWpt = "P.POS";
     // Set WPT to Present Position (Pilot's Guide) adds a user waypoint here to `points` and puts it in RAIM PREDICTION's
     // waypoint field, which stays grey: there is no RAIM prediction without satellites.
     pageMenu() {
@@ -1893,7 +1893,7 @@ class GpsStatusPage extends PanelPage {
         ], [
             this.sbas
                 ? greyBox("SBAS SELECTION", [["WAAS", "ON"], ["EGNOS", "OFF"], ["MSAS", "OFF"]])
-                : greyBox("RAIM PREDICTION", [["WAYPOINT", this.raimWpt], ["TIME", "__:__"], ["DATE", "__-___-__"], ["AVAILABILITY", "COMPUTE RAIM?"]]),
+                : greyBox("RAIM PREDICTION", [["WAYPOINT", s.points.some((p) => p.id === this.raimWpt) ? this.raimWpt : "P.POS"], ["TIME", "__:__"], ["DATE", "__-___-__"], ["AVAILABILITY", "COMPUTE RAIM?"]]),
         ]);
     }
 }
