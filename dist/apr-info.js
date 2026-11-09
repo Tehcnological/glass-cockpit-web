@@ -4,6 +4,17 @@ import { clamp } from "./page.js";
 import { approachPoints } from "./nav.js";
 // The sequence box's role labels. shortcut: our own wording for the missed approach; change it if the trainer differs.
 export const ROLE = { IAF: "IAF", IF: "IF", FAF: "FAF", MAP: "MAP", MISSED: "MA" };
+// BARO minimums, as WPT - APPROACH INFORMATION, PROC's approach loading and the PFD's TMR/REF set them.
+// shortcut: a 16,000 ft ceiling for the minimum altitude, assumed; check it against the Pilot's Guide.
+export const MIN_ALT_MAX = 16000;
+/** The minimum altitude field with minimums off. */
+export const MIN_BLANK = "_____FT";
+/** BARO on starts at the field elevation, rounded up to 100 ft; again turns it off. */
+export const toggleBaro = (baro, elev) => (baro === null ? Math.ceil(elev / 100) * 100 : null);
+/** The minimum altitude steps 10 ft. */
+export const stepBaro = (baro, d) => clamp(baro + d * 10, 0, MIN_ALT_MAX);
+/** The MINIMUMS box: OFF or BARO, and the altitude. */
+export const minView = (baro, cur, altCur) => ({ mode: baro === null ? "OFF" : "BARO", alt: baro === null ? MIN_BLANK : `${baro}FT`, cur, altCur });
 export class AprInfo {
     entry;
     grp = "APT";
@@ -51,11 +62,10 @@ export class AprInfo {
             [this.apr, this.trans, this.seq] = [clamp(this.apr + d, 0, Math.max(0, (c.airport?.approaches.length ?? 1) - 1)), 0, 0];
         else if (this.grp === "TRANS")
             [this.trans, this.seq] = [clamp(this.trans + d, 0, Math.max(0, this.transitions(c).length - 1)), 0];
-        // BARO on starts at the field elevation, rounded up to 100 ft; the altitude steps 10 ft, as TMR/REF's.
         else if (this.grp === "MIN")
-            this.baro = this.baro === null ? Math.ceil((c.airport?.elev ?? 0) / 100) * 100 : null;
+            this.baro = toggleBaro(this.baro, c.airport?.elev ?? 0);
         else if (this.grp === "MINALT" && this.baro !== null)
-            this.baro = Math.max(0, this.baro + d * 10);
+            this.baro = stepBaro(this.baro, d);
         else if (this.grp === "SEQ")
             this.seq = clamp(this.seq + d, 0, Math.max(0, this.preview(c).length - 1));
     }
@@ -85,7 +95,7 @@ export class AprInfo {
             aptCur: on("APT") || this.entry.editing,
             approaches: (c.airport?.approaches ?? []).map((label, i) => ({ label, dim: !has(label), cur: on("APR") && i === this.apr })),
             transitions: this.transitions(c).map((label, i) => ({ label, cur: on("TRANS") && i === this.trans })),
-            min: { mode: this.baro === null ? "OFF" : "BARO", alt: this.baro === null ? "_____FT" : `${this.baro}FT`, cur: on("MIN"), altCur: on("MINALT") },
+            min: minView(this.baro, on("MIN"), on("MINALT")),
             sequence: this.preview(c).map((p, i) => ({ label: p.id, role: ROLE[p.role ?? ""] ?? "", cur: on("SEQ") && i === this.seq })),
         };
     }

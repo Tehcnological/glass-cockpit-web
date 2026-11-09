@@ -9,6 +9,7 @@ export interface ProcHost {
         points: MapPoint[];
         airports: Airport[];
         procedures: Procedure[];
+        minimums?: number | null;
     };
     change(patch: object): void;
     close(): void;
@@ -60,7 +61,8 @@ export declare class ProcFlow {
     private menuItem;
     private activate;
     private load;
-    /** What the approach loading page draws (as WPT - APPROACH INFORMATION's boxes); `crsr` is the FMS cursor being on. */
+    /** What the approach loading page draws (as WPT - APPROACH INFORMATION's boxes); `crsr` is the FMS cursor being on.
+     * `points`: the approach from the selected transition on, to preview on the map. */
     loading(crsr: boolean): {
         apt: string;
         aptCur: boolean;
@@ -75,7 +77,6 @@ export declare class ProcFlow {
         sequence: AprRow[];
         load: boolean;
         activate: boolean;
+        points: MapPoint[];
     };
-    /** The approach and transition to preview on the map. */
-    preview(): MapPoint[];
 }

@@ -2,7 +2,7 @@
 // procedures page. DOM-free, so the MFD page and the PFD window share it and the tests can run it.
 import { clamp } from "./page.js";
 import { approachPatch, approachPoints, gpsApproved, loadedApproach, nearest, routePoint, vtfPatch, type Airport, type Procedure } from "./nav.js";
-import { ROLE, type AprRow } from "./apr-info.js";
+import { minView, ROLE, stepBaro, toggleBaro, type AprRow } from "./apr-info.js";
 import type { LatLon, MapPoint } from "./map.js";
 
 export const PROC_MENU = ["ACTIVATE VECTOR-TO-FINAL", "ACTIVATE APPROACH", "ACTIVATE MISSED APPROACH", "SELECT APPROACH", "SELECT ARRIVAL", "SELECT DEPARTURE"];
@@ -10,7 +10,7 @@ const SELECT_APPROACH = 3;
 
 /** What the flow reads and where it sends its changes. */
 export interface ProcHost {
-  s(): LatLon & { route: (string | MapPoint)[]; points: MapPoint[]; airports: Airport[]; procedures: Procedure[] };
+  s(): LatLon & { route: (string | MapPoint)[]; points: MapPoint[]; airports: Airport[]; procedures: Procedure[]; minimums?: number | null };
   change(patch: object): void;
   close(): void;
 }
@@ -38,7 +38,7 @@ export class ProcFlow {
     const s = this.h.s();
     const apts = s.route.map((r) => routePoint(r, s.points, s.airports)).filter((p) => p?.type === "APT");
     this.airport = apts[apts.length - 1]?.id ?? nearest(s.airports, s.lat, s.lon, 0, 1)[0]?.item.id ?? null;
-    [this.view, this.item, this.grp, this.apr, this.trans, this.pending, this.baro] = ["menu", SELECT_APPROACH, "APR", 0, 0, null, null];
+    [this.view, this.item, this.grp, this.apr, this.trans, this.pending, this.baro] = ["menu", SELECT_APPROACH, "APR", 0, 0, null, s.minimums ?? null];
     this.entry.cancel();
   }
 
@@ -47,7 +47,7 @@ export class ProcFlow {
   loadApproach(airport: string, name: string): boolean {
     const i = this.h.s().procedures.filter((p) => p.airport === airport).findIndex((p) => p.name === name);
     if (i < 0) return false;
-    [this.airport, this.view, this.apr, this.trans, this.pending, this.baro] = [airport, "select", i, 0, null, null];
+    [this.airport, this.view, this.apr, this.trans, this.pending, this.baro] = [airport, "select", i, 0, null, this.h.s().minimums ?? null];
     this.entry.cancel();
     this.grp = this.transitions().length > 1 ? "TRANS" : "MIN";
     return true;
@@ -100,9 +100,9 @@ export class ProcFlow {
       this.yes = !this.yes;
       return;
     }
-    // The large knob's stops: transitions only when there are some, the minimum altitude only with minimums on.
+    // The large knob's stops, as ENT's: the transition only when there is a choice, the minimum altitude only with minimums on.
     const order = (["APT", "APR", "TRANS", "MIN", "MINALT", "LOAD", "ACTIVATE"] as const).filter((g) =>
-      (g !== "TRANS" || this.transitions().length > 0) && (g !== "MINALT" || this.baro !== null));
+      (g !== "TRANS" || this.transitions().length > 1) && (g !== "MINALT" || this.baro !== null));
     if (this.entry.editing) {
       if (outer) this.entry.outer(d);
       else this.entry.inner(d);
@@ -110,9 +110,8 @@ export class ProcFlow {
     else if (this.grp === "APT") this.entry.inner(d);
     else if (this.grp === "APR") [this.apr, this.trans] = [clamp(this.apr + d, 0, Math.max(0, this.procs().length - 1)), 0];
     else if (this.grp === "TRANS") this.trans = clamp(this.trans + d, 0, Math.max(0, this.transitions().length - 1));
-    // BARO on starts at the field elevation, rounded up to 100 ft; the altitude steps 10 ft, as WPT - APPROACH INFORMATION's.
-    else if (this.grp === "MIN") this.baro = this.baro === null ? Math.ceil((this.h.s().airports.find((a) => a.id === this.airport)?.elev ?? 0) / 100) * 100 : null;
-    else if (this.grp === "MINALT" && this.baro !== null) this.baro = Math.max(0, this.baro + d * 10);
+    else if (this.grp === "MIN") this.baro = toggleBaro(this.baro, this.h.s().airports.find((a) => a.id === this.airport)?.elev ?? 0);
+    else if (this.grp === "MINALT" && this.baro !== null) this.baro = stepBaro(this.baro, d);
     else this.grp = d > 0 ? "ACTIVATE" : "LOAD";
   }
 
@@ -180,31 +179,28 @@ export class ProcFlow {
     const name = this.transitions()[this.trans];
     const pts = approachPoints(p, name);
     const patch = approachPatch(s.route, pts, !activate ? "load" : name === "VECTORS" ? "vectors" : "activate", { lat: s.lat, lon: s.lon });
-    this.h.change(this.baro === null ? patch : { ...patch, minimums: this.baro });
+    this.h.change({ ...patch, minimums: this.baro }); // the page opened on the PFD's minimums: OFF here turns them off
     this.h.close();
   }
 
-  /** What the approach loading page draws (as WPT - APPROACH INFORMATION's boxes); `crsr` is the FMS cursor being on. */
+  /** What the approach loading page draws (as WPT - APPROACH INFORMATION's boxes); `crsr` is the FMS cursor being on.
+   * `points`: the approach from the selected transition on, to preview on the map. */
   loading(crsr: boolean) {
     const on = (g: ProcFlow["grp"]) => crsr && this.view === "select" && this.grp === g;
     const procs = this.procs();
     const p = procs[this.apr];
+    const points = p ? approachPoints(p, this.transitions()[this.trans]) : [];
     return {
       apt: this.entry.editing ? this.entry.value : this.airport ?? "____",
       aptCur: on("APT") || this.entry.editing,
       approaches: procs.length ? procs.map((x, i): AprRow => ({ label: x.name, cur: on("APR") && i === this.apr })) : [{ label: "NONE", cur: false, dim: true }],
       transitions: this.transitions().map((label, i): AprRow => ({ label, cur: on("TRANS") && i === this.trans })),
-      min: { mode: this.baro === null ? "OFF" : "BARO", alt: this.baro === null ? "_____FT" : `${this.baro}FT`, cur: on("MIN"), altCur: on("MINALT") },
-      sequence: (p ? approachPoints(p, this.transitions()[this.trans]) : []).map((x): AprRow => ({ label: x.id, role: ROLE[x.role ?? ""] ?? "", cur: false })),
+      min: minView(this.baro, on("MIN"), on("MINALT")),
+      sequence: points.map((x): AprRow => ({ label: x.id, role: ROLE[x.role ?? ""] ?? "", cur: false })),
       load: on("LOAD"),
       activate: on("ACTIVATE"),
+      points,
     };
-  }
-
-  /** The approach and transition to preview on the map. */
-  preview(): MapPoint[] {
-    const p = this.procs()[this.apr];
-    return p ? approachPoints(p, this.transitions()[this.trans]) : [];
   }
 }
 

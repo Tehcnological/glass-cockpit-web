@@ -13,6 +13,20 @@ export interface AprRow {
     role?: string;
 }
 export declare const ROLE: Record<string, string>;
+export declare const MIN_ALT_MAX = 16000;
+/** The minimum altitude field with minimums off. */
+export declare const MIN_BLANK = "_____FT";
+/** BARO on starts at the field elevation, rounded up to 100 ft; again turns it off. */
+export declare const toggleBaro: (baro: number | null, elev: number) => number | null;
+/** The minimum altitude steps 10 ft. */
+export declare const stepBaro: (baro: number, d: number) => number;
+/** The MINIMUMS box: OFF or BARO, and the altitude. */
+export declare const minView: (baro: number | null, cur: boolean, altCur: boolean) => {
+    mode: string;
+    alt: string;
+    cur: boolean;
+    altCur: boolean;
+};
 export declare class AprInfo {
     readonly entry: Speller;
     grp: Grp;

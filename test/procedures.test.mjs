@@ -2,6 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ProcFlow, PROC_MENU } from "../dist/procedures.js";
+import { MIN_ALT_MAX } from "../dist/apr-info.js";
 
 const leg = (fix, lat, role) => ({ fix, lat, lon: -112, type: "TF", alt: null, role });
 const legs = [leg("ONEIF", 33.25, "IF"), leg("TWOFA", 33.32, "FAF"), leg("RW36", 33.395, "MAP"), leg("THREE", 33.5, "MISSED")];
@@ -96,14 +97,51 @@ test("BARO minimums: on at the field elevation, 10 ft steps, and loading sets th
   assert.equal(h.changes[0].minimums, 1180);
 });
 
-test("minimums left off do not change the PFD's", () => {
+test("the loading page opens on the minimums already set, and OFF there turns them off", () => {
+  const h = host();
+  h.s.minimums = 1500;
+  h.flow.open();
+  h.flow.ent();
+  assert.deepEqual([h.flow.baro, h.flow.loading(true).min.alt], [1500, "1500FT"]);
+  h.flow.ent(); // to MINIMUMS
+  h.flow.fms(false, 1); // OFF
+  h.flow.ent();
+  h.flow.ent(); // LOAD?
+  assert.equal(h.changes[0].minimums, null);
+  assert.equal(h.flow.loadApproach("KAAA", "ILS RWY 36"), true);
+  assert.equal(h.flow.baro, 1500, "LD APR too");
+});
+
+test("with one transition the large knob skips TRANS, as ENT does", () => {
   const h = host();
   h.flow.open();
   h.flow.ent();
+  h.flow.fms(true, 1);
+  assert.equal(h.flow.grp, "MIN");
+  h.s.procedures[0].transitions = { VECTORS: [], ABC: [] };
+  h.flow.fms(true, -1);
+  assert.equal(h.flow.grp, "TRANS");
+});
+
+test("the minimum altitude stops at MIN_ALT_MAX and 0", () => {
+  const h = host();
+  h.s.minimums = MIN_ALT_MAX - 10;
+  h.flow.open();
   h.flow.ent();
   h.flow.ent();
+  h.flow.ent(); // MINALT
+  h.flow.fms(false, 5);
+  assert.equal(h.flow.baro, MIN_ALT_MAX);
+  h.flow.fms(false, -5000);
+  assert.equal(h.flow.baro, 0);
+});
+
+test("the loading page's points are the sequence it lists", () => {
+  const h = host();
+  h.flow.open();
   h.flow.ent();
-  assert.equal("minimums" in h.changes[0], false);
+  const v = h.flow.loading(true);
+  assert.deepEqual(v.points.map((p) => p.id), v.sequence.map((r) => r.label));
 });
 
 test("the loading page's view: approaches, the fix sequence with roles, and LOAD? under the cursor", () => {

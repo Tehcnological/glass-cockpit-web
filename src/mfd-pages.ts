@@ -1317,6 +1317,7 @@ class ProceduresPage extends MfdPage {
   private flow: ProcFlow;
   private mapG: SVGGElement;
   private panel: SVGGElement;
+  private drawn = "";
 
   constructor(m: Mfd, screen: SVGGElement, after: Element) {
     super(m, "Procedures", screen);
@@ -1411,9 +1412,13 @@ class ProceduresPage extends MfdPage {
     if (under !== "select") return;
     const apt = this.s.airports.find((a) => a.id === f.airport);
     const v = f.loading(this.crsr);
-    this.panel.innerHTML = aprPanel(v, apt?.use ?? "", (apt?.name ?? "").toUpperCase(), v);
-    cursorBoxes(this.panel);
-    this.m.drawMap(this.mapG, INFO_MAP, apt, f.preview());
+    // The panel only when it changed (the MFD draws many times a second in flight); the map always, the aircraft moves.
+    const panel = aprPanel(v, apt?.use ?? "", (apt?.name ?? "").toUpperCase(), v);
+    if (panel !== this.drawn) {
+      this.panel.innerHTML = this.drawn = panel;
+      cursorBoxes(this.panel);
+    }
+    this.m.drawMap(this.mapG, INFO_MAP, apt, v.points);
   }
 }
 

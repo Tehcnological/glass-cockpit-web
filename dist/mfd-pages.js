@@ -1255,6 +1255,7 @@ class ProceduresPage extends MfdPage {
     flow;
     mapG;
     panel;
+    drawn = "";
     constructor(m, screen, after) {
         super(m, "Procedures", screen);
         const g = document.createElementNS(NS, "g");
@@ -1338,9 +1339,13 @@ class ProceduresPage extends MfdPage {
             return;
         const apt = this.s.airports.find((a) => a.id === f.airport);
         const v = f.loading(this.crsr);
-        this.panel.innerHTML = aprPanel(v, apt?.use ?? "", (apt?.name ?? "").toUpperCase(), v);
-        cursorBoxes(this.panel);
-        this.m.drawMap(this.mapG, INFO_MAP, apt, f.preview());
+        // The panel only when it changed (the MFD draws many times a second in flight); the map always, the aircraft moves.
+        const panel = aprPanel(v, apt?.use ?? "", (apt?.name ?? "").toUpperCase(), v);
+        if (panel !== this.drawn) {
+            this.panel.innerHTML = this.drawn = panel;
+            cursorBoxes(this.panel);
+        }
+        this.m.drawMap(this.mapG, INFO_MAP, apt, v.points);
     }
 }
 // MENU: the page's PAGE MENU, a window over the page (v13 trainer). Either FMS knob moves the cursor, skipping dim
