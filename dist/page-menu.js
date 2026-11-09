@@ -1,6 +1,6 @@
 // PAGE MENU: the MENU key's options for a page, as the v13 trainer lists them. Options this package cannot carry out
 // are dim, as the softkeys are; the cursor skips them. DOM-free, so it can be tested on its own.
-import { cancelParallel, isApproach, isHold } from "./nav.js";
+import { cancelParallel, isApproach, isHold, userName } from "./nav.js";
 /** The next option the cursor can stop on in direction `d`, or `at` at either end. */
 export function stepMenu(enabled, at, d) {
     for (let i = at + d; i >= 0 && i < enabled.length; i += d)
@@ -40,4 +40,35 @@ export function fplMenu(route, activeLeg) {
         patches["Remove Approach"] = patch;
     }
     return FPL_OPTIONS.map((label) => ({ label, patch: patches[label] }));
+}
+/** The flight plan's destination: its last airport, or undefined with none. */
+export const destination = (route, airports) => [...route].reverse().find((r) => typeof r === "string" && airports.some((a) => a.id === r));
+/** WPT - AIRPORT INFORMATION's menu: `airport` shows an airport on the page, `approach` the approach view. */
+export function airportInfoMenu(dest, go) {
+    // Grey where the softkeys are: INFO-2 (the directory) is not ported, and there is no departure, arrival, weather,
+    // NOTAM or chart data.
+    return [
+        { label: "View Destination Airport", act: dest ? () => go.airport(dest) : undefined }, { label: "Show Directory Page" },
+        { label: "Show Departure Page" }, { label: "Show Arrival Page" }, { label: "Show Approach Page", act: go.approach },
+        { label: "Show Weather Page" }, { label: "View NOTAMs" }, { label: "Chart Mode On" },
+    ];
+}
+/** NRST - NEAREST VOR's menu: it moves the cursor to the VOR list or the frequency, as the VOR and FREQ softkeys do. */
+export const nearestVorMenu = (select) => [{ label: "Select VOR Window", act: () => select("LIST") }, { label: "Select Frequency Window", act: () => select("FREQ") }];
+/** AUX - TRIP PLANNING's menu: `mode` sets manual (true) or automatic inputs, as the MANUAL and AUTO softkeys do. */
+export const tripMenu = (mode) => [
+    { label: "Flight Plan Mode", act: () => { } }, // the only mode here and always on, as the lit FPL softkey
+    { label: "Waypoints Mode" }, // WPTS mode is not ported
+    { label: "Auto Mode", act: () => mode(false) }, { label: "Manual Mode", act: () => mode(true) },
+];
+/**
+ * AUX - GPS STATUS's menu: Set WPT to Present Position makes a user waypoint at the aircraft (read when chosen) and
+ * gives it to `add`. It is named as Hold At Present Position names its PPOS points (nav.ts's `userName`).
+ */
+export function gpsStatusMenu(s, add) {
+    const ppos = () => {
+        const { route, points, lat, lon } = s();
+        return { id: userName("PPOS", [...route, ...points]), type: "WPT", lat, lon };
+    };
+    return [{ label: "Set WPT to Present Position", act: () => add(ppos()) }];
 }
