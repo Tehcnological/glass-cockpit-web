@@ -30,6 +30,7 @@ export type ToolEnt = {
         vtf?: boolean;
         directFrom?: LatLon | null;
         points?: MapPoint[];
+        susp?: boolean;
     };
     close: boolean;
 };

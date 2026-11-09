@@ -162,9 +162,10 @@ export function approachPatch(route0: Route, pts: MapPoint[], mode: "load" | "ac
   // Loading an approach cancels Parallel Track (Pilot's Guide).
   const enroute = cancelParallel(route0).filter((r) => !isApproach(r));
   const route = [...enroute, ...pts];
-  if (mode === "load") return { route, vtf: false };
-  if (mode === "activate") return { route, activeLeg: enroute.length, directFrom: here, vtf: false };
-  return { route, ...vtfPatch(enroute.length, pts, here) };
+  // Loading an approach ends SUSP at the one it replaces.
+  if (mode === "load") return { route, vtf: false, susp: false };
+  if (mode === "activate") return { route, activeLeg: enroute.length, directFrom: here, vtf: false, susp: false };
+  return { route, ...vtfPatch(enroute.length, pts, here), susp: false };
 }
 
 /** A fix entered by hand (WAYPOINT ENTRY, DIRECT TO) is an ordinary waypoint, even when picked from a loaded approach. */
@@ -194,8 +195,43 @@ export function directToPatch(s: Plan & LatLon, p: MapPoint) {
   const id = p.parallel !== undefined ? routePoint(p.parallel, s.points, s.airports)?.id : p.id;
   const i = route.findIndex((r) => routePoint(r, s.points, s.airports)?.id === id);
   const directFrom = { lat: s.lat, lon: s.lon };
-  if (i >= 0) return { ...(s.route.some(isParallel) && { route }), activeLeg: i, directFrom, vtf: false };
-  return { route: [planEntry(s, p)], activeLeg: 0, directFrom, vtf: false };
+  // A direct-to ends SUSP, even one to the missed approach point: the aircraft flies back to it.
+  if (i >= 0) return { ...(s.route.some(isParallel) && { route }), activeLeg: i, directFrom, vtf: false, susp: false };
+  return { route: [planEntry(s, p)], activeLeg: 0, directFrom, vtf: false, susp: false };
+}
+
+type Active = Plan & LatLon & { activeLeg: number; directFrom?: LatLon | null };
+
+/** The loaded approach's missed approach point, when it is the active waypoint. */
+function activeMap(s: Active): MapPoint | null {
+  const m = s.route[s.activeLeg];
+  return m !== undefined && isApproach(m) && m.role === "MAP" ? m : null;
+}
+
+/** Whether the aircraft has passed the active missed approach point: beyond it along the leg into it. */
+export function pastMap(s: Active): boolean {
+  const m = activeMap(s);
+  const a = s.directFrom ?? routePoint(s.route[s.activeLeg - 1] ?? "", s.points, s.airports);
+  if (!m || !a) return false;
+  const { to } = local(m);
+  const [[ax, ay], [hx, hy]] = [to(a), to(s)];
+  return ax * hx + ay * hy < 0;
+}
+
+/**
+ * SUSP (Pilot's Guide; FG1000 sequences onto the missed approach): past the loaded approach's missed approach point
+ * waypoint sequencing suspends, the MAP staying active, until SUSP or ACTIVATE MISSED APPROACH makes the missed
+ * approach active. It ends whenever the MAP stops being the active waypoint. Never in OBS mode, even when a host
+ * shares `susp` from a unit that cannot see OBS (the MFD), so the OBS key can always be turned off.
+ */
+export function suspended(s: Active & { susp?: boolean; obs?: boolean }): boolean {
+  return activeMap(s) !== null && !s.obs && (!!s.susp || pastMap(s));
+}
+
+/** SUSP and ACTIVATE MISSED APPROACH: the first missed approach leg active, from `from` (null: from the MAP, as both use it). Null with no missed approach. */
+export function missedPatch(route: Route, from: LatLon | null) {
+  const i = route.findIndex((r) => isApproach(r) && r.role === "MISSED");
+  return i < 0 ? null : { activeLeg: i, directFrom: from, vtf: false, susp: false };
 }
 
 /**
@@ -377,7 +413,7 @@ export function holdAtPresentPosition(s: Plan & LatLon & { activeLeg: number }, 
   const point: MapPoint = { id: userName("PPOS", [...route, ...s.points]), type: "WPT", lat: s.lat, lon: s.lon };
   const at = Math.min(s.activeLeg, route.length);
   route.splice(at, 0, point.id, holdLeg(point, hold));
-  return { points: [...s.points, point], route, activeLeg: at, directFrom: { lat: s.lat, lon: s.lon }, vtf: false };
+  return { points: [...s.points, point], route, activeLeg: at, directFrom: { lat: s.lat, lon: s.lon }, vtf: false, susp: false }; // a direct-to ends SUSP
 }
 
 /**

@@ -111,6 +111,7 @@ export declare function loadedApproach(route: Route): {
 export declare function approachPatch(route0: Route, pts: MapPoint[], mode: "load" | "activate" | "vectors", here: LatLon): {
     route: (string | MapPoint)[];
     vtf: boolean;
+    susp: boolean;
     activeLeg?: undefined;
     directFrom?: undefined;
 } | {
@@ -118,7 +119,9 @@ export declare function approachPatch(route0: Route, pts: MapPoint[], mode: "loa
     activeLeg: number;
     directFrom: LatLon;
     vtf: boolean;
+    susp: boolean;
 } | {
+    susp: boolean;
     activeLeg: number;
     directFrom: LatLon | null;
     vtf: true;
@@ -144,8 +147,32 @@ export declare function directToPatch(s: Plan & LatLon, p: MapPoint): {
         lon: number;
     };
     vtf: boolean;
+    susp: boolean;
     route?: Route | undefined;
 };
+type Active = Plan & LatLon & {
+    activeLeg: number;
+    directFrom?: LatLon | null;
+};
+/** Whether the aircraft has passed the active missed approach point: beyond it along the leg into it. */
+export declare function pastMap(s: Active): boolean;
+/**
+ * SUSP (Pilot's Guide; FG1000 sequences onto the missed approach): past the loaded approach's missed approach point
+ * waypoint sequencing suspends, the MAP staying active, until SUSP or ACTIVATE MISSED APPROACH makes the missed
+ * approach active. It ends whenever the MAP stops being the active waypoint. Never in OBS mode, even when a host
+ * shares `susp` from a unit that cannot see OBS (the MFD), so the OBS key can always be turned off.
+ */
+export declare function suspended(s: Active & {
+    susp?: boolean;
+    obs?: boolean;
+}): boolean;
+/** SUSP and ACTIVATE MISSED APPROACH: the first missed approach leg active, from `from` (null: from the MAP, as both use it). Null with no missed approach. */
+export declare function missedPatch(route: Route, from: LatLon | null): {
+    activeLeg: number;
+    directFrom: LatLon | null;
+    vtf: boolean;
+    susp: boolean;
+} | null;
 /**
  * The Direct-to window's Cancel Direct-To NAV (Pilot's Guide): the plan resumes on the leg closest to the aircraft; a
  * direct-to that replaced the plan leaves nothing to fly. Null (dim) with no direct-to, or on vector-to-final.
@@ -241,6 +268,7 @@ export declare function holdAtPresentPosition(s: Plan & LatLon & {
         lon: number;
     };
     vtf: boolean;
+    susp: boolean;
 };
 /**
  * The active leg once the aircraft reaches the active waypoint (the host sequences the plan): the next one, except

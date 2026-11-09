@@ -18,7 +18,7 @@ export type ToolState = LatLon & {
 };
 export interface ToolRow { label: string; value?: string; cur?: boolean; dim?: boolean; title?: boolean }
 /** What ENT does: the change to make, if any, and whether the window closes. */
-export type ToolEnt = { patch?: { route?: Route; activeLeg?: number; vtf?: boolean; directFrom?: LatLon | null; points?: MapPoint[] }; close: boolean };
+export type ToolEnt = { patch?: { route?: Route; activeLeg?: number; vtf?: boolean; directFrom?: LatLon | null; points?: MapPoint[]; susp?: boolean }; close: boolean };
 
 /** Whether the flight plan menu offers `name`; ATK and Hold At Waypoint need the waypoint `sel` under the cursor. */
 export function toolEnabled(name: FplToolName, s: ToolState, sel: number | null): boolean {

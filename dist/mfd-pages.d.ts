@@ -40,7 +40,7 @@ export interface Mfd {
     go(group: string, page: string): void;
     /** Puts a frequency in the standby of the selected NAV or COM, by band. */ tune(freq: number): void;
     /** ENGINE and MAP, plus the page's own keys by index. */ topKeys(extra?: Record<number, Key>): Key[];
-    /** Draws the map into a page's own map window, with a procedure to preview. */ drawMap(g: SVGGElement, geom: MapGeometry, center?: LatLon, preview?: MapPoint[]): void;
+    /** Draws the map into a page's own map window, with a procedure to preview, and pan mode's rotation. */ drawMap(g: SVGGElement, geom: MapGeometry, center?: LatLon, preview?: MapPoint[], up?: number): void;
     /** Opens a window over the page (WAYPOINT ENTRY). */ open(p: MfdPage): void;
     /** Closes DIRECT TO, PROC or WAYPOINT ENTRY. */ close(): void;
 }
@@ -57,6 +57,11 @@ export declare class MfdPage {
     /** Redrawn every second (a clock on the page). */ live: boolean;
     /** The navigation map behind the page: the whole map, or the map beside the page's data. */
     navMap: "full" | "partial" | null;
+    /** A page whose own map pans (the flight plan page's): the map window and the layer the pointer goes in. */
+    panWindow: {
+        geom: MapGeometry;
+        layer: SVGGElement;
+    } | null;
     protected p: Page;
     protected root: SVGGElement | null;
     protected get s(): MfdState;
@@ -79,6 +84,8 @@ export declare class MfdPage {
     center(): LatLon | null;
     /** The waypoint DIRECT TO starts with from this page (the one under the cursor). */
     selected(): string | null;
+    /** WPT pages: shows waypoint `id` (pan mode's ENT), if this page has it. */
+    showWaypoint(_id: string): boolean;
     /** The MENU key's PAGE MENU options, or null for a page without one here. */
     /** Where the navigation map draws the nearest airport line, if this page has one. */
     nearestLine(): LatLon | null;
@@ -89,6 +96,7 @@ export declare class MfdPage {
 declare class MapPage extends MfdPage {
     private geom;
     protected g: SVGGElement;
+    /** Where the map goes: under the range legend. */ protected before: Element;
     constructor(m: Mfd, name: string, screen: SVGGElement, geom: MapGeometry);
     protected drawOwnMap(preview?: MapPoint[]): void;
 }

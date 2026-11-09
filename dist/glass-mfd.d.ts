@@ -2,7 +2,7 @@ import { type DisplayOptions } from "./display.js";
 import { type Airspace, type Airway, type LatLon, type MapPoint, type Orientation } from "./map.js";
 import type { CdiSource } from "./glass-pfd.js";
 import { type Knobs } from "./bezel.js";
-import type { Airport, Procedure, Station } from "./nav.js";
+import { type Airport, type Procedure, type Station } from "./nav.js";
 import { type Checklist } from "./mfd-pages.js";
 export interface Engine {
     rpm: number;
@@ -39,6 +39,7 @@ export interface MfdState extends Knobs {
     /** Index into `route` of the active waypoint; the leg into it is magenta. */ activeLeg: number;
     /** Set by DIRECT TO: where the direct leg to the active waypoint starts. */ directFrom: LatLon | null;
     /** Vector-to-final is active (PROC): the active waypoint is the final approach fix, on the final course. */ vtf: boolean;
+    /** Waypoint sequencing is suspended at the approach's missed approach point (the PFD's SUSP); set as the aircraft passes the MAP. */ susp: boolean;
     /** Barometric minimums, feet; null is off. Not drawn here: PROC's approach loading sets them for the PFD (reported through `onChange`). */ minimums: number | null;
     engine: Engine;
     /** Which NAV shows green as the CDI source. */ cdiSource: CdiSource;
@@ -73,6 +74,10 @@ export declare class GlassMfd {
     /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ private overlay;
     /** The page FPL goes back to: group and page names. */ private beforeFpl;
     private timers;
+    /** Pan mode ends after a minute with no joystick input, and the map recenters. */
+    private idle;
+    /** After pan mode's ENT opened a WPT page: the page (group and page names) the push or CLR goes back to. */
+    private panBack;
     /** Once a second: the Utility page's trip statistics, and the AUX pages' clocks. */ private clock;
     private hl;
     private ui;
@@ -97,8 +102,14 @@ export declare class GlassMfd {
     private loadPage;
     /** Merge new values into the state and redraw. */
     set(patch: Partial<MfdState>): void;
+    /** The map pan mode works on: the full navigation map, or the page's own (the flight plan page's). */
+    private panWindow;
     private panView;
+    private panPoints;
     private panInfo;
+    /** Pilot's Guide: ENT with the pointer on a waypoint opens its WPT page. False when there is none to open (no point
+     * under the pointer, a user waypoint, or one the WPT pages do not list, such as an approach fix of the plan's own). */
+    private panWaypoint;
     /** Pan mode: the pointer, and the info bar across the top of the map (layout from the v13 trainer, drawn here). */
     private drawPan;
     private softkeys;

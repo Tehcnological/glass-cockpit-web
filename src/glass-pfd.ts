@@ -16,8 +16,8 @@ import { adjust, bezelInput, type Input } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { ProcFlow, PROC_MENU } from "./procedures.js";
 import { MIN_BLANK, minView, stepBaro } from "./apr-info.js";
-import { panInfo, panMarkup, panMove, panStart, panTarget, type Pan, type PanView } from "./pan.js";
-import { bearingDistance, bestApproach, directToPatch, cancelDirectTo, findPoint, latLon, nearest, nrstFreq, planName, routePoint, type Airport, type Procedure } from "./nav.js";
+import { PanIdle, panInfo, panMarkup, panMove, panStart, panTarget, type Pan, type PanView } from "./pan.js";
+import { bearingDistance, bestApproach, directToPatch, cancelDirectTo, findPoint, latLon, missedPatch, nearest, nrstFreq, planName, routePoint, suspended, type Airport, type Procedure } from "./nav.js";
 import { alertsKey, seenAlerts } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
 import { BLANK as blank, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key as k, screenBox, type Key } from "./ui.js";
@@ -93,6 +93,7 @@ export interface PfdState {
   /** Set by DIRECT TO and PROC: where the direct leg to the active waypoint starts, for the inset map. */ directFrom: LatLon | null;
   /** Vector-to-final is active (PROC): `directFrom` is its intercept, not a direct-to, so Cancel Direct-To NAV is dim. */ vtf: boolean;
   /** Index into `route` of the active waypoint. */ activeLeg: number;
+  /** Waypoint sequencing is suspended at the approach's missed approach point (SUSP); set as the aircraft passes the MAP. */ susp: boolean;
   /** Airports the NRST window lists, nearest first after sorting here. */ airports: Airport[];
   /** Approaches the PROC window can load, for the airports in `airports`. */ procedures: Procedure[];
   /** Magnetic variation, degrees east positive: bearings to stations are magnetic. */ magVar: number;
@@ -135,7 +136,7 @@ const DEFAULTS: PfdState = {
   pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
   baro: 29.92, oat: 15, heading: 0, turnRate: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
   cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null, afcs: null,
-  radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], directFrom: null, vtf: false, activeLeg: 1, airports: [], procedures: [], magVar: 0, wind: null,
+  radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], directFrom: null, vtf: false, susp: false, activeLeg: 1, airports: [], procedures: [], magVar: 0, wind: null,
   xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
   vspeedsOn: { Vglide: false, Vr: false, Vx: false, Vy: false }, minimums: null, failed: {}, // v13 trainer: references start off
   reversionary: false,
@@ -255,6 +256,11 @@ export class GlassPfd {
     /** DIRECT TO: the waypoint, and whether the cursor is on ACTIVATE? (else on the identifier). */ dto: { id: null as string | null, act: false },
     /** Pan mode on the inset map (joystick push), or null. */ pan: null as Pan | null,
   };
+  /** Pan mode ends after a minute with no joystick input, as on the MFD. */
+  private idle = new PanIdle(() => {
+    this.ui.pan = null;
+    this.set({});
+  });
   /** DIRECT TO's identifier, spelled with the FMS knob. */ private dtoEntry!: IdEntry;
   /** PROC: the same flow as the MFD's PROCEDURES page; its airport identifier is spelled in `procEntry`. */ private proc!: ProcFlow;
   private procEntry!: IdEntry;
@@ -349,6 +355,7 @@ export class GlassPfd {
   destroy(): void {
     clearInterval(this.clock);
     this.timers.forEach(clearTimeout);
+    this.idle.stop();
     this.surround.destroy();
     this.unbezel();
   }
@@ -379,6 +386,7 @@ export class GlassPfd {
         if (!u.inset || !u.pan) return;
         const h = i.control === "JOYSTICK_HORIZONTAL";
         u.pan = panMove(u.pan, h ? i.value : 0, h ? 0 : i.value, this.panView());
+        this.idle.moved();
         return this.set({});
       }
       case "FMS_OUTER":
@@ -507,10 +515,13 @@ export class GlassPfd {
       case "top": {
         const cdi: CdiSource[] = ["GPS", "NAV1", "NAV2"];
         // v13 trainer: OBS is dim with no flight plan (FG1000 always offers it); while on, it stays so it can be turned off.
+        // Pilot's Guide (FG1000 has no SUSP): suspended at the missed approach point the key reads SUSP, lit, and sequences
+        // onto the missed approach from the MAP; with no missed approach it stays suspended.
         return [
           s.reversionary ? k("ENGINE", () => this.go("engine")) : blank,
           off(k("INSET", () => { u.inset = true; this.go("inset"); })), blank, off(k("PFD", () => this.go("pfd"))),
-          s.route.length || s.obs ? k("OBS", () => this.change({ obs: !s.obs }), s.obs) : dimKey("OBS"),
+          s.susp ? k("SUSP", () => { const p = missedPatch(s.route, null); if (p) this.change(p); }, true)
+            : s.route.length || s.obs ? k("OBS", () => this.change({ obs: !s.obs }), s.obs) : dimKey("OBS"),
           // PFDInstrumentsController.incrCDISource: GPS, NAV1, NAV2.
           k("CDI", () => this.change({ cdiSource: cdi[(cdi.indexOf(s.cdiSource) + 1) % 3] })),
           k("DME", () => this.openWindow("DME"), u.window === "DME"), off(k("XPDR", () => this.go("xpdr"))), off(k("IDENT", () => this.ident())),
@@ -707,6 +718,9 @@ export class GlassPfd {
   /** Merge new values into the state and redraw. */
   set(patch: Partial<PfdState>): void {
     const s = (this.state = { ...this.state, ...patch });
+    // SUSP as the aircraft passes the missed approach point, reported after the redraw; a host's own `susp` is not echoed back.
+    const report = suspended(s) !== s.susp && !("susp" in patch);
+    s.susp = suspended(s);
     // Unusual attitude declutter, undone as the attitude recovers. Bearing information, the DME window and ALERTS stay
     // (Pilot's Guide: the Bearing Information, Alerts and Annunciation windows can be displayed).
     this.ua = unusualAttitude(s.pitch, s.roll);
@@ -772,6 +786,7 @@ export class GlassPfd {
     this.updateNrst();
     this.updateFlightPlan(s);
     this.drawWindow();
+    if (report) this.options.onChange?.({ susp: s.susp });
   }
 
   // setFlightPlan / updateFlightPlan: the flight plan window, shown by FPL while there is a flight plan. The arrow marks
@@ -860,6 +875,7 @@ export class GlassPfd {
     const on = u.inset && !this.ua;
     for (const id of ["PFD-Map", "PFD-Map-bg", "PFD-Map-bg-1"]) this.p.show(id, on);
     if (!u.inset) u.pan = null;
+    this.idle.sync(!!u.pan);
     this.inset.style.display = on ? "inline" : "none";
     this.panLayer.style.display = on && u.pan ? "inline" : "none";
     if (!on) return;
@@ -1199,7 +1215,7 @@ export class GlassPfd {
     this.p.show("CDI-GPS-XTK-text", xtk);
     if (xtk) this.p.text("CDI-GPS-XTK-text", `XTK ${Math.abs(s.xtk).toFixed(2)}NM`);
     this.p.show("CDI-GPS-ANN-text", src === "GPS");
-    if (src === "GPS") this.p.text("CDI-GPS-ANN-text", s.obs ? "OBS" : s.gpsMode);
+    if (src === "GPS") this.p.text("CDI-GPS-ANN-text", s.obs ? "OBS" : s.susp ? "SUSP" : s.gpsMode);
     this.p.tf(`${src}-CDI`, { tx: (80 * clamp(s.cdiDots, -2.4, 2.4)) / 2.4 });
     this.p.show(`${src}-TO`, !s.from);
     this.p.show(`${src}-FROM`, s.from);

@@ -81,6 +81,7 @@ export interface PfdState {
     /** Set by DIRECT TO and PROC: where the direct leg to the active waypoint starts, for the inset map. */ directFrom: LatLon | null;
     /** Vector-to-final is active (PROC): `directFrom` is its intercept, not a direct-to, so Cancel Direct-To NAV is dim. */ vtf: boolean;
     /** Index into `route` of the active waypoint. */ activeLeg: number;
+    /** Waypoint sequencing is suspended at the approach's missed approach point (SUSP); set as the aircraft passes the MAP. */ susp: boolean;
     /** Airports the NRST window lists, nearest first after sorting here. */ airports: Airport[];
     /** Approaches the PROC window can load, for the airports in `airports`. */ procedures: Procedure[];
     /** Magnetic variation, degrees east positive: bearings to stations are magnetic. */ magVar: number;
@@ -167,6 +168,8 @@ export declare class GlassPfd {
     private clock;
     private timers;
     private ui;
+    /** Pan mode ends after a minute with no joystick input, as on the MFD. */
+    private idle;
     /** DIRECT TO's identifier, spelled with the FMS knob. */ private dtoEntry;
     /** PROC: the same flow as the MFD's PROCEDURES page; its airport identifier is spelled in `procEntry`. */ private proc;
     private procEntry;

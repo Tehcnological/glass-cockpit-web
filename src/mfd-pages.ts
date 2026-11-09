@@ -44,7 +44,7 @@ export interface Mfd {
   go(group: string, page: string): void;
   /** Puts a frequency in the standby of the selected NAV or COM, by band. */ tune(freq: number): void;
   /** ENGINE and MAP, plus the page's own keys by index. */ topKeys(extra?: Record<number, Key>): Key[];
-  /** Draws the map into a page's own map window, with a procedure to preview. */ drawMap(g: SVGGElement, geom: MapGeometry, center?: LatLon, preview?: MapPoint[]): void;
+  /** Draws the map into a page's own map window, with a procedure to preview, and pan mode's rotation. */ drawMap(g: SVGGElement, geom: MapGeometry, center?: LatLon, preview?: MapPoint[], up?: number): void;
   /** Opens a window over the page (WAYPOINT ENTRY). */ open(p: MfdPage): void;
   /** Closes DIRECT TO, PROC or WAYPOINT ENTRY. */ close(): void;
 }
@@ -93,6 +93,8 @@ export class MfdPage {
   /** Redrawn every second (a clock on the page). */ live = false;
   /** The navigation map behind the page: the whole map, or the map beside the page's data. */
   navMap: "full" | "partial" | null = null;
+  /** A page whose own map pans (the flight plan page's): the map window and the layer the pointer goes in. */
+  panWindow: { geom: MapGeometry; layer: SVGGElement } | null = null;
   protected p: Page;
   protected root: SVGGElement | null;
   protected get s() {
@@ -154,6 +156,11 @@ export class MfdPage {
     return null;
   }
 
+  /** WPT pages: shows waypoint `id` (pan mode's ENT), if this page has it. */
+  showWaypoint(_id: string): boolean {
+    return false;
+  }
+
   /** The MENU key's PAGE MENU options, or null for a page without one here. */
   /** Where the navigation map draws the nearest airport line, if this page has one. */
   nearestLine(): LatLon | null {
@@ -170,16 +177,18 @@ export class MfdPage {
 /** A page with its own map window beside its data. */
 class MapPage extends MfdPage {
   protected g: SVGGElement;
+  /** Where the map goes: under the range legend. */ protected before: Element;
 
   constructor(m: Mfd, name: string, screen: SVGGElement, private geom: MapGeometry) {
     super(m, name, screen);
     // Under the range legend (DIRECT TO has no legend group, AirportInfo no legend).
-    const before = this.p.el("Legend") ?? this.p.el("RangeDisplay") ?? this.root!.querySelector('[id="Background"]')!;
-    this.g = mapGroup(screen, before, geom);
+    this.before = this.p.el("Legend") ?? this.p.el("RangeDisplay") ?? this.root!.querySelector('[id="Background"]')!;
+    this.g = mapGroup(screen, this.before, geom);
   }
 
   protected drawOwnMap(preview?: MapPoint[]) {
-    this.m.drawMap(this.g, this.geom, this.center() ?? undefined, preview);
+    const pan = this.panWindow && this.m.ui.pan;
+    this.m.drawMap(this.g, this.geom, pan ? pan.center : this.center() ?? undefined, preview, pan ? pan.up : undefined);
     this.p.text("RangeDisplay", rangeLabel(this.s.range));
     this.p.text("OrientationDisplay", this.s.orientation);
   }
@@ -518,6 +527,13 @@ class NavInfoPage extends MapPage {
     return this.point() ?? null;
   }
 
+  showWaypoint(id: string) {
+    if (!this.s.points.some((p) => p.type === this.type && p.id === id)) return false;
+    this.id = id;
+    this.entry.cancel();
+    return true;
+  }
+
   selected() {
     return this.point()?.id ?? null;
   }
@@ -736,6 +752,14 @@ class AirportInfoPage extends MapPage {
 
   center() {
     return this.apt ?? null;
+  }
+
+  showWaypoint(id: string) {
+    if (!this.s.airports.some((a) => a.id === id)) return false;
+    this.setView("INFO");
+    [this.id, this.grp, this.rwy, this.freqs.sel] = [id, "ID", 0, 0];
+    this.entry.cancel();
+    return true;
   }
 
   selected() {
@@ -973,6 +997,8 @@ class FlightPlanPage extends MapPage {
 
   constructor(m: Mfd, screen: SVGGElement, private entry: WaypointEntryPage, private tools: () => FplToolPage) {
     super(m, "ActiveFlightPlanNarrow", screen, FPL_MAP);
+    // Pilot's Guide: the joystick pans this page's map too, with the navigation map's pointer and info bar.
+    this.panWindow = { geom: FPL_MAP, layer: mapGroup(screen, this.before, FPL_MAP) };
   }
 
   private legs() {

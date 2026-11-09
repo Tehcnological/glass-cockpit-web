@@ -18,11 +18,11 @@ test("findPoint looks in points, then the plan, then airports", () => {
 });
 
 test("direct to a waypoint in the plan activates its leg from here", () => {
-  assert.deepEqual(directToPatch(s, findPoint(s, "KPHX")), { activeLeg: 0, directFrom: { lat: 33, lon: -112 }, vtf: false });
+  assert.deepEqual(directToPatch(s, findPoint(s, "KPHX")), { activeLeg: 0, directFrom: { lat: 33, lon: -112 }, vtf: false, susp: false });
 });
 
 test("direct to a waypoint off the plan makes it the plan", () => {
-  assert.deepEqual(directToPatch(s, VOR), { route: ["PXR"], activeLeg: 0, directFrom: { lat: 33, lon: -112 }, vtf: false });
+  assert.deepEqual(directToPatch(s, VOR), { route: ["PXR"], activeLeg: 0, directFrom: { lat: 33, lon: -112 }, vtf: false, susp: false });
   const off = { ...s, route: [] };
   assert.deepEqual(directToPatch(off, FAF).route, [{ id: "FAF", type: "WPT", lat: 33.5, lon: -112 }], "an approach fix goes as a plain waypoint");
 });

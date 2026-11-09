@@ -100,6 +100,7 @@ test("hold at present position: a user waypoint here, direct to it, the hold aft
   assert.deepEqual(p.route, ["A", w.id, { ...w, hold: { course: 45, turn: "R", time: 1 } }, "B", "C", "D"]);
   assert.equal(p.activeLeg, 1);
   assert.deepEqual(p.directFrom, { lat: 0, lon: 0.5 });
+  assert.equal(p.susp, false, "a direct-to ends SUSP");
   const empty = holdAtPresentPosition({ ...s, route: [], activeLeg: 1 }, H);
   assert.equal(empty.route.length, 2);
   assert.equal(empty.activeLeg, 0);

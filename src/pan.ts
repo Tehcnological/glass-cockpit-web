@@ -1,14 +1,41 @@
 // Map pan mode, from the Pilot's Guide and the v13 trainer (FG1000 has none): the joystick push puts a pointer on the aircraft and an info bar
-// over the map; the joystick moves the pointer, and at the map's edge the map scrolls instead. Pushing again ends it.
+// over the map; the joystick moves the pointer, and at the map's edge the map scrolls instead. Pushing again ends it, as
+// does a minute with no joystick input. ENT on a waypoint opens its WPT page.
 // DOM-free so the tests can run it.
 import { bearingDistance, latLon } from "./nav.js";
 import { deg3 } from "./page.js";
 import { esc } from "./ui.js";
-import type { LatLon, MapGeometry } from "./map.js";
+import type { LatLon, MapGeometry, MapPoint } from "./map.js";
 
 const NM_PER_DEG = 60;
 /** Pixels the pointer moves for one joystick click. */
 export const PAN_STEP = 12;
+/** Pilot's Guide: with no joystick input for about a minute, pan mode ends and the map recenters on the aircraft. */
+export const PAN_IDLE_MS = 60_000;
+/** ENT with the pointer on a waypoint: the WPT page for its type. User waypoints have none (UserWPTInfo has no data here). */
+export const PAN_WPT_PAGES: Partial<Record<MapPoint["type"], string>> = { APT: "AirportInfo", VOR: "VORInfo", NDB: "NDBInfo", FIX: "IntersectionInfo" };
+
+/** Pan mode's idle timer: one timeout, started with pan mode, restarted by each joystick move, stopped when pan ends. */
+export class PanIdle {
+  private t: ReturnType<typeof setTimeout> | undefined;
+  constructor(private end: () => void) {}
+  /** Call on every redraw: starts the timer when pan mode has started, stops it when pan mode has ended. */
+  sync(panning: boolean) {
+    if (!panning) this.stop();
+    else if (this.t === undefined) this.moved();
+  }
+  moved() {
+    clearTimeout(this.t);
+    this.t = setTimeout(() => {
+      this.t = undefined;
+      this.end();
+    }, PAN_IDLE_MS);
+  }
+  stop() {
+    clearTimeout(this.t);
+    this.t = undefined;
+  }
+}
 /** How close to the map's edge the pointer may go. */
 const MARGIN = 10;
 /** A point within this many pixels of the pointer is the one it names. */
@@ -68,7 +95,11 @@ export function panMarkup(p: Pan, info: ReturnType<typeof panInfo>, m: MapGeomet
   const [pad, l1, l2] = [font * 0.55, m.y + font * 1.1, m.y + font * 2.3];
   // Measuring: a dashed line from the start point (`start`, from panProject) to the pointer.
   const line = start ? `<line x1="${m.cx + start[0]}" y1="${m.cy + start[1]}" x2="${x}" y2="${y}" stroke="#ffffff" stroke-width="2" stroke-dasharray="6 4"/>` : "";
-  return line + `<path d="M${x} ${y}l0 ${22 * k}l${6 * k} ${-6 * k}l${6 * k} ${11 * k}l${4 * k} ${-2 * k}l${-6 * k} ${-11 * k}l${9 * k} 0z" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>` +
+  // The pointer flashes (Pilot's Guide): a 1 s cycle, shown 0.7 s and hidden 0.3 s. A SMIL animation, so it runs without
+  // redraws; with no id, so display.ts's per-display id scoping has nothing to rename. Its begin is the document's
+  // start, so redrawing the markup keeps the phase instead of restarting it.
+  const flash = `<animate attributeName="visibility" values="visible;hidden" keyTimes="0;0.7" calcMode="discrete" dur="1s" repeatCount="indefinite"/>`;
+  return line + `<path d="M${x} ${y}l0 ${22 * k}l${6 * k} ${-6 * k}l${6 * k} ${11 * k}l${4 * k} ${-2 * k}l${-6 * k} ${-11 * k}l${9 * k} 0z" fill="#ffffff" stroke="#000000" stroke-width="1.5">${flash}</path>` +
     `<rect x="${m.x}" y="${m.y}" width="${m.w}" height="${font * 2.7}" fill="#000000" stroke="#808080" stroke-width="2"/>` +
     t(m.x + pad, l1, esc(info.label)) + t(m.x + pad, l2, `${info.dis}  ${info.brg}`) +
     t(m.x + m.w - pad, l1, latLon(info.lat, "N", "S"), "end") + t(m.x + m.w - pad, l2, latLon(info.lon, "E", "W"), "end");
@@ -77,13 +108,19 @@ export function panMarkup(p: Pan, info: ReturnType<typeof panInfo>, m: MapGeomet
 /** The info bar: the point under the pointer (or MAP POINTER), its distance and magnetic bearing from the aircraft, lat/lon. */
 export function panInfo(p: Pan, v: PanView, here: LatLon, points: (LatLon & { id: string })[], magVar: number) {
   const at = panPoint(p, v);
-  let [under, best] = [undefined as (typeof points)[number] | undefined, NEAR];
+  const under = panUnder(p, v, points);
+  const { brg, dist } = bearingDistance(here.lat, here.lon, at.lat, at.lon);
+  const dis = dist < 0.1 ? `${Math.round(dist * 6076.12)}FT` : dist < 100 ? `${dist.toFixed(1)}NM` : `${Math.round(dist)}NM`;
+  return { label: under?.id ?? "MAP POINTER", dis, brg: deg3(brg - magVar), lat: at.lat, lon: at.lon };
+}
+
+/** The point under the pointer (the closest within a few pixels), or undefined. */
+export function panUnder<T extends LatLon>(p: Pan, v: PanView, points: T[]): T | undefined {
+  let [under, best] = [undefined as T | undefined, NEAR];
   for (const q of points) {
     const [x, y] = project(p.center, q, v);
     const d = Math.hypot(x - p.x, y - p.y);
     if (d <= best) [under, best] = [q, d];
   }
-  const { brg, dist } = bearingDistance(here.lat, here.lon, at.lat, at.lon);
-  const dis = dist < 0.1 ? `${Math.round(dist * 6076.12)}FT` : dist < 100 ? `${dist.toFixed(1)}NM` : `${Math.round(dist)}NM`;
-  return { label: under?.id ?? "MAP POINTER", dis, brg: deg3(brg - magVar), lat: at.lat, lon: at.lon };
+  return under;
 }

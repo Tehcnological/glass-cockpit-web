@@ -12,10 +12,11 @@ import SURROUND from "./svg/surround-mfd.js";
 import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay } from "./display.js";
 import { Page, mod } from "./page.js";
-import { panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget } from "./pan.js";
+import { PAN_WPT_PAGES, PanIdle, panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget, panUnder } from "./pan.js";
 import { AIRWAY_RANGE, drawMap, mapGroup, mapUp, profileView, rangeLabel, shownAirways, stepRange } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import { adjust, bezelInput } from "./bezel.js";
+import { suspended } from "./nav.js";
 import { BLANK, Highlighter, IdEntry, NS, dimKey, key } from "./ui.js";
 import { dataBar, setupDefaults } from "./aux-pages.js";
 import { PAGE_GROUPS, makePages } from "./mfd-pages.js";
@@ -24,7 +25,7 @@ const PAN_FONT = 18;
 const DEFAULTS = {
     heading: 0, headingBug: 0, course: 0, baro: 29.92, alt: 0, selectedAlt: null, track: 0, groundspeed: 0, dtk: null, ete: null,
     lat: 0, lon: 0, magVar: 0, range: 10, orientation: "NORTH UP",
-    points: [], airspaces: [], airways: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null, vtf: false, minimums: null,
+    points: [], airspaces: [], airways: [], airports: [], stations: [], procedures: [], route: [], activeLeg: 1, directFrom: null, vtf: false, susp: false, minimums: null,
     engine: { rpm: 0, fuelFlow: 0, oilPressure: 0, oilTemp: 0, egt: 0, vacuum: 0, fuelLeft: 0, fuelRight: 0, volts: 0, engineHours: 0 },
     radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, cdiSource: "NAV1", bearings: {}, checklists: [],
 };
@@ -59,6 +60,13 @@ export class GlassMfd {
     /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ overlay = null;
     /** The page FPL goes back to: group and page names. */ beforeFpl = ["MapPageGroup", "NavigationMap"];
     timers = { menu: 0, load: 0 };
+    /** Pan mode ends after a minute with no joystick input, and the map recenters. */
+    idle = new PanIdle(() => {
+        this.ui.pan = null;
+        this.set({});
+    });
+    /** After pan mode's ENT opened a WPT page: the page (group and page names) the push or CLR goes back to. */
+    panBack = null;
     /** Once a second: the Utility page's trip statistics, and the AUX pages' clocks. */ clock;
     hl = new Highlighter();
     ui = {
@@ -111,6 +119,7 @@ export class GlassMfd {
         clearInterval(this.clock);
         clearTimeout(this.timers.menu);
         clearTimeout(this.timers.load);
+        this.idle.stop();
         this.surround.destroy();
         this.unbezel();
     }
@@ -127,7 +136,7 @@ export class GlassMfd {
             go: (group, page) => this.goToPage(group, page),
             tune: (freq) => this.tune(freq),
             topKeys: (extra) => this.topKeys(extra),
-            drawMap: (g, geom, center, preview) => drawMap(g, { ...this.state, center, preview, airways: this.airways() }, geom, this.ui.dcltr),
+            drawMap: (g, geom, center, preview, up) => drawMap(g, { ...this.state, center, preview, up, airways: this.airways() }, geom, this.ui.dcltr),
             open: (p) => this.openOverlay(p),
             close: () => this.closeOverlay(),
         };
@@ -148,6 +157,8 @@ export class GlassMfd {
                 this.surround.toggle(i.control === "NAV_TOGGLE" ? "nav" : "com");
                 return this.set({});
             case "SOFTKEY":
+                // A softkey (APR, DP, ...) leaves the page as pan mode's ENT opened it: CLR is the page's own again.
+                this.panBack = null;
                 this.softkeys()[i.value - 1]?.act?.();
                 return this.set({});
             case "RANGE":
@@ -184,10 +195,13 @@ export class GlassMfd {
                 // Measuring (Pilot's Guide): ENT moves the start point to the pointer.
                 if (this.ui.pan?.from && !this.overlay)
                     this.ui.pan = panMeasureFrom(this.ui.pan, this.panView());
-                else
+                else if (!(this.ui.pan && !this.overlay && this.panWaypoint()))
                     page.ent();
                 return this.set({});
             case "CLR":
+                // Pilot's Guide: from the waypoint's page that pan mode's ENT opened, CLR goes back to the map.
+                if (this.panBack && !this.overlay && !page.crsr)
+                    return this.goToPage(...this.panBack);
                 page.clr();
                 return this.set({});
             case "CLR_HOLD":
@@ -215,8 +229,13 @@ export class GlassMfd {
                 return this.set({});
             }
             case "JOYSTICK_PRESS":
-                // v13 trainer: the push starts pan mode on the full navigation map; again ends it and recenters the map.
-                if (this.overlay || this.groupPage.navMap !== "full")
+                // v13 trainer: the push starts pan mode on the full navigation map (Pilot's Guide: and the flight plan page's
+                // map); again ends it and recenters the map. From the WPT page pan mode's ENT opened, it goes back to the map.
+                if (this.overlay)
+                    return;
+                if (this.panBack)
+                    return this.goToPage(...this.panBack);
+                if (this.groupPage.navMap !== "full" && !this.groupPage.panWindow)
                     return;
                 this.ui.pan = this.ui.pan ? null : panStart(this.state, this.panView().up);
                 return this.set({});
@@ -227,6 +246,7 @@ export class GlassMfd {
                     return;
                 const h = i.control === "JOYSTICK_HORIZONTAL";
                 this.ui.pan = panMove(pan, h ? i.value : 0, h ? 0 : i.value, this.panView());
+                this.idle.moved();
                 return this.set({});
             }
             case "DTO": {
@@ -331,6 +351,7 @@ export class GlassMfd {
     }
     loadPage() {
         const u = this.ui;
+        this.panBack = null;
         this.closeOverlay();
         this.groupPage.show(false);
         if (u.shown[0] !== u.group || u.shown[1] !== u.page)
@@ -344,6 +365,10 @@ export class GlassMfd {
     /** Merge new values into the state and redraw. */
     set(patch) {
         const s = (this.state = { ...this.state, ...patch });
+        // SUSP as the aircraft passes the missed approach point, reported after the redraw; a host's own `susp` is not echoed
+        // back. The MFD cannot see OBS and draws nothing for susp, so the PFD's value wins in a host that shares it.
+        const report = suspended(s) !== s.susp && !("susp" in patch);
+        s.susp = suspended(s);
         this.pages.utility.util.tick(s.groundspeed, Date.now());
         const page = this.page;
         const under = this.groupPage;
@@ -377,29 +402,58 @@ export class GlassMfd {
         }
         this.drawProfile(profile);
         this.drawPan(mode === "full");
+        this.idle.sync(!!this.ui.pan);
         this.frame.textContent = base.frame();
         if (base !== page)
             base.draw();
         page.draw();
+        if (report)
+            this.options.onChange?.({ susp: s.susp });
+    }
+    /** The map pan mode works on: the full navigation map, or the page's own (the flight plan page's). */
+    panWindow() {
+        return this.groupPage.panWindow ?? { geom: MAP_FULL, layer: this.panLayer };
     }
     panView() {
         const s = this.state;
         const up = this.ui.pan?.up ?? mapUp(s);
-        return { w: MAP_FULL.w, h: MAP_FULL.h, scale: MAP_FULL.px / s.range, up, lat: s.lat, bar: PAN_FONT * 2.7 };
+        const g = this.panWindow().geom;
+        return { w: g.w, h: g.h, scale: g.px / s.range, up, lat: s.lat, bar: PAN_FONT * 2.7 };
+    }
+    panPoints() {
+        const s = this.state;
+        return [...s.points, ...s.route.filter((r) => typeof r !== "string")];
     }
     panInfo() {
         const s = this.state;
-        const named = [...s.points, ...s.route.filter((r) => typeof r !== "string")];
-        return panInfo(this.ui.pan, this.panView(), this.ui.pan.from ?? s, named, s.magVar);
+        return panInfo(this.ui.pan, this.panView(), this.ui.pan.from ?? s, this.panPoints(), s.magVar);
+    }
+    /** Pilot's Guide: ENT with the pointer on a waypoint opens its WPT page. False when there is none to open (no point
+     * under the pointer, a user waypoint, or one the WPT pages do not list, such as an approach fix of the plan's own). */
+    panWaypoint() {
+        const q = panUnder(this.ui.pan, this.panView(), this.panPoints());
+        const name = q && PAN_WPT_PAGES[q.type];
+        const wpt = PAGE_GROUPS.findIndex((g) => g.group === "WPTPageGroup");
+        const target = name && this.pages.groups[wpt][PAGE_GROUPS[wpt].pages.indexOf(name)];
+        if (!target || !target.showWaypoint(q.id))
+            return false;
+        const [gi, pi] = this.ui.shown;
+        const back = [PAGE_GROUPS[gi].group, PAGE_GROUPS[gi].pages[pi]];
+        this.goToPage("WPTPageGroup", name);
+        this.panBack = back;
+        return true;
     }
     /** Pan mode: the pointer, and the info bar across the top of the map (layout from the v13 trainer, drawn here). */
-    drawPan(shown) {
-        const pan = shown ? this.ui.pan : null;
-        this.panLayer.style.display = pan ? "inline" : "none";
+    drawPan(full) {
+        const w = this.panWindow();
+        const pan = full || w.layer !== this.panLayer ? this.ui.pan : null;
+        if (w.layer !== this.panLayer)
+            this.panLayer.style.display = "none";
+        w.layer.style.display = pan ? "inline" : "none";
         if (!pan)
             return;
         const start = pan.from && panProject(pan, pan.from, this.panView());
-        this.panLayer.innerHTML = panMarkup(pan, this.panInfo(), MAP_FULL, PAN_FONT, start);
+        w.layer.innerHTML = panMarkup(pan, this.panInfo(), w.geom, PAN_FONT, start);
     }
     // The softkeys: the page's own, or a menu shared by the pages (EIS engineMenu, NavigationMap mapMenu).
     softkeys() {
