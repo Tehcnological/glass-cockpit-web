@@ -167,6 +167,8 @@ export declare class GlassPfd {
     private clock;
     private timers;
     private ui;
+    /** Pan mode ends after a minute with no joystick input, as on the MFD. */
+    private idle;
     /** DIRECT TO's identifier, spelled with the FMS knob. */ private dtoEntry;
     /** PROC: the same flow as the MFD's PROCEDURES page; its airport identifier is spelled in `procEntry`. */ private proc;
     private procEntry;
