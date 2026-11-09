@@ -1,6 +1,6 @@
 // The navigation map shared by the MFD map page and the PFD inset: FG1000's map layers (Nasal/canvas/map/*.symbol.nas,
 // NavigationMapStyles.nas, ConfigStore.nas; Copyright 2018 Stuart Buchanan, GPL-2.0-or-later) drawn from the points given.
-import { clipRect } from "./page.js";
+import { clipRect, TEXT_GLIDE } from "./page.js";
 
 export interface MapPoint {
   id: string;
@@ -205,7 +205,7 @@ const shown = (layer: keyof typeof LAYER_RANGE) => s.range <= LAYER_RANGE[layer]
     const [x, y] = xy(p);
     if (x < m.x - 150 || x > m.x + m.w + 150 || y < m.y - 150 || y > m.y + m.h + 150) continue;
     const active = route[s.activeLeg]?.id === p.id;
-    out += `<g transform="translate(${x} ${y})">${SYMBOLS[p.type](p.id, active)}</g>`;
+    out += `<g transform="translate(${x} ${y}) rotate(${TEXT_GLIDE})">${SYMBOLS[p.type](p.id, active)}</g>`; // labels glide as the map moves
   }
   // Track vector: a light blue line to where the aircraft will be (Pilot's Guide). shortcut: always straight; the real
   // one bends through up to 90 degrees of a turn at 30 and 60 s. Bend it when the MFD gets a turn rate.

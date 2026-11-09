@@ -72,6 +72,8 @@ DIRECT TO and PROC open windows where NRST opens, and work as the MFD's do (see 
 
 FG1000 draws the turn rate scale above the compass rose but never moves anything on it; `turnRate` (degrees per second) draws a magenta trend vector there, the heading 6 seconds ahead, as the real unit does, with an arrowhead past 4°/s. `turnVector(rate)` returns its path data.
 
+Moving text (the airspeed and altitude tapes and their rolling digits, the VSI pointer, the pitch ladder, map labels) carries a 0.05° rotation that FG1000 does not: Chrome draws text under a pure translation on whole pixels, so the numbers stepped while the lines beside them glided. The rotation is under a tenth of a pixel across a label (`TEXT_GLIDE` in `src/page.ts`).
+
 Past +30° or -20° pitch, or 65° bank, the PFD declutters as the Pilot's Guide describes unusual attitudes (FG1000 only removes the command bars): the OAT, wind, inset map, heading and course readouts, baro setting, selected altitude, glideslope and vertical deviation, transponder and clock, autopilot annunciations, and the TMR/REF, NRST, flight plan, PROC, DIRECT TO and setup windows go, and the INSET, PFD, XPDR, IDENT, TMR/REF and NRST softkeys dim. The attitude, airspeed, altitude, vertical speed and HSI stay, with bearing information, the DME window and ALERTS. RANGE, the joystick, MENU, DIRECT TO, PROC and FPL do nothing then, nor do the FMS knobs, ENT and CLR unless ALERTS or the DME window is open. Everything returns as the attitude recovers. `unusualAttitude(pitch, roll)` gives the test, reading bank the short way round (350 is 10° left).
 
 ### Autopilot

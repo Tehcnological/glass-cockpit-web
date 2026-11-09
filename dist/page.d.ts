@@ -5,7 +5,9 @@ export type Tf = {
     sy?: number;
     rot?: number;
     center?: [number, number];
+    glide?: boolean;
 };
+export declare const TEXT_GLIDE = 0.05;
 export declare const clamp: (v: number, lo: number, hi: number) => number;
 export declare const mod: (a: number, b: number) => number;
 export declare const pad: (s: string | number, n: number, c?: string) => string;
