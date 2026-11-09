@@ -25,7 +25,7 @@ export interface MfdUi {
   page: number;
   /** The page on screen: group and page. */ shown: [number, number];
   menuVisible: boolean;
-  /** The shared softkey menu showing: "top" (the page's own), "engine", "lean", "system" or "map". */ menu: string;
+  /** The shared softkey menu showing: "top" (the page's own), "engine", "lean", "system", "galrem" or "map". */ menu: string;
   /** Declutter level, 0 to 3. */ dcltr: number;
   /** MAP SETUP's track vector look-ahead, seconds; 0 is off. */ trackVector: number;
   /** Airways key state, 0 to 3. */ airways: number;

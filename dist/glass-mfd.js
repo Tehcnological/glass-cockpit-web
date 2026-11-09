@@ -7,7 +7,7 @@
 // NavigationMapStyles.nas) and the ownship icon from FG1000/Icons/APSmodel.svg.
 import NAV_MAP from "./svg/nav-map.js";
 import EIS from "./svg/eis.js";
-import { drawEis, engineKeys } from "./eis.js";
+import { EisStrip, engineBack, engineKeys } from "./eis.js";
 import SURROUND from "./svg/surround-mfd.js";
 import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay } from "./display.js";
@@ -78,7 +78,7 @@ export class GlassMfd {
         this.options = options;
         const { svg, screen } = buildDisplay(container, [NAV_MAP, ...Object.values(PAGE_SVGS), SURROUND, EIS], "Multi-function display", options);
         this.svg = svg;
-        this.eis = new Page(screen, "EIS");
+        this.eis = new EisStrip(new Page(screen, "EIS"));
         this.nav = new Page(screen, "NavigationMap");
         this.surround = new Surround(screen);
         this.raw = new Page(screen, "");
@@ -379,7 +379,7 @@ export class GlassMfd {
         this.surround.setSoftkeys(keys.map((k) => k.label), keys.map((k) => !!k.lit), keys.map((k) => !!k.dim));
         this.surround.setPageTitle(page.title); // a page's softkeys may change its title (the airport page's APR)
         this.updateHeader(s);
-        drawEis(this.eis, s.engine);
+        this.eis.draw(s.engine, this.ui.menu);
         // NavigationMap.ondisplay / ondisplayPartial: the full map, the map beside a page's data, or none. DIRECT TO and
         // WAYPOINT ENTRY are windows over the page, which stays drawn, as is PROC's PROCEDURES menu (not its loading page).
         const windows = [this.pages.directTo, this.pages.waypointEntry, this.pages.pageMenu, this.pages.mapSetup, this.pages.fplTool];
@@ -465,7 +465,8 @@ export class GlassMfd {
             case "engine":
             case "lean":
             case "system":
-                return fill([...engineKeys(u.menu, to), key("BACK", to(u.menu === "engine" ? "top" : "engine"))]);
+            case "galrem":
+                return fill([...engineKeys(u.menu, to, this.eis), key("BACK", to(engineBack(u.menu)))]);
             case "map": {
                 // shortcut: no traffic data; TRAFFIC switches only its setting.
                 const layer = (n) => key(n, () => (u.layers[n] = !u.layers[n]), u.layers[n]);

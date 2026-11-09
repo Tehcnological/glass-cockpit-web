@@ -105,7 +105,7 @@ Garmin art, screenshots, data or manual text is copied.
 | --- | --- | --- |
 | Root | ENGINE, MAP, DCLTR, SHW CHRT, CHKLIST | Done (SHW CHRT No data) |
 | MAP | TRAFFIC, PROFILE, TOPO, TERRAIN, AIRWAYS, PRECIP, METAR, LEGEND, BACK | Partial: PROFILE (no terrain) and AIRWAYS (host data) done; the rest No data |
-| ENGINE, LEAN, SYSTEM | CYL SLCT, ASSIST, RST FUEL, GAL REM (+/- 1, 10 GAL) | Partial: keys shown, but LEAN and SYSTEM change only the softkeys (the strip keeps its ENGINE page) and CYL SLCT, ASSIST, RST FUEL and GAL REM do nothing |
+| ENGINE, LEAN, SYSTEM | CYL SLCT, ASSIST, RST FUEL, GAL REM (+/- 1, 10 GAL) | Done (our own art, FG1000 has none; MFD and reversionary PFD): LEAN with EGT and CHT bars per cylinder (`engine.cylinders`), CYL SLCT, ASSIST (first cylinder to peak, ΔPEAK, fuel flow at peak); SYSTEM with oil, fuel calculator (GAL USED, GAL REM, RST FUEL, -10/-1/+1/+10 GAL). Assumed: peak at a 10 F drop, bar scales, GAL REM key slots; no battery amps or time remaining |
 | Nearest airports | APT, RNWY, FREQ, APR, LD APR | Done |
 | Procedures page | DP, STAR, APR, GO BACK | Missing |
 
