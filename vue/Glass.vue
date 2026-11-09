@@ -5,20 +5,26 @@
 // `reversionary` puts a PFD in reversionary mode, with `mfd.engine` in its engine strip; for the MFD's place in
 // reversionary mode, the host shows a second `unit="pfd"` with it set.
 // The bezel's knobs work with the mouse; changes to FlightState values come back as a `change` event.
+// Autopilot: the MFD's GFC 700 keys come out as a `key` event for the host's `Afcs`; its `update` gives `afcs` (the
+// annunciations) and `fd` (the command bars) to pass back to the PFD. `afcsKeys` on the PFD in the MFD's place draws them there.
 import { onMounted, onUnmounted, ref, watch } from "vue";
-import type { GlassMfd, GlassPfd, MfdState, PfdOptions } from "glass-cockpit-web";
+import type { AfcsDisplay, AfcsKey, GlassMfd, GlassPfd, MfdState, PfdOptions, PfdState } from "glass-cockpit-web";
 import type { FlightState } from "./state";
 import { tuneNav } from "glass-cockpit-web/radio";
 
 const props = withDefaults(defineProps<{
   state: FlightState; unit?: "pfd" | "mfd"; bezel?: boolean;
   mfd?: Partial<MfdState>; vspeeds?: PfdOptions["vspeeds"]; reversionary?: boolean;
+  afcs?: AfcsDisplay | null; fd?: PfdState["fd"]; afcsKeys?: boolean;
 }>(), {
   unit: "pfd",
   bezel: true,
   reversionary: false,
+  afcs: null,
+  fd: null,
+  afcsKeys: undefined,
 });
-const emit = defineEmits<{ change: [patch: Partial<FlightState>]; mfd: [patch: Partial<MfdState>] }>();
+const emit = defineEmits<{ change: [patch: Partial<FlightState>]; mfd: [patch: Partial<MfdState>]; key: [key: AfcsKey] }>();
 const box = ref<HTMLDivElement>();
 let pfd: GlassPfd | undefined;
 let mfd: GlassMfd | undefined;
@@ -35,6 +41,7 @@ function draw(s: FlightState) {
     ...pickKeys(m, ["lat", "lon", "points", "airspaces", "route", "activeLeg", "directFrom", "vtf", "airports", "procedures", "magVar", "selectedAlt", "minimums"]),
     ...nav && { radios: nav.radios },
     reversionary: props.reversionary, ...m.engine && { engine: m.engine },
+    afcs: props.afcs, fd: props.fd,
   });
   mfd?.set({ heading: s.heading, headingBug: s.headingBug, course: s.course, baro: s.baro, alt: s.alt, track: s.heading, groundspeed: s.ias, ...m, ...nav });
 }
@@ -52,14 +59,15 @@ onMounted(async () => {
     const map = pick(patch, { route: 0, activeLeg: 0, directFrom: 0, vtf: 0, points: 0, minimums: 0, ...props.mfd });
     if (Object.keys(map).length) emit("mfd", map);
   };
-  if (props.unit === "mfd") mfd = new lib.GlassMfd(box.value!, { bezel: props.bezel, onChange });
-  else pfd = new lib.GlassPfd(box.value!, { bezel: props.bezel, onChange, vspeeds: props.vspeeds });
+  const onInput = ({ control }: { control: string }) => (lib.AFCS_KEYS as readonly string[]).includes(control) && emit("key", control as AfcsKey);
+  if (props.unit === "mfd") mfd = new lib.GlassMfd(box.value!, { bezel: props.bezel, onChange, onInput, afcsKeys: props.afcsKeys });
+  else pfd = new lib.GlassPfd(box.value!, { bezel: props.bezel, onChange, vspeeds: props.vspeeds, onInput, afcsKeys: props.afcsKeys });
   draw(props.state);
 });
 onUnmounted(() => (pfd?.destroy(), mfd?.destroy()));
 
 const pickKeys = (o: object, keys: string[]) => Object.fromEntries(Object.entries(o).filter(([k]) => keys.includes(k)));
-watch(() => [{ ...props.state }, props.mfd, props.reversionary], () => draw(props.state), { deep: true });
+watch(() => [{ ...props.state }, props.mfd, props.reversionary, props.afcs, props.fd], () => draw(props.state), { deep: true });
 </script>
 
 <template>

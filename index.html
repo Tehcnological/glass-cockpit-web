@@ -9,12 +9,21 @@
   .units svg { display: block; width: 100%; height: auto; }
   form { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 16px; margin-top: 12px; }
   label { display: grid; grid-template-columns: 90px 1fr 48px; gap: 8px; align-items: center; }
+  #yoke { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
 </style>
 <div class="units"><div id="pfd"></div><div id="backup"></div><div id="mfd"></div></div>
 <form id="f"></form>
+<div id="yoke">Yoke and panel: <button id="disc">AP DISC</button> <button id="cws">CWS (hold)</button> <button id="ga">GA</button></div>
 <script type="module">
   import { GlassPfd, GlassMfd } from "./dist/glass-pfd.js";
   import { DisplayBackup, displayModes } from "./dist/display-backup.js";
+  import { Afcs, AFCS_KEYS } from "./dist/afcs.js";
+  import { RADIOS } from "./dist/surround.js";
+  // The GFC 700: its keys are on the MFD (and on the second PFD in its place), its annunciations on the PFDs. With the
+  // autopilot engaged, the loop below flies the sliders toward the command bars (a toy model, not flight dynamics).
+  const afcs = new Afcs({ maxSpeed: 140 });
+  let out = null;
+  const afcsKey = (i) => { if (AFCS_KEYS.includes(i.control)) afcs.press(i.control), update(); };
   // DISPLAY BACKUP, or a failed display, puts the MFD's place in reversionary mode: a second PFD, laid over the MFD so it
   // keeps its pages for when the button is pushed again.
   let backup = false, rev = null;
@@ -23,7 +32,7 @@
   const revUnit = () => {
     if (rev) return rev;
     document.getElementById("mfd").append(revBox);
-    rev = new GlassPfd(revBox, { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share("rev") });
+    rev = new GlassPfd(revBox, { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share("rev"), afcsKeys: true, onInput: afcsKey });
     rev.set({ points, airports, procedures, ...plan });
     return rev;
   };
@@ -36,7 +45,7 @@
   // sliders follow. RANGE and the map stay each unit's own.
   const SHARED = ["headingBug", "course", "baro", "selectedAlt", "radios", "navVolume", "comVolume", "navIdent", "route", "activeLeg", "directFrom", "vtf", "points", "minimums"];
   const share = (from) => (patch) => {
-    for (const [k, v] of Object.entries(patch)) if (f.elements[k]?.type === "range") (f.elements[k].value = v), (f.elements[k].nextElementSibling.value = v);
+    for (const [k, v] of Object.entries(patch)) if (f.elements[k]?.type === "range") (f.elements[k].value = v), (f.elements[k].nextElementSibling.value = v), (ac[k] = v);
     const p = Object.fromEntries(Object.entries(patch).filter(([k]) => SHARED.includes(k)));
     if (!Object.keys(p).length) return;
     Object.assign(plan, p);
@@ -45,7 +54,7 @@
   const pfd = new GlassPfd(document.getElementById("pfd"), { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share("pfd") });
   // Scheduler messages from AUX - UTILITY go to the PFD's ALERTS window.
   const scheduled = [];
-  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true, onChange: share("mfd"), onScheduler });
+  const mfd = new GlassMfd(document.getElementById("mfd"), { bezel: true, onChange: share("mfd"), onScheduler, onInput: afcsKey });
   // A message posted again (a periodic one) is taken off first, so the PFD counts it unread.
   function onScheduler(m) {
     const i = scheduled.indexOf(m);
@@ -65,7 +74,7 @@
   const procedures = ["ILS RWY 36", "RNAV (GPS) RWY 36"].map((name) => ({ airport: "KAAA", name, transitions: { VECTORS: [] }, legs: final }));
   const ctl = {
     pitch: [-80, 80, 0], roll: [-60, 60, 0], ias: [0, 200, 100], alt: [-500, 15000, 3000], vsi: [-2000, 2000, 0],
-    heading: [0, 359, 90], headingBug: [0, 359, 120], course: [0, 359, 100], cdiDots: [-2.4, 2.4, 0.5], selectedAlt: [0, 15000, 4000],
+    heading: [0, 359, 90], headingBug: [0, 359, 120], course: [0, 359, 100], cdiDots: [-2.4, 2.4, 0.5], gs: [-1, 1, 0.3], selectedAlt: [0, 15000, 4000],
     range: [1, 50, 10], rpm: [0, 3000, 2400],
   };
   const f = document.getElementById("f");
@@ -73,14 +82,19 @@
     f.insertAdjacentHTML("beforeend", `<label>${k}<input type="range" name="${k}" min="${min}" max="${max}" step="${k === "selectedAlt" ? 100 : k === "vsi" ? 50 : max - min > 10 ? 1 : 0.1}" value="${v}"><output>${v}</output></label>`);
   }
   f.insertAdjacentHTML("beforeend", `<label>message<input type="checkbox" name="alert"></label><label>fail AHRS<input type="checkbox" name="ahrs"></label><label>fail ADC<input type="checkbox" name="adc"></label><label>fail PFD<input type="checkbox" name="pfdFail"></label><label>fail MFD<input type="checkbox" name="mfdFail"></label>`);
-  const update = () => {
-    const s = Object.fromEntries([...new FormData(f)].map(([k, v]) => [k, Number(v)]));
+  // The aircraft: the sliders set it, and the autopilot loop moves it (in finer steps than the sliders show).
+  const ac = Object.fromEntries([...f.querySelectorAll("input[type=range]")].map((i) => [i.name, Number(i.value)]));
+  // `flying`: the autopilot loop's redraw, which redraws the MFD once a second, not every tick.
+  let tick = 0;
+  const update = (flying = false) => {
+    const s = { ...ac };
     f.querySelectorAll("label").forEach((l) => l.querySelector("output") && (l.querySelector("output").value = l.querySelector("input").value));
     const engine = { rpm: s.rpm, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 };
     const modes = displayModes(backup, !f.pfdFail.checked, !f.mfdFail.checked);
     const failed = { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked };
-    const ps = { ...s, alerts: [...(f.alert.checked ? ["DEMO - A sample message."] : []), ...scheduled],
-      cdiSource: "NAV1", gs: 0.3, bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, turnRate: s.ias > 0 ? (1091 * Math.tan((s.roll * Math.PI) / 180)) / (s.ias + 6) : 0, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 }, engine };
+    out = afcs.update({ ...s, cdiSource: "NAV1", cdiValid: true, gpsMode: "ENR", radios: plan.radios ?? RADIOS, failed }, performance.now());
+    const ps = { ...s, fd: out.fd, afcs: out.display, alerts: [...(f.alert.checked ? ["DEMO - A sample message."] : []), ...scheduled],
+      cdiSource: "NAV1", bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, turnRate: s.ias > 0 ? (1091 * Math.tan((s.roll * Math.PI) / 180)) / (s.ias + 6) : 0, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 }, engine };
     dark(pfd, modes.pfd.mode === "off");
     // A unit not shown is not drawn; the next update() draws it when it comes back.
     if (modes.pfd.mode !== "off") pfd.set({ ...ps, reversionary: modes.pfd.mode === "reversionary", failed: { ...failed, ...modes.pfd.failed } });
@@ -88,12 +102,34 @@
     revBox.style.display = revOn ? "" : "none"; // shown before the second PFD is built: it measures its layout
     if (revOn) revUnit().set({ ...ps, reversionary: true, failed: { ...failed, ...modes.mfd.failed } });
     dark(mfd, modes.mfd.mode === "off");
-    if (modes.mfd.mode === "normal") mfd.set({
+    if (modes.mfd.mode === "normal" && (!flying || ++tick % 10 === 0)) mfd.set({
       heading: s.heading, headingBug: s.headingBug, course: s.course, selectedAlt: s.selectedAlt, alt: s.alt, track: s.heading, groundspeed: s.ias, dtk: 245, ete: 151, lat: 33.42, lon: -112.02, range: s.range,
       engine,
     });
   };
-  f.addEventListener("input", update);
+  f.addEventListener("input", (e) => { if (e.target.type === "range") ac[e.target.name] = Number(e.target.value); update(); });
+  const disc = document.getElementById("disc"), cws = document.getElementById("cws"), ga = document.getElementById("ga");
+  disc.onclick = () => (afcs.press("AP_DISC"), update());
+  ga.onclick = () => (afcs.press("GA"), update());
+  cws.onpointerdown = () => (afcs.cws(true), update());
+  cws.onpointerup = cws.onpointerleave = () => (afcs.cws(false), update());
+  // 10 times a second: move toward the command bars while the autopilot flies, and redraw while the AFCS shows anything.
+  const toward = (v, target, rate) => v + Math.max(-rate, Math.min(rate, target - v));
+  setInterval(() => {
+    if (!out || (!out.fd && !out.display.status.text)) return;
+    if (out.ap && out.fd) {
+      const dt = 0.1, rad = Math.PI / 180;
+      ac.pitch = toward(ac.pitch, out.fd.pitch, 3 * dt);
+      ac.roll = toward(ac.roll, out.fd.roll, 8 * dt);
+      ac.ias = toward(ac.ias, Math.max(55, 105 - 3 * (ac.pitch - 1)), 2 * dt); // fixed power: nose up slows
+      ac.vsi = ac.ias * 101.3 * Math.tan((ac.pitch - 1) * rad);
+      ac.alt += (ac.vsi * dt) / 60;
+      ac.heading = (ac.heading + ((1091 * Math.tan(ac.roll * rad)) / (ac.ias + 6)) * dt + 360) % 360;
+      ac.cdiDots = Math.max(-2.4, Math.min(2.4, ac.cdiDots - Math.sin((ac.heading - ac.course) * rad) * (ac.ias / 3600) * dt / 0.3));
+      for (const k of ["pitch", "roll", "ias", "vsi", "alt", "heading", "cdiDots"]) f.elements[k].value = ac[k];
+    }
+    update(true);
+  }, 100);
   // Set once, so the sliders don't undo flight plan changes.
   const plan = { route: ["ABC", "WPONE", "KAAA"], activeLeg: 1 };
   mfd.set({ points, airports, procedures, ...plan });

@@ -27,10 +27,11 @@ export { unusualAttitude };
 export { GlassMfd } from "./glass-mfd.js";
 export { gpsApproved, vtfLeg } from "./nav.js";
 export { DisplayBackup, displayModes } from "./display-backup.js";
+export { Afcs, AFCS_KEYS } from "./afcs.js";
 const DEFAULTS = {
     pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
     baro: 29.92, oat: 15, heading: 0, turnRate: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
-    cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null,
+    cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null, afcs: null,
     radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], directFrom: null, vtf: false, activeLeg: 1, airports: [], procedures: [], magVar: 0, wind: null,
     xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
     vspeedsOn: { Vglide: false, Vr: false, Vx: false, Vy: false }, minimums: null, failed: {}, // v13 trainer: references start off
@@ -55,6 +56,11 @@ const UA_HIDDEN = new Set([...UA_ALWAYS, "SelectedALT", "SelectedALT-bug", "Sele
 /** The autopilot annunciations in the header. */
 const AFCS = ["APLateralArmed", "APLateralActive", "APVerticalArmed", "APVerticalActive", "APVerticalReference", "APStatus"];
 const AFCS_HIDDEN = new Set(AFCS.map((id) => `Header${id}`));
+const AFCS_FIELDS = [
+    ["lateralArmed", "APLateralArmed"], ["lateralActive", "APLateralActive"], ["verticalArmed", "APVerticalArmed"],
+    ["verticalActive", "APVerticalActive"], ["verticalReference", "APVerticalReference"], ["status", "APStatus"],
+];
+const AFCS_COLORS = { white: "#ffffff", green: "#00ff00", yellow: "#ffff00", red: "#ff0000" };
 // Parts of the FG1000 PFD this port does not drive. L_NoGPS: the v13 trainer's PFD shows a GPS failure only as an alert.
 const HIDDEN = ["L_NoGPS", "GSPD", "PFD-Multilines", "Annunciation", "SelectedALT-meters", "SelectedSPD-bug", "SelectedSPD-bg", "SelectedSPD-text", "SelectedSPD-symbol"];
 // Tape clipping, as "rect(top, right, bottom, left)" in screen coordinates.
@@ -206,8 +212,11 @@ export class GlassPfd {
         // Autopilot annunciations start blank, as Surround.new() leaves them.
         for (const id of AFCS)
             this.surround.p.text(`Header${id}`, "");
+        // Flashing AFCS annunciations (FG1000 draws none).
+        svg.appendChild(document.createElementNS(NS, "style")).textContent =
+            ".gcw-flash{animation:gcw-flash 1s steps(1) infinite}@keyframes gcw-flash{50%{visibility:hidden}}";
         if (options.bezel)
-            this.unbezel = bezelInput(svg, (i) => this.input(i));
+            this.unbezel = bezelInput(svg, (i) => this.input(i), options.afcsKeys ?? false);
         // FG1000 draws the turn rate scale but never drives it; the trend vector is drawn here.
         const scale = this.p.el("turnrate-indicator");
         this.turnTrend = scale.parentNode.insertBefore(document.createElementNS(NS, "path"), scale.nextSibling);
@@ -640,6 +649,7 @@ export class GlassPfd {
             this.surround.p.show(`Header${id}`, true);
         this.updateAI(s.pitch, s.roll, s.slip);
         this.updateFD(s);
+        this.updateAfcs(s.afcs, s.ias);
         this.updateIAS(s.ias, s.iasTrend);
         this.updateVSI(s.vsi);
         this.p.text("TAS-text", `${Math.round(s.tas)}KT`);
@@ -1039,6 +1049,24 @@ export class GlassPfd {
         this.p.show("FlightDirector", on);
         if (fd && on)
             this.p.tf("FlightDirector", { ty: -(fd.pitch - pitch) * 6.849, rot: -(roll - fd.roll), center: [459, 282.8] });
+    }
+    /** The AFCS status box, and FLC's airspeed reference (cyan, with its bug) or MAXSPD (flashing yellow) above the tape. */
+    updateAfcs(a, ias) {
+        for (const [k, id] of AFCS_FIELDS) {
+            const f = a?.[k];
+            this.surround.p.text(`Header${id}`, f?.text ?? "", AFCS_COLORS[f?.color ?? "white"]);
+            this.surround.p.el(`Header${id}`)?.classList.toggle("gcw-flash", !!f?.flash);
+        }
+        const ref = a?.airspeedRef ?? null;
+        const max = !!a?.maxspd;
+        for (const id of ["SelectedSPD-bg", "SelectedSPD-text"])
+            this.p.show(id, ref !== null || max);
+        this.p.show("SelectedSPD-symbol", ref !== null && !max);
+        this.p.show("SelectedSPD-bug", ref !== null);
+        this.p.text("SelectedSPD-text", max ? "MAXSPD" : ref === null ? "" : `${ref}KT`, max ? "#ffff00" : CYAN);
+        this.p.el("SelectedSPD-text")?.classList.toggle("gcw-flash", max);
+        if (ref !== null)
+            this.p.tf("SelectedSPD-bug", { ty: clamp(ias - ref, -30, 30) * 5.711 });
     }
     updateIAS(ias, trend) {
         const on = this.state.vspeedsOn;

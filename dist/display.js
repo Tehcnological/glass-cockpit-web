@@ -2,13 +2,28 @@
 // FG1000 window (Dialogs/fascia.svg, screen at 186,45 of the 1407 x 918 bezel, per Nasal/GUI.nas).
 import BEZEL from "./svg/bezel.js";
 import { clipRect } from "./page.js";
+// From dist/, the font in src/fonts/ (both ship in the package; README "Font").
+const FONT = new URL("../src/fonts/SairaSemiCondensed-Medium.ttf", import.meta.url).href;
 const NS = "http://www.w3.org/2000/svg";
+let displayCount = 0;
+/**
+ * Prefixes every id the markup references (`url(#id)`, `href="#id"`) with `tag`. A reference resolves to the first
+ * element in the document with that id, so two displays inlining the same art would share one copy, and if that copy
+ * sits in a display:none display, the other display's gradients and filters do not paint. Ids nothing references keep
+ * their names, so `Page.el` and the bezel find them as before.
+ */
+export function scopeIds(markup, tag) {
+    const ref = /(url\(#|href="#)([^)"]+)/g;
+    const refs = new Set(Array.from(markup.matchAll(ref), (m) => m[2]));
+    return markup.replace(ref, (_, a, id) => a + tag + id).replace(/(\sid=")([^"]+)"/g, (m, a, id) => (refs.has(id) ? `${a}${tag}${id}"` : m));
+}
 export function buildDisplay(container, pages, label, { bezel }) {
+    const tag = `glass-d${++displayCount}-`;
     container.innerHTML = `<svg xmlns="${NS}" viewBox="${bezel ? "1 132 1407 918" : "0 0 1024 768"}" role="img"></svg>`;
     const svg = container.querySelector("svg");
     svg.setAttribute("aria-label", label);
     if (bezel) {
-        svg.innerHTML = BEZEL;
+        svg.innerHTML = scopeIds(BEZEL, tag);
         // fascia.svg shades its two side columns unevenly (the left has an extra black overlay and a fainter edge strip), so
         // the left reads darker. Replace the left column's shading with a mirror image of the right's.
         for (const id of ["rect8520", "path12506", "path12557"])
@@ -22,10 +37,18 @@ export function buildDisplay(container, pages, label, { bezel }) {
                 right.after(left);
         }
     }
+    // Departs from FG1000 (Liberation Sans Narrow, not bundled): every screen text in Saira Semi Condensed, an open font
+    // close to the v13 trainer's, bundled so it looks the same on every machine. The bezel keeps its own lettering. Digits
+    // are tabular, as Liberation's are, so readouts hold still. A file, not a data: URI, so a site's CSP can keep
+    // font-src 'self': bundlers (Vite, webpack 5) emit it as an asset.
+    const style = svg.appendChild(document.createElementNS(NS, "style"));
+    style.textContent = `@font-face{font-family:"Saira Semi Condensed";src:url(${FONT}) format("truetype")}` +
+        `.gcw-screen text,.gcw-screen tspan{font-family:"Saira Semi Condensed",sans-serif!important;font-stretch:normal!important;font-variant-numeric:tabular-nums}`;
     const screen = svg.appendChild(document.createElementNS(NS, "g"));
+    screen.setAttribute("class", "gcw-screen");
     if (bezel)
         screen.setAttribute("transform", "translate(187 177)");
-    screen.innerHTML = `<rect width="1024" height="768" fill="#000"/>${pages.map((p) => `<g>${p}</g>`).join("")}`;
+    screen.innerHTML = `<rect width="1024" height="768" fill="#000"/>${pages.map((p) => `<g>${scopeIds(p, tag)}</g>`).join("")}`;
     screen.setAttribute("clip-path", `url(#${clipRect(screen, 0, 0, 1024, 768)})`);
     return { svg, screen };
 }

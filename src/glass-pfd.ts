@@ -24,6 +24,7 @@ import { firstOption, fplMenu, stepMenu } from "./page-menu.js";
 import { FPL_TOOLS, FplTool, toolEnabled, type FplToolName } from "./fpl-tools.js";
 import { vsiPointer, vsiText } from "./vsi.js";
 import { uaIgnores, unusualAttitude } from "./unusual-attitude.js";
+import type { AfcsDisplay, AfcsField } from "./afcs.js";
 export { unusualAttitude };
 
 export { GlassMfd, type MfdState, type Engine } from "./glass-mfd.js";
@@ -35,6 +36,7 @@ export type { Radio, Radios, RadioFailure } from "./surround.js";
 export { DisplayBackup, displayModes, type DisplayMode } from "./display-backup.js";
 export type { DisplayOptions } from "./display.js";
 export type { Control, Input } from "./bezel.js";
+export { Afcs, AFCS_KEYS, type AfcsKey, type AfcsSwitch, type AfcsInput, type AfcsOutput, type AfcsDisplay, type AfcsField, type AfcsOptions } from "./afcs.js";
 
 export type CdiSource = "GPS" | "NAV1" | "NAV2" | "OFF";
 export type BrgSource = "OFF" | "NAV1" | "NAV2" | "GPS" | "ADF";
@@ -73,6 +75,8 @@ export interface PfdState {
   bearings: Partial<Record<Exclude<BrgSource, "OFF">, Pointer>>;
   /** Marker beacon: "", "O", "M", "I". */ marker: "" | "O" | "M" | "I";
   /** Flight director command bars; null hides them. */ fd: { pitch: number; roll: number } | null;
+  /** The GFC 700's annunciations (`Afcs.update`'s `display`): the AFCS status box and FLC's airspeed reference. Null blanks them. */
+  afcs: AfcsDisplay | null;
   radios: Radios;
   /** NAV and COM volume, 0 to 1; a change shows on the radios for 2 seconds. */ navVolume: number;
   comVolume: number;
@@ -129,7 +133,7 @@ export interface PfdOptions extends DisplayOptions {
 const DEFAULTS: PfdState = {
   pitch: 0, roll: 0, slip: 0, ias: 0, iasTrend: 0, tas: 0, alt: 0, altTrend: 0, selectedAlt: null, vsi: 0,
   baro: 29.92, oat: 15, heading: 0, turnRate: 0, headingBug: 0, cdiSource: "NAV1", course: 0, cdiDots: 0, from: false,
-  cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null,
+  cdiValid: true, gpsMode: "ENR", xtk: 0, gs: null, brg1: "OFF", brg2: "OFF", bearings: {}, marker: "", fd: null, afcs: null,
   radios: RADIOS, navVolume: 0.5, comVolume: 0.5, navIdent: false, leg: null, lat: 0, lon: 0, points: [], airspaces: [], route: [], directFrom: null, vtf: false, activeLeg: 1, airports: [], procedures: [], magVar: 0, wind: null,
   xpdr: { mode: "ALT", code: "1200", ident: false }, time: null, obs: false, alerts: [],
   vspeedsOn: { Vglide: false, Vr: false, Vx: false, Vy: false }, minimums: null, failed: {}, // v13 trainer: references start off
@@ -159,6 +163,11 @@ const UA_HIDDEN = new Set([...UA_ALWAYS, "SelectedALT", "SelectedALT-bug", "Sele
 /** The autopilot annunciations in the header. */
 const AFCS = ["APLateralArmed", "APLateralActive", "APVerticalArmed", "APVerticalActive", "APVerticalReference", "APStatus"];
 const AFCS_HIDDEN = new Set(AFCS.map((id) => `Header${id}`));
+const AFCS_FIELDS: [keyof AfcsDisplay, string][] = [
+  ["lateralArmed", "APLateralArmed"], ["lateralActive", "APLateralActive"], ["verticalArmed", "APVerticalArmed"],
+  ["verticalActive", "APVerticalActive"], ["verticalReference", "APVerticalReference"], ["status", "APStatus"],
+];
+const AFCS_COLORS: Record<AfcsField["color"], string> = { white: "#ffffff", green: "#00ff00", yellow: "#ffff00", red: "#ff0000" };
 // Parts of the FG1000 PFD this port does not drive. L_NoGPS: the v13 trainer's PFD shows a GPS failure only as an alert.
 const HIDDEN = ["L_NoGPS", "GSPD", "PFD-Multilines", "Annunciation", "SelectedALT-meters", "SelectedSPD-bug", "SelectedSPD-bg", "SelectedSPD-text", "SelectedSPD-symbol"];
 
@@ -309,7 +318,10 @@ export class GlassPfd {
     this.rev = reversionaryLayout(screenBox(screen, this.p.el("TAS")!), screenBox(screen, this.p.el("OAT")!), frame);
     // Autopilot annunciations start blank, as Surround.new() leaves them.
     for (const id of AFCS) this.surround.p.text(`Header${id}`, "");
-    if (options.bezel) this.unbezel = bezelInput(svg, (i) => this.input(i));
+    // Flashing AFCS annunciations (FG1000 draws none).
+    svg.appendChild(document.createElementNS(NS, "style")).textContent =
+      ".gcw-flash{animation:gcw-flash 1s steps(1) infinite}@keyframes gcw-flash{50%{visibility:hidden}}";
+    if (options.bezel) this.unbezel = bezelInput(svg, (i) => this.input(i), options.afcsKeys ?? false);
     // FG1000 draws the turn rate scale but never drives it; the trend vector is drawn here.
     const scale = this.p.el("turnrate-indicator")!;
     this.turnTrend = scale.parentNode!.insertBefore(document.createElementNS(NS, "path"), scale.nextSibling);
@@ -702,6 +714,7 @@ export class GlassPfd {
     for (const id of AFCS) this.surround.p.show(`Header${id}`, true);
     this.updateAI(s.pitch, s.roll, s.slip);
     this.updateFD(s);
+    this.updateAfcs(s.afcs, s.ias);
     this.updateIAS(s.ias, s.iasTrend);
     this.updateVSI(s.vsi);
     this.p.text("TAS-text", `${Math.round(s.tas)}KT`);
@@ -1084,6 +1097,23 @@ export class GlassPfd {
     const on = !!fd && !unusualAttitude(pitch, roll);
     this.p.show("FlightDirector", on);
     if (fd && on) this.p.tf("FlightDirector", { ty: -(fd.pitch - pitch) * 6.849, rot: -(roll - fd.roll), center: [459, 282.8] });
+  }
+
+  /** The AFCS status box, and FLC's airspeed reference (cyan, with its bug) or MAXSPD (flashing yellow) above the tape. */
+  private updateAfcs(a: AfcsDisplay | null, ias: number) {
+    for (const [k, id] of AFCS_FIELDS) {
+      const f = a?.[k] as AfcsField | undefined;
+      this.surround.p.text(`Header${id}`, f?.text ?? "", AFCS_COLORS[f?.color ?? "white"]);
+      this.surround.p.el(`Header${id}`)?.classList.toggle("gcw-flash", !!f?.flash);
+    }
+    const ref = a?.airspeedRef ?? null;
+    const max = !!a?.maxspd;
+    for (const id of ["SelectedSPD-bg", "SelectedSPD-text"]) this.p.show(id, ref !== null || max);
+    this.p.show("SelectedSPD-symbol", ref !== null && !max);
+    this.p.show("SelectedSPD-bug", ref !== null);
+    this.p.text("SelectedSPD-text", max ? "MAXSPD" : ref === null ? "" : `${ref}KT`, max ? "#ffff00" : CYAN);
+    this.p.el("SelectedSPD-text")?.classList.toggle("gcw-flash", max);
+    if (ref !== null) this.p.tf("SelectedSPD-bug", { ty: clamp(ias - ref, -30, 30) * 5.711 });
   }
 
   private updateIAS(ias: number, trend: number) {
