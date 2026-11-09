@@ -7,7 +7,7 @@ import { SETUP_GROUPS, type MapSettings } from "./map-setup.js";
 import { bearingDistance, cancelDirectTo, cancelParallel, deleteEntry, directToPatch, findPoint, isHold, isParallel, latLon, nearest, planEntry, planName, routePoint, vtfEdit, type Airport, type Procedure } from "./nav.js";
 import { FPL_TOOLS, FplTool, holdRow, toolEnabled, type FplToolName } from "./fpl-tools.js";
 import { BLANK, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key, type Key } from "./ui.js";
-import { firstOption, fplMenu, stepMenu, type MenuOption } from "./page-menu.js";
+import { airportInfoMenu, destination, firstOption, fplMenu, gpsStatusMenu, nearestVorMenu, stepMenu, tripMenu, type MenuOption } from "./page-menu.js";
 import type { MfdState } from "./glass-mfd.js";
 import { panStart, type Pan } from "./pan.js";
 import { PROC_MENU, ProcFlow } from "./procedures.js";
@@ -392,8 +392,17 @@ class NearestNavPage extends MfdPage {
 
   keys() {
     if (this.type !== "VOR") return this.m.topKeys();
-    const g = (label: string, grp: typeof this.grp) => key(label, () => ((this.crsr = true), (this.grp = grp)), this.crsr && this.grp === grp);
+    const g = (label: string, grp: typeof this.grp) => key(label, () => this.select(grp), this.crsr && this.grp === grp);
     return this.m.topKeys({ 4: g("VOR", "LIST"), 5: g("FREQ", "FREQ") });
+  }
+
+  private select(grp: typeof this.grp) {
+    [this.crsr, this.grp] = [true, grp];
+  }
+
+  // Pilot's Guide: only the nearest VOR page has a menu (the NDB and intersection pages have no window softkeys).
+  pageMenu() {
+    return this.type === "VOR" ? nearestVorMenu((w) => this.select(w)) : null;
   }
 
   toggleCrsr() {
@@ -743,6 +752,11 @@ class AirportInfoPage extends MapPage {
       4: key("INFO-1", () => this.setView("INFO"), this.view === "INFO"), 5: dimKey("DP"), 6: dimKey("STAR"),
       7: key("APR", () => this.setView("APR"), this.view === "APR"), 8: dimKey("WX"),
     });
+  }
+
+  // View Destination Airport shows the flight plan's last airport on the INFO view.
+  pageMenu() {
+    return airportInfoMenu(destination(this.s.route, this.s.airports), { airport: (id) => this.showWaypoint(id), approach: () => this.setView("APR") });
   }
 
   private get apt(): Airport | undefined {
@@ -1890,10 +1904,19 @@ class TripPlanningPage extends PanelPage {
 
   keys() {
     return this.m.topKeys({
-      4: key("AUTO", () => ([this.manual, this.at] = [null, 0]), !this.manual),
-      5: key("MANUAL", () => (this.manual ??= this.sensors()), !!this.manual),
+      4: key("AUTO", () => this.mode(false), !this.manual),
+      5: key("MANUAL", () => this.mode(true), !!this.manual),
       7: key("FPL", undefined, true), 8: dimKey("WPTS"),
     });
+  }
+
+  private mode(manual: boolean) {
+    if (manual) this.manual ??= this.sensors();
+    else [this.manual, this.at] = [null, 0];
+  }
+
+  pageMenu() {
+    return tripMenu((manual) => this.mode(manual));
   }
 
   draw() {
@@ -1952,6 +1975,16 @@ class TripPlanningPage extends PanelPage {
 class GpsStatusPage extends PanelPage {
   private rx = 1;
   private sbas = false;
+  /** RAIM PREDICTION's waypoint: P.POS, or the user waypoint Set WPT to Present Position made while `points` has it. */ private raimWpt = "P.POS";
+
+  // Set WPT to Present Position (Pilot's Guide) adds a user waypoint here to `points` and puts it in RAIM PREDICTION's
+  // waypoint field, which stays grey: there is no RAIM prediction without satellites.
+  pageMenu() {
+    return gpsStatusMenu(() => this.s, (p) => {
+      this.raimWpt = p.id;
+      this.m.change({ points: [...this.s.points, p] });
+    });
+  }
 
   keys() {
     return this.m.topKeys({
@@ -1972,7 +2005,7 @@ class GpsStatusPage extends PanelPage {
     ], [
       this.sbas
         ? greyBox("SBAS SELECTION", [["WAAS", "ON"], ["EGNOS", "OFF"], ["MSAS", "OFF"]])
-        : greyBox("RAIM PREDICTION", [["WAYPOINT", "P.POS"], ["TIME", "__:__"], ["DATE", "__-___-__"], ["AVAILABILITY", "COMPUTE RAIM?"]]),
+        : greyBox("RAIM PREDICTION", [["WAYPOINT", s.points.some((p) => p.id === this.raimWpt) ? this.raimWpt : "P.POS"], ["TIME", "__:__"], ["DATE", "__-___-__"], ["AVAILABILITY", "COMPUTE RAIM?"]]),
     ]);
   }
 }
