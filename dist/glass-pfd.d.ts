@@ -113,8 +113,10 @@ export interface PfdState {
     reversionary: boolean;
     /** For the engine strip in reversionary mode (see the MFD's). */ engine: Engine;
 }
-/** A change `onChange` reports. */
-export type PfdChange = Partial<PfdState>;
+/** A change `onChange` reports; `aligning: false` once, when the AHRS has aligned (see `startup`). */
+export type PfdChange = Partial<PfdState> & {
+    aligning?: boolean;
+};
 export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading" | RadioFailure;
 export interface PfdOptions extends DisplayOptions {
     /** Called when a bezel input changes the state (heading bug, course, baro, selected altitude, radios, CDI source). */
@@ -122,6 +124,25 @@ export interface PfdOptions extends DisplayOptions {
     /** IAS box turns red above this. */ vne?: number;
     /** Speed references, switched on and off in TMR/REF. */ vspeeds?: Partial<Record<VSpeed, number>>;
     /** The airspeed tape's color strip, knots (default: the 172S's). */ speedRanges?: SpeedRanges;
+    /** AHRS alignment at power-up, seconds (default `AHRS_ALIGN_S`); 0 starts with everything valid. See `Startup`. */
+    startup?: number;
+}
+/** How long the AHRS aligns at power-up, seconds (Line Maintenance Manual: 40 to 60 s). */
+export declare const AHRS_ALIGN_S = 45;
+/** How long air data is invalid at power-up, seconds. Assumed: the manuals give the AHRS's time only, and the ADC is
+ * ready well before it. */
+export declare const ADC_START_S = 5;
+/**
+ * The power-up start-up (Line Maintenance Manual; FG1000 starts with everything valid): attitude and heading (the
+ * magnetometer's data comes through the AHRS) invalid while the AHRS aligns, `seconds`, and air data for the first
+ * `ADC_START_S` of it. `changed` is called as each ends.
+ */
+export declare class Startup {
+    /** The instruments still invalid, as `PfdState.failed`. */ failed: Partial<Record<Failure, boolean>>;
+    private timers;
+    constructor(seconds: number, changed: () => void);
+    get aligning(): boolean;
+    stop(): void;
 }
 /** Speed range strip limits, knots: flaps operating vso to vfe (white), normal vs1 to vno (green), caution vno to vne
  * (yellow), vne up (red); under vso is red for low speed awareness. */
@@ -167,6 +188,9 @@ export declare class GlassPfd {
     private winBox;
     private clock;
     private timers;
+    private startup;
+    /** The AHRS alignment box, over FG1000's attitude red X. */ private alignBox;
+    /** FG1000's ATTITUDE FAIL text, which the alignment box replaces. */ private alignText;
     private ui;
     /** Pan mode ends after a minute with no joystick input, as on the MFD. */
     private idle;
@@ -177,6 +201,9 @@ export declare class GlassPfd {
     /** The container must be visible: layout is measured once here. */
     constructor(container: HTMLElement, options?: PfdOptions);
     private updateTurnRate;
+    /** True while the AHRS aligns at power-up: attitude is invalid, so a host holds the autopilot off (`failed.attitude`
+     * to `Afcs.update`). `onChange` reports `aligning: false` when it ends. */
+    get aligning(): boolean;
     /** Stops the clock. Call when the display is removed. */
     destroy(): void;
     private input;

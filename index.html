@@ -32,7 +32,9 @@
   const revUnit = () => {
     if (rev) return rev;
     document.getElementById("mfd").append(revBox);
-    rev = new GlassPfd(revBox, { bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share("rev"), afcsKeys: true, onInput: afcsKey });
+    // The MFD's screen shows the same AHRS as the PFD's, so no alignment of its own (shortcut: pushed during the PFD's
+    // alignment it shows attitude early; a host would pass the time left).
+    rev = new GlassPfd(revBox, { startup: 0, bezel: true, vne: 163, vspeeds: { Vx: 62, Vy: 74, Vglide: 68 }, onChange: share("rev"), afcsKeys: true, onInput: afcsKey });
     rev.set({ points, airports, procedures, ...plan });
     return rev;
   };
@@ -45,6 +47,7 @@
   // sliders follow. RANGE and the map stay each unit's own.
   const SHARED = ["headingBug", "course", "baro", "selectedAlt", "radios", "navVolume", "comVolume", "navIdent", "route", "activeLeg", "directFrom", "vtf", "points", "minimums"];
   const share = (from) => (patch) => {
+    if ("aligning" in patch) return update(); // the AHRS has aligned: the autopilot may engage
     for (const [k, v] of Object.entries(patch)) if (f.elements[k]?.type === "range") (f.elements[k].value = v), (f.elements[k].nextElementSibling.value = v), (ac[k] = v);
     const p = Object.fromEntries(Object.entries(patch).filter(([k]) => SHARED.includes(k)));
     if (!Object.keys(p).length) return;
@@ -94,7 +97,8 @@
     const engine = { rpm: s.rpm, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 };
     const modes = displayModes(backup, !f.pfdFail.checked, !f.mfdFail.checked);
     const failed = { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked };
-    out = afcs.update({ ...s, cdiSource: "NAV1", cdiValid: true, gpsMode: "ENR", radios: plan.radios ?? RADIOS, failed }, performance.now());
+    // The PFD aligns its AHRS on load: no autopilot until it has.
+    out = afcs.update({ ...s, cdiSource: "NAV1", cdiValid: true, gpsMode: "ENR", radios: plan.radios ?? RADIOS, failed: { ...failed, attitude: failed.attitude || pfd.aligning } }, performance.now());
     const ps = { ...s, fd: out.fd, afcs: out.display, alerts: [...(f.alert.checked ? ["DEMO - A sample message."] : []), ...scheduled],
       cdiSource: "NAV1", bearings: { ADF: { id: "", bearing: 200 }, NAV1: { id: "ABC", bearing: 45, distance: 8.2 } }, tas: s.ias + 6, turnRate: s.ias > 0 ? (1091 * Math.tan((s.roll * Math.PI) / 180)) / (s.ias + 6) : 0, lat: 33.42, lon: -112.02, leg: { from: "ABC", to: "WPONE", dis: 4.2, brg: 245 }, engine };
     dark(pfd, modes.pfd.mode === "off");

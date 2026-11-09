@@ -119,8 +119,8 @@ export interface PfdState {
   /** For the engine strip in reversionary mode (see the MFD's). */ engine: Engine;
 }
 
-/** A change `onChange` reports. */
-export type PfdChange = Partial<PfdState>;
+/** A change `onChange` reports; `aligning: false` once, when the AHRS has aligned (see `startup`). */
+export type PfdChange = Partial<PfdState> & { aligning?: boolean };
 
 export type Failure = "attitude" | "airspeed" | "altitude" | "vsi" | "heading" | RadioFailure;
 
@@ -130,6 +130,38 @@ export interface PfdOptions extends DisplayOptions {
   /** IAS box turns red above this. */ vne?: number;
   /** Speed references, switched on and off in TMR/REF. */ vspeeds?: Partial<Record<VSpeed, number>>;
   /** The airspeed tape's color strip, knots (default: the 172S's). */ speedRanges?: SpeedRanges;
+  /** AHRS alignment at power-up, seconds (default `AHRS_ALIGN_S`); 0 starts with everything valid. See `Startup`. */
+  startup?: number;
+}
+
+/** How long the AHRS aligns at power-up, seconds (Line Maintenance Manual: 40 to 60 s). */
+export const AHRS_ALIGN_S = 45;
+/** How long air data is invalid at power-up, seconds. Assumed: the manuals give the AHRS's time only, and the ADC is
+ * ready well before it. */
+export const ADC_START_S = 5;
+
+/**
+ * The power-up start-up (Line Maintenance Manual; FG1000 starts with everything valid): attitude and heading (the
+ * magnetometer's data comes through the AHRS) invalid while the AHRS aligns, `seconds`, and air data for the first
+ * `ADC_START_S` of it. `changed` is called as each ends.
+ */
+export class Startup {
+  /** The instruments still invalid, as `PfdState.failed`. */ failed: Partial<Record<Failure, boolean>> = {};
+  private timers: ReturnType<typeof setTimeout>[] = [];
+  constructor(seconds: number, changed: () => void) {
+    if (!(seconds > 0)) return;
+    this.failed = { attitude: true, heading: true, airspeed: true, altitude: true, vsi: true };
+    const after = (sec: number, failed: Partial<Record<Failure, boolean>>) =>
+      this.timers.push(setTimeout(() => ((this.failed = failed), changed()), sec * 1000));
+    after(Math.min(ADC_START_S, seconds), { attitude: true, heading: true }); // equal delays fire in order: air data first
+    after(seconds, {});
+  }
+  get aligning(): boolean {
+    return !!this.failed.attitude;
+  }
+  stop(): void {
+    this.timers.forEach(clearTimeout);
+  }
 }
 
 const DEFAULTS: PfdState = {
@@ -243,6 +275,9 @@ export class GlassPfd {
   private winBox: DOMRect;
   private clock: ReturnType<typeof setInterval>;
   private timers: ReturnType<typeof setTimeout>[] = [];
+  private startup: Startup;
+  /** The AHRS alignment box, over FG1000's attitude red X. */ private alignBox: SVGGElement;
+  /** FG1000's ATTITUDE FAIL text, which the alignment box replaces. */ private alignText: SVGElement;
   // Display settings the menus change, as FG1000 keeps them in the page and its controller.
   private ui = {
     menu: "top" as Menu, inset: false, insetRange: 10, dcltr: 0, window: null as Window, cursor: 0, nrstInfo: false,
@@ -312,6 +347,17 @@ export class GlassPfd {
     flags?.parentNode?.appendChild(flags);
     const typo = screen.querySelector('[id="tspan6977"]'); // FG1000 spells it ATTIUDE
     if (typo) typo.textContent = "ATTITUDE FAIL";
+    // AHRS alignment (Pilot's Guide): the red X with AHRS ALIGN and a keep wings level line in yellow. FG1000 has no
+    // alignment annunciation, so this box is our own, drawn where its ATTITUDE FAIL text is.
+    this.alignText = screen.querySelector<SVGElement>('[id="text6974"]')!;
+    this.alignBox = this.p.el("NoAttitude")!.appendChild(document.createElementNS(NS, "g"));
+    this.alignBox.innerHTML = `<rect x="364.5" y="200" width="190" height="56" fill="#000000"/>` +
+      `<text x="459.5" y="222" text-anchor="middle" ${FONT} fill="#ffcf00">AHRS ALIGN:</text>` +
+      `<text x="459.5" y="246" text-anchor="middle" ${FONT} fill="#ffcf00">Keep Wings Level</text>`;
+    this.startup = new Startup(options.startup ?? AHRS_ALIGN_S, () => {
+      this.set({});
+      if (!this.startup.aligning) this.options.onChange?.({ aligning: false });
+    });
     for (const [id, r] of Object.entries(CLIPS)) this.p.clip(id, r);
     this.ladderWindow();
     this.p.el("HDG")?.setAttribute("transform", `translate(0 ${-HDG_LIFT})`);
@@ -351,9 +397,16 @@ export class GlassPfd {
     this.turnArrow.setAttribute("d", v.arrow);
   }
 
+  /** True while the AHRS aligns at power-up: attitude is invalid, so a host holds the autopilot off (`failed.attitude`
+   * to `Afcs.update`). `onChange` reports `aligning: false` when it ends. */
+  get aligning(): boolean {
+    return this.startup.aligning;
+  }
+
   /** Stops the clock. Call when the display is removed. */
   destroy(): void {
     clearInterval(this.clock);
+    this.startup.stop();
     this.timers.forEach(clearTimeout);
     this.idle.stop();
     this.surround.destroy();
@@ -749,8 +802,15 @@ export class GlassPfd {
     this.p.text("HDG-text", deg3(s.heading));
     this.p.tf("Heading-bug", { rot: s.headingBug });
     this.p.text("SelectedHDG-text", deg3(s.headingBug));
-    for (const [f, id] of FAILURES) this.p.show(id, !!s.failed[f]);
-    this.surround.setFailed(s.failed);
+    // The start-up's invalid instruments draw as failures; while aligning the attitude area has no horizon and shows the
+    // alignment box instead of ATTITUDE FAIL.
+    const failed = { ...s.failed, ...this.startup.failed };
+    for (const [f, id] of FAILURES) this.p.show(id, !!failed[f]);
+    const aligning = this.startup.aligning;
+    this.p.show("Horizon", !aligning);
+    this.alignBox.style.display = aligning ? "inline" : "none";
+    this.alignText.style.display = aligning ? "none" : "inline";
+    this.surround.setFailed(failed);
     this.p.show("DME1", this.ui.dme);
     if (this.ui.dme) {
       const src = this.ui.dmeSource;

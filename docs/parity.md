@@ -152,7 +152,7 @@ terrain, charts, Iridium or a database GCW does not carry.
 | DISPLAY BACKUP: one push puts both displays in reversionary mode (flight instruments and engine strip on each); a second push returns them | Done in the demo (the host shows a second PFD in the MFD's place) |
 | A display that loses power sends the other into reversionary mode on its own; the failed side's COM/NAV fields flag invalid | Done (`displayModes`; the demo's fail PFD and fail MFD) |
 | A failed sensor or unit red-X's its fields: attitude (AHRS), heading (AHRS or magnetometer), air data (ADC), COM/NAV 1 or 2 (GIA), transponder, engine data, OAT | Partial: `failed` flags attitude, airspeed, altitude, vertical speed, heading and COM/NAV 1 and 2 on the PFD; not transponder, engine or OAT (FG1000 has no art for them) |
-| Start-up: attitude, airspeed and altitude invalid for the first 40 to 60 s while the AHRS aligns | Missing |
+| Start-up: attitude, airspeed and altitude invalid for the first 40 to 60 s while the AHRS aligns | Done (`startup`, default 45 s: attitude and heading red X'd with AHRS ALIGN: Keep Wings Level in our own box and no horizon; air data for the first 5 s, an assumption; `aligning` for the host's autopilot) |
 | GFC 700: AFCS and PFT annunciations above the airspeed tape; the autopilot cannot engage until the preflight test passes | Missing (needs art direction: FG1000 has no box for them). MAXSPD is done |
 | AUX SYSTEM STATUS: unit health and software versions on the MFD | Partial: every LRU in; no versions |
 | System message advisories: about 150 messages in the Pilot's Guide appendix | Host data: GCW shows what the host posts |
