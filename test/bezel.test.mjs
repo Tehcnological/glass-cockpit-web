@@ -91,10 +91,13 @@ test("a fast spin turns HDG and CRS five degrees a notch", () => {
 test("GFC 700 keys: two columns of six in the left column between the HDG and ALT knobs, GDU 1044B order", async () => {
   const { AFCS_SPOTS } = await import("../dist/bezel.js");
   const rows = (x) => AFCS_SPOTS.filter((s) => s.box[0] < x).map((s) => s.click);
+  const at = (c) => AFCS_SPOTS.find((s) => s.click === c).box;
+  assert.deepEqual([at("FD")[0] - at("AP")[0], at("HDG")[1] - at("AP")[1]], [69, 52]); // the FMS keys' spacing
   assert.deepEqual(rows(90), ["AP", "HDG", "NAV", "APR", "VS", "FLC"]);
   assert.deepEqual(AFCS_SPOTS.filter((s) => s.box[0] >= 90).map((s) => s.click), ["FD", "ALT", "VNV", "BC", "NOSE_UP", "NOSE_DN"]);
   for (const { box: [x1, y1, x2, y2], label } of AFCS_SPOTS) {
-    assert.ok(x1 >= 45 && x2 <= 135 && y1 > 445 && y2 < 769, label); // clear of PUSH HDG SYNC and the ALT label
+    assert.ok(x1 >= 0 && x2 <= 160 && y1 > 445 && y2 < 769, label); // in the left column, clear of PUSH HDG SYNC and the ALT label
+    assert.deepEqual([x2 - x1, y2 - y1], [50, 40], label); // the FPL key's size
     assert.ok(label);
   }
   // None overlap the knobs' own spots.

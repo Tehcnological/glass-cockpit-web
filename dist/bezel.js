@@ -65,9 +65,10 @@ SPOTS.push(...SPOTS.filter((s) => s.wheel && s.wheel !== "RANGE" && !s.arrow).fl
  * knobs. FG1000's bezel is the GDU 1040's, without them, so they are drawn here as copies of its FPL key.
  */
 export const AFCS_SPOTS = [["AP", "FD"], ["HDG", "ALT"], ["NAV", "VNV"], ["APR", "BC"], ["VS", "NOSE_UP"], ["FLC", "NOSE_DN"]].flatMap((row, i) => row.map((click, j) => {
-    // Between the HDG knob's PUSH HDG SYNC (to y 445) and the ALT knob's label (from y 769).
-    const [x, y] = [68 + j * 44, 466 + i * 56];
-    return { box: [x - 19, y - 15, x + 19, y + 15], click, label: click.replace("_", " ") };
+    // The FMS keys' size and spacing (69 x 52), as FG1000's GDU-1044B.png lays them out, centered on the HDG and ALT knobs'
+    // column between PUSH HDG SYNC (to y 445) and the ALT label (from y 769).
+    const [x, y] = [90 + (j - 0.5) * 69, 477 + i * 52];
+    return { box: [x - 25, y - 20, x + 25, y + 20], click, label: click.replace("_", " ") };
 })).sort((a, b) => a.box[0] - b.box[0]);
 const NS = "http://www.w3.org/2000/svg";
 // fascia.svg draws the bezel 1 px right of and 132 px below GUI.nas's coordinates.
@@ -84,7 +85,7 @@ const HOLD = 2000;
 export function wheelStep(control, gap) {
     return (control === "HEADING" || control === "CRS") && gap < 100 ? 5 : 1;
 }
-/** Draws the GFC 700 keys as copies of the bezel's FPL key (fascia.svg's g13091), scaled to fit the column. */
+/** Draws the GFC 700 keys as copies of the bezel's FPL key (fascia.svg's g13091). */
 function drawKeys(svg, before) {
     const fpl = svg.querySelector("#g13091");
     if (!fpl)
@@ -92,20 +93,28 @@ function drawKeys(svg, before) {
     for (const s of AFCS_SPOTS) {
         const [x1, y1, x2, y2] = s.box;
         const g = svg.insertBefore(document.createElementNS(NS, "g"), before);
-        // The FPL key's center in fascia.svg is (1281.7, 823.7); 0.75 makes it 38 x 30.
-        g.setAttribute("transform", `translate(${(x1 + x2) / 2 + DX} ${(y1 + y2) / 2 + DY}) scale(0.75) translate(-1281.7 -823.7)`);
+        // The FPL key's center in fascia.svg is (1281.7, 823.7).
+        g.setAttribute("transform", `translate(${(x1 + x2) / 2 + DX - 1281.7} ${(y1 + y2) / 2 + DY - 823.7})`);
         const key = g.appendChild(fpl.cloneNode(true));
         for (const e of [key, ...key.querySelectorAll("[id]")])
             e.removeAttribute("id");
         const text = key.querySelector("text");
         const span = text.querySelector("tspan");
-        span.textContent = s.label;
-        // Centered on the key (x in the text's own scaled units); longer labels smaller.
+        // Centered on the key (x in the text's own scaled units).
         for (const e of [text, span])
             e.setAttribute("x", "177.35");
         text.setAttribute("text-anchor", "middle");
-        if (s.label.length > 3)
-            span.style.fontSize = s.label.length > 4 ? "5.9px" : "7.4px";
+        const [top, word] = s.label.split(" ");
+        span.textContent = word ?? top;
+        if (word) {
+            // NOSE UP and NOSE DN: a small NOSE over the larger word, as GDU-1044B.png has them.
+            const y = Number(span.getAttribute("y"));
+            span.setAttribute("y", String(y + 2.5));
+            const nose = text.insertBefore(span.cloneNode(), span);
+            nose.textContent = top;
+            nose.setAttribute("y", String(y - 5.3));
+            nose.style.fontSize = "5.4px";
+        }
     }
 }
 /**
