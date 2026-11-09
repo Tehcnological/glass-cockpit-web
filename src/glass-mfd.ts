@@ -156,7 +156,7 @@ export class GlassMfd {
       for (const m of this.pages.utility.sched.tick(Date.now())) this.options.onScheduler?.(m);
       if (this.page.live || this.groupPage.live) this.set({}); // still under the PAGE MENU
     }, 1000);
-    if (options.bezel) this.unbezel = bezelInput(svg, (i) => this.input(i));
+    if (options.bezel) this.unbezel = bezelInput(svg, (i) => this.input(i), options.afcsKeys ?? true);
     this.loadPage();
   }
 

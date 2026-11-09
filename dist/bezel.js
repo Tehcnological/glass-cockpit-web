@@ -60,6 +60,16 @@ export const SPOTS = [
 ];
 // After the knobs' own spots, so an arrow is on top of the knob it turns.
 SPOTS.push(...SPOTS.filter((s) => s.wheel && s.wheel !== "RANGE" && !s.arrow).flatMap(arrows));
+/**
+ * The GFC 700's keys, on the MFD (v13 trainer; the GDU 1044B's left column): two columns of six between the HDG and ALT
+ * knobs. FG1000's bezel is the GDU 1040's, without them, so they are drawn here as copies of its FPL key.
+ */
+export const AFCS_SPOTS = [["AP", "FD"], ["HDG", "ALT"], ["NAV", "VNV"], ["APR", "BC"], ["VS", "NOSE_UP"], ["FLC", "NOSE_DN"]].flatMap((row, i) => row.map((click, j) => {
+    // The FMS keys' size and spacing (69 x 52), as FG1000's GDU-1044B.png lays them out, centered on the HDG and ALT knobs'
+    // column between PUSH HDG SYNC (to y 445) and the ALT label (from y 769).
+    const [x, y] = [90 + (j - 0.5) * 69, 477 + i * 52];
+    return { box: [x - 25, y - 20, x + 25, y + 20], click, label: click.replace("_", " ") };
+})).sort((a, b) => a.box[0] - b.box[0]);
 const NS = "http://www.w3.org/2000/svg";
 // fascia.svg draws the bezel 1 px right of and 132 px below GUI.nas's coordinates.
 const DX = 1;
@@ -75,15 +85,53 @@ const HOLD = 2000;
 export function wheelStep(control, gap) {
     return (control === "HEADING" || control === "CRS") && gap < 100 ? 5 : 1;
 }
-/** Adds the hotspots to a display drawn with its bezel and reports each input. Returns a function that removes the window listener. */
-export function bezelInput(svg, onInput) {
+/** Draws the GFC 700 keys as copies of the bezel's FPL key (fascia.svg's g13091). */
+function drawKeys(svg, before) {
+    const fpl = svg.querySelector("#g13091");
+    if (!fpl)
+        return;
+    for (const s of AFCS_SPOTS) {
+        const [x1, y1, x2, y2] = s.box;
+        const g = svg.insertBefore(document.createElementNS(NS, "g"), before);
+        // The FPL key's center in fascia.svg is (1281.7, 823.7).
+        g.setAttribute("transform", `translate(${(x1 + x2) / 2 + DX - 1281.7} ${(y1 + y2) / 2 + DY - 823.7})`);
+        const key = g.appendChild(fpl.cloneNode(true));
+        for (const e of [key, ...key.querySelectorAll("[id]")])
+            e.removeAttribute("id");
+        const text = key.querySelector("text");
+        const span = text.querySelector("tspan");
+        // Centered on the key (x in the text's own scaled units).
+        for (const e of [text, span])
+            e.setAttribute("x", "177.35");
+        text.setAttribute("text-anchor", "middle");
+        const [top, word] = s.label.split(" ");
+        span.textContent = word ?? top;
+        if (word) {
+            // NOSE UP and NOSE DN: a small NOSE over the larger word, as GDU-1044B.png has them.
+            const y = Number(span.getAttribute("y"));
+            span.setAttribute("y", String(y + 2.5));
+            const nose = text.insertBefore(span.cloneNode(), span);
+            nose.textContent = top;
+            nose.setAttribute("y", String(y - 5.3));
+            nose.style.fontSize = "5.4px";
+        }
+    }
+}
+/**
+ * Adds the hotspots to a display drawn with its bezel and reports each input; `afcs` adds the GFC 700 keys. Returns a
+ * function that removes the window listener.
+ */
+export function bezelInput(svg, onInput, afcs = false) {
+    const spots = afcs ? [...SPOTS, ...AFCS_SPOTS] : SPOTS;
     const layer = svg.appendChild(document.createElementNS(NS, "g"));
+    if (afcs)
+        drawKeys(svg, layer);
     layer.setAttribute("fill", "transparent");
     layer.setAttribute("cursor", "pointer");
     // A slight glow shows where an arrow is, and its drawn arrow brightens.
     layer.appendChild(document.createElementNS(NS, "style")).textContent =
         ".gcw-arrow:hover{fill:rgba(255,255,255,.14)}.gcw-arrow:hover+path{fill-opacity:1}";
-    for (const [i, s] of SPOTS.entries()) {
+    for (const [i, s] of spots.entries()) {
         const [x1, y1, x2, y2] = s.box;
         const r = layer.appendChild(document.createElementNS(NS, "rect"));
         for (const [k, v] of Object.entries({ x: x1 + DX, y: y1 + DY, width: x2 - x1, height: y2 - y1, rx: s.arrow ? 3 : 0 }))
@@ -102,7 +150,7 @@ export function bezelInput(svg, onInput) {
         p.setAttribute("fill-opacity", "0.6");
         p.setAttribute("pointer-events", "none");
     }
-    const spot = (e) => SPOTS[Number(e.target.getAttribute("data-spot"))];
+    const spot = (e) => spots[Number(e.target.getAttribute("data-spot"))];
     const fire = (s, control) => {
         onInput({ control, value: s.value ?? 1 });
         if (s.also)
