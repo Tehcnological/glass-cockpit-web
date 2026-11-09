@@ -16,7 +16,7 @@ import { adjust, bezelInput, type Input } from "./bezel.js";
 import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type LatLon, type MapGeometry, type MapPoint } from "./map.js";
 import { ProcFlow, PROC_MENU } from "./procedures.js";
 import { MIN_BLANK, minView, stepBaro } from "./apr-info.js";
-import { panInfo, panMarkup, panMove, panStart, panTarget, type Pan, type PanView } from "./pan.js";
+import { PanIdle, panInfo, panMarkup, panMove, panStart, panTarget, type Pan, type PanView } from "./pan.js";
 import { bearingDistance, bestApproach, directToPatch, cancelDirectTo, findPoint, latLon, missedPatch, nearest, nrstFreq, planName, routePoint, suspended, type Airport, type Procedure } from "./nav.js";
 import { alertsKey, seenAlerts } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
@@ -256,6 +256,11 @@ export class GlassPfd {
     /** DIRECT TO: the waypoint, and whether the cursor is on ACTIVATE? (else on the identifier). */ dto: { id: null as string | null, act: false },
     /** Pan mode on the inset map (joystick push), or null. */ pan: null as Pan | null,
   };
+  /** Pan mode ends after a minute with no joystick input, as on the MFD. */
+  private idle = new PanIdle(() => {
+    this.ui.pan = null;
+    this.set({});
+  });
   /** DIRECT TO's identifier, spelled with the FMS knob. */ private dtoEntry!: IdEntry;
   /** PROC: the same flow as the MFD's PROCEDURES page; its airport identifier is spelled in `procEntry`. */ private proc!: ProcFlow;
   private procEntry!: IdEntry;
@@ -350,6 +355,7 @@ export class GlassPfd {
   destroy(): void {
     clearInterval(this.clock);
     this.timers.forEach(clearTimeout);
+    this.idle.stop();
     this.surround.destroy();
     this.unbezel();
   }
@@ -380,6 +386,7 @@ export class GlassPfd {
         if (!u.inset || !u.pan) return;
         const h = i.control === "JOYSTICK_HORIZONTAL";
         u.pan = panMove(u.pan, h ? i.value : 0, h ? 0 : i.value, this.panView());
+        this.idle.moved();
         return this.set({});
       }
       case "FMS_OUTER":
@@ -863,6 +870,7 @@ export class GlassPfd {
     const on = u.inset && !this.ua;
     for (const id of ["PFD-Map", "PFD-Map-bg", "PFD-Map-bg-1"]) this.p.show(id, on);
     if (!u.inset) u.pan = null;
+    this.idle.sync(!!u.pan);
     this.inset.style.display = on ? "inline" : "none";
     this.panLayer.style.display = on && u.pan ? "inline" : "none";
     if (!on) return;

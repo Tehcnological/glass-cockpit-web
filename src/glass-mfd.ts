@@ -12,7 +12,7 @@ import SURROUND from "./svg/surround-mfd.js";
 import PAGE_SVGS from "./svg/mfd-pages.js";
 import { buildDisplay, type DisplayOptions } from "./display.js";
 import { Page, clamp, mod } from "./page.js";
-import { panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget, type PanView } from "./pan.js";
+import { PAN_WPT_PAGES, PanIdle, panInfo, panMarkup, panMeasureFrom, panMove, panProject, panStart, panTarget, panUnder, type PanView } from "./pan.js";
 import { AIRWAY_RANGE, drawMap, mapGroup, mapUp, profileView, rangeLabel, shownAirways, stepRange, type Airspace, type Airway, type LatLon, type MapGeometry, type MapPoint, type Orientation } from "./map.js";
 import { RADIOS, Surround } from "./surround.js";
 import type { CdiSource } from "./glass-pfd.js";
@@ -117,6 +117,13 @@ export class GlassMfd {
   /** DIRECT TO, PROC, WAYPOINT ENTRY or the PAGE MENU, over the page. */ private overlay: MfdPage | null = null;
   /** The page FPL goes back to: group and page names. */ private beforeFpl: [string, string] = ["MapPageGroup", "NavigationMap"];
   private timers = { menu: 0, load: 0 };
+  /** Pan mode ends after a minute with no joystick input, and the map recenters. */
+  private idle = new PanIdle(() => {
+    this.ui.pan = null;
+    this.set({});
+  });
+  /** After pan mode's ENT opened a WPT page: the page (group and page names) the push or CLR goes back to. */
+  private panBack: [string, string] | null = null;
   /** Once a second: the Utility page's trip statistics, and the AUX pages' clocks. */ private clock: ReturnType<typeof setInterval>;
   private hl = new Highlighter();
   private ui: MfdUi = {
@@ -167,6 +174,7 @@ export class GlassMfd {
     clearInterval(this.clock);
     clearTimeout(this.timers.menu);
     clearTimeout(this.timers.load);
+    this.idle.stop();
     this.surround.destroy();
     this.unbezel();
   }
@@ -184,7 +192,7 @@ export class GlassMfd {
       go: (group, page) => this.goToPage(group, page),
       tune: (freq) => this.tune(freq),
       topKeys: (extra) => this.topKeys(extra),
-      drawMap: (g, geom, center, preview) => drawMap(g, { ...this.state, center, preview, airways: this.airways() }, geom, this.ui.dcltr),
+      drawMap: (g, geom, center, preview, up) => drawMap(g, { ...this.state, center, preview, up, airways: this.airways() }, geom, this.ui.dcltr),
       open: (p) => this.openOverlay(p),
       close: () => this.closeOverlay(),
     };
@@ -208,6 +216,8 @@ export class GlassMfd {
         this.surround.toggle(i.control === "NAV_TOGGLE" ? "nav" : "com");
         return this.set({});
       case "SOFTKEY":
+        // A softkey (APR, DP, ...) leaves the page as pan mode's ENT opened it: CLR is the page's own again.
+        this.panBack = null;
         this.softkeys()[i.value - 1]?.act?.();
         return this.set({});
       case "RANGE":
@@ -238,9 +248,11 @@ export class GlassMfd {
       case "ENT":
         // Measuring (Pilot's Guide): ENT moves the start point to the pointer.
         if (this.ui.pan?.from && !this.overlay) this.ui.pan = panMeasureFrom(this.ui.pan, this.panView());
-        else page.ent();
+        else if (!(this.ui.pan && !this.overlay && this.panWaypoint())) page.ent();
         return this.set({});
       case "CLR":
+        // Pilot's Guide: from the waypoint's page that pan mode's ENT opened, CLR goes back to the map.
+        if (this.panBack && !this.overlay && !page.crsr) return this.goToPage(...this.panBack);
         page.clr();
         return this.set({});
       case "CLR_HOLD":
@@ -266,8 +278,11 @@ export class GlassMfd {
         return this.set({});
       }
       case "JOYSTICK_PRESS":
-        // v13 trainer: the push starts pan mode on the full navigation map; again ends it and recenters the map.
-        if (this.overlay || this.groupPage.navMap !== "full") return;
+        // v13 trainer: the push starts pan mode on the full navigation map (Pilot's Guide: and the flight plan page's
+        // map); again ends it and recenters the map. From the WPT page pan mode's ENT opened, it goes back to the map.
+        if (this.overlay) return;
+        if (this.panBack) return this.goToPage(...this.panBack);
+        if (this.groupPage.navMap !== "full" && !this.groupPage.panWindow) return;
         this.ui.pan = this.ui.pan ? null : panStart(this.state, this.panView().up);
         return this.set({});
       case "JOYSTICK_HORIZONTAL":
@@ -276,6 +291,7 @@ export class GlassMfd {
         if (!pan || this.overlay) return;
         const h = i.control === "JOYSTICK_HORIZONTAL";
         this.ui.pan = panMove(pan, h ? i.value : 0, h ? 0 : i.value, this.panView());
+        this.idle.moved();
         return this.set({});
       }
       case "DTO": {
@@ -382,6 +398,7 @@ export class GlassMfd {
 
   private loadPage() {
     const u = this.ui;
+    this.panBack = null;
     this.closeOverlay();
     this.groupPage.show(false);
     if (u.shown[0] !== u.group || u.shown[1] !== u.page) u.pan = null; // the page group menu reloads the same page too
@@ -432,31 +449,59 @@ export class GlassMfd {
     }
     this.drawProfile(profile);
     this.drawPan(mode === "full");
+    this.idle.sync(!!this.ui.pan);
     this.frame.textContent = base.frame();
     if (base !== page) base.draw();
     page.draw();
     if (report) this.options.onChange?.({ susp: s.susp });
   }
 
+  /** The map pan mode works on: the full navigation map, or the page's own (the flight plan page's). */
+  private panWindow() {
+    return this.groupPage.panWindow ?? { geom: MAP_FULL, layer: this.panLayer };
+  }
+
   private panView(): PanView {
     const s = this.state;
     const up = this.ui.pan?.up ?? mapUp(s);
-    return { w: MAP_FULL.w, h: MAP_FULL.h, scale: MAP_FULL.px / s.range, up, lat: s.lat, bar: PAN_FONT * 2.7 };
+    const g = this.panWindow().geom;
+    return { w: g.w, h: g.h, scale: g.px / s.range, up, lat: s.lat, bar: PAN_FONT * 2.7 };
+  }
+
+  private panPoints() {
+    const s = this.state;
+    return [...s.points, ...s.route.filter((r): r is MapPoint => typeof r !== "string")];
   }
 
   private panInfo() {
     const s = this.state;
-    const named = [...s.points, ...s.route.filter((r): r is MapPoint => typeof r !== "string")];
-    return panInfo(this.ui.pan!, this.panView(), this.ui.pan!.from ?? s, named, s.magVar);
+    return panInfo(this.ui.pan!, this.panView(), this.ui.pan!.from ?? s, this.panPoints(), s.magVar);
+  }
+
+  /** Pilot's Guide: ENT with the pointer on a waypoint opens its WPT page. False when there is none to open (no point
+   * under the pointer, a user waypoint, or one the WPT pages do not list, such as an approach fix of the plan's own). */
+  private panWaypoint(): boolean {
+    const q = panUnder(this.ui.pan!, this.panView(), this.panPoints());
+    const name = q && PAN_WPT_PAGES[q.type];
+    const wpt = PAGE_GROUPS.findIndex((g) => g.group === "WPTPageGroup");
+    const target = name && this.pages.groups[wpt][PAGE_GROUPS[wpt].pages.indexOf(name)];
+    if (!target || !target.showWaypoint(q.id)) return false;
+    const [gi, pi] = this.ui.shown;
+    const back: [string, string] = [PAGE_GROUPS[gi].group, PAGE_GROUPS[gi].pages[pi]];
+    this.goToPage("WPTPageGroup", name);
+    this.panBack = back;
+    return true;
   }
 
   /** Pan mode: the pointer, and the info bar across the top of the map (layout from the v13 trainer, drawn here). */
-  private drawPan(shown: boolean) {
-    const pan = shown ? this.ui.pan : null;
-    this.panLayer.style.display = pan ? "inline" : "none";
+  private drawPan(full: boolean) {
+    const w = this.panWindow();
+    const pan = full || w.layer !== this.panLayer ? this.ui.pan : null;
+    if (w.layer !== this.panLayer) this.panLayer.style.display = "none";
+    w.layer.style.display = pan ? "inline" : "none";
     if (!pan) return;
     const start = pan.from && panProject(pan, pan.from, this.panView());
-    this.panLayer.innerHTML = panMarkup(pan, this.panInfo(), MAP_FULL, PAN_FONT, start);
+    w.layer.innerHTML = panMarkup(pan, this.panInfo(), w.geom, PAN_FONT, start);
   }
 
   // The softkeys: the page's own, or a menu shared by the pages (EIS engineMenu, NavigationMap mapMenu).
