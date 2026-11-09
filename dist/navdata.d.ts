@@ -36,12 +36,24 @@ export interface Nasr {
     airways?: [id: Airway["id"], type: Airway["type"], points: [id: string, type: "VOR" | "NDB" | "FIX"][]][];
 }
 export type CifpLeg = [fix: string, lat: number, lon: number, type: string, alt: string | null, role: ProcLeg["role"] | null];
+/**
+ * An approach (four elements, as records built before SIDs and STARs have them), or a SID or STAR: `transitions` are
+ * then its en route transitions, `legs` its common legs and `runways` its runway transitions ("RW30", "RW13B").
+ */
+export type CifpProcedure = [
+    airport: string,
+    name: string,
+    transitions: Record<string, CifpLeg[]>,
+    legs: CifpLeg[],
+    kind?: "SID" | "STAR",
+    runways?: Record<string, CifpLeg[]>
+];
 export interface Cifp {
     cycle: string;
-    procedures: [airport: string, name: string, transitions: Record<string, CifpLeg[]>, legs: CifpLeg[]][];
+    procedures: CifpProcedure[];
 }
 /**
- * Map points, airspace, airports, frequencies, approaches and airways near a position, in the shapes glass-cockpit-web
+ * Map points, airspace, airports, frequencies, procedures (approaches, SIDs and STARs) and airways near a position, in the shapes glass-cockpit-web
  * takes. An airway comes as the run of its segments within range, whole, and its points outside range join `points`.
  */
 export declare function near(data: Nasr, cifp: Cifp, lat: number, lon: number, range: number): {
@@ -55,9 +67,10 @@ export declare function near(data: Nasr, cifp: Cifp, lat: number, lon: number, r
 /** "I07L" -> "ILS RWY 07L", "R08-Y" -> "RNAV (GPS) Y RWY 08", "VDM-A" -> "VOR/DME-A". */
 export declare function approachName(id: string): string;
 /**
- * Approaches from the FAA CIFP file (ARINC 424-18, 132 columns): approach records (section P, subsection F) with their
- * fixes' positions from the waypoint, runway and navaid records. Legs without a fix (heading and altitude legs) are
- * left out.
+ * Procedures from the FAA CIFP file (ARINC 424-18, 132 columns): approach (section P, subsection F), SID (D) and STAR
+ * (E) records, with their fixes' positions from the waypoint, runway and navaid records. Legs without a fix (heading
+ * and altitude legs) are left out. A SID's or STAR's records go by transition identifier: "RW..." a runway transition,
+ * blank or ALL the common legs, any other an en route transition.
  */
 export declare function parseCifp(text: string): Cifp["procedures"];
 /**

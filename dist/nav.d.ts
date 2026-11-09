@@ -43,13 +43,21 @@ export interface ProcLeg {
     /** Feet, with "+" at or above, "-" at or below, "" at; null none. */ alt: string | null;
     /** Fix role: initial, intermediate, final approach, missed approach point, missed approach. */ role?: "IAF" | "IF" | "FAF" | "MAP" | "MISSED";
 }
-/** An approach, with its transitions, as the PROC key lists and loads them. */
+/** An approach, departure or arrival, with its transitions, as the PROC key lists and loads them. */
 export interface Procedure {
     airport: string;
     name: string;
-    /** Transition name ("VECTORS" for none) to its legs, which lead into `legs`. */ transitions: Record<string, ProcLeg[]>;
-    /** Final approach legs through the missed approach point, then the missed approach (role "MISSED"). */ legs: ProcLeg[];
+    /** "SID" a departure, "STAR" an arrival; absent, an approach. */ kind?: "SID" | "STAR";
+    /** Approach: transition name ("VECTORS" for none) to its legs, which lead into `legs`. SID and STAR: the en route
+     * transitions, after a SID's `legs` and before a STAR's. */ transitions: Record<string, ProcLeg[]>;
+    /** Approach: final approach legs through the missed approach point, then the missed approach (role "MISSED"). SID and
+     * STAR: the common legs (may be empty). */ legs: ProcLeg[];
+    /** SID and STAR: runway transitions ("RW30"; "RW13B" both 13s) to their legs, before a SID's `legs` and after a STAR's. */
+    runways?: Record<string, ProcLeg[]>;
 }
+/** Which PROC list a procedure is on. */
+export type ProcKind = "APR" | "SID" | "STAR";
+export declare const procKind: (p: Procedure) => ProcKind;
 /** Initial great-circle bearing (true) and distance in nm. */
 export declare function bearingDistance(lat1: number, lon1: number, lat2: number, lon2: number): {
     brg: number;
@@ -76,6 +84,10 @@ export declare function planName(legs: (MapPoint | undefined)[]): string;
 /** An approach's fixes from `transition` on, through the missed approach, as flight plan points (a fix shared by the
  * transition's end and the approach's start once). An unknown transition gives the approach's own. */
 export declare function approachPoints(p: Procedure, transition: string): MapPoint[];
+/** A procedure's fixes as flight plan points: an approach's as `approachPoints`; a SID's from `runway` through its common
+ * legs to `transition`, a STAR's from `transition` through them to `runway`, marked `departure` or `arrival` with its
+ * name (a fix shared by two parts once). An unknown runway or transition adds none. */
+export declare function procedurePoints(p: Procedure, transition?: string, runway?: string): MapPoint[];
 /** Whether the GPS may fly an approach (by `approachName`'s names): RNAV (GPS) and GPS approaches. The rest ask NOT APPROVED FOR GPS. */
 export declare function gpsApproved(name: string): boolean;
 /** Vector-to-final makes the final approach fix active; an approach without one starts at its first leg. */
@@ -127,7 +139,21 @@ export declare function approachPatch(route0: Route, pts: MapPoint[], mode: "loa
     vtf: true;
     route: (string | MapPoint)[];
 };
-/** A fix entered by hand (WAYPOINT ENTRY, DIRECT TO) is an ordinary waypoint, even when picked from a loaded approach. */
+/** A route entry PROC loaded as part of a departure (SID) or an arrival (STAR). */
+export declare const isDeparture: (r: string | MapPoint) => r is MapPoint;
+export declare const isArrival: (r: string | MapPoint) => r is MapPoint;
+/**
+ * PROC's change to the flight plan for a departure or arrival `p` (its `pts`), replacing one loaded before: a SID's
+ * fixes after its airport (the airport first when the plan does not have it), a STAR's before the approach, else at the
+ * end. The active waypoint stays active; before takeoff, flying the leg from the departure airport, the departure's first
+ * fix becomes the active one, as it does when the active fix was one of those replaced.
+ */
+export declare function procedurePatch(route0: Route, activeLeg: number, p: Procedure, pts: MapPoint[]): {
+    directFrom?: null | undefined;
+    route: (string | MapPoint)[];
+    activeLeg: number;
+};
+/** A fix entered by hand (WAYPOINT ENTRY, DIRECT TO) is an ordinary waypoint, even when picked from a loaded procedure. */
 export declare function asWaypoint(p: MapPoint): MapPoint;
 type Plan = {
     points: MapPoint[];

@@ -35,7 +35,7 @@ function pointsOf(data) {
     return at;
 }
 /**
- * Map points, airspace, airports, frequencies, approaches and airways near a position, in the shapes glass-cockpit-web
+ * Map points, airspace, airports, frequencies, procedures (approaches, SIDs and STARs) and airways near a position, in the shapes glass-cockpit-web
  * takes. An airway comes as the run of its segments within range, whole, and its points outside range join `points`.
  */
 export function near(data, cifp, lat, lon, range) {
@@ -45,16 +45,17 @@ export function near(data, cifp, lat, lon, range) {
     const procedures = [];
     const ids = new Set(apts.map((a) => a[1] || a[0]));
     const leg = ([fix, la, lo, type, alt, role]) => ({ fix, lat: la, lon: lo, type, alt, ...(role && { role }) });
-    for (const [airport, name, trans, legs] of cifp.procedures) {
+    const legsOf = (r) => Object.fromEntries(Object.entries(r).map(([t, l]) => [t, l.map(leg)]));
+    for (const [airport, name, trans, legs, kind, runways] of cifp.procedures) {
         if (!ids.has(airport))
             continue;
-        procedures.push({ airport, name, legs: legs.map(leg), transitions: Object.fromEntries(Object.entries(trans).map(([t, l]) => [t, l.map(leg)])) });
+        procedures.push({ airport, name, legs: legs.map(leg), transitions: legsOf(trans), ...(kind && { kind, runways: legsOf(runways ?? {}) }) });
     }
     const airports = apts.map(([id, icao, name, la, lo, freqs, elev, runways, city, state, fuel]) => ({
         id: icao || id, name, city, region: state, use: "PUBLIC", lat: la, lon: lo, elev, fuel,
         runways: runways.map(([rid, length, width, surface, lights]) => ({ id: rid, length, width, surface, lights })),
         freqs: freqs.map(([use, freq]) => ({ use, freq })),
-        approaches: procedures.filter((p) => p.airport === (icao || id)).map((p) => p.name),
+        approaches: procedures.filter((p) => p.airport === (icao || id) && !p.kind).map((p) => p.name),
     }));
     const points = [
         ...airports.map((a) => ({ id: a.id, type: "APT", lat: a.lat, lon: a.lon, name: a.name })),
@@ -149,49 +150,60 @@ function cifpFixKey(l, airport, fix) {
     const sec = l.slice(36, 38);
     return sec[0] === "P" ? `${sec}|${airport}|${fix}` : `${sec}|${fix}|${l.slice(34, 36)}`;
 }
-/** An approach leg's altitude constraint, as the chart gives it. */
+/** A leg's altitude constraint, as the chart gives it; flight levels in feet. */
 function cifpAlt(l) {
     const [desc, alt1, alt2] = [l[82], l.slice(84, 89).trim(), l.slice(89, 94).trim()];
-    return !/^\d+$/.test(alt1) ? null : desc === "B" && /^\d+$/.test(alt2) ? `${Number(alt2)}+` : `${Number(alt1)}${desc === "+" || desc === "-" ? desc : ""}`;
+    const ft = (a) => (/^\d+$/.test(a) ? Number(a) : /^FL\d+$/.test(a) ? Number(a.slice(2)) * 100 : null);
+    const [a1, a2] = [ft(alt1), ft(alt2)];
+    return a1 === null ? null : desc === "B" && a2 !== null ? `${a2}+` : `${a1}${desc === "+" || desc === "-" ? desc : ""}`;
 }
 /** Waypoint description code, 4th character: the fix's role on the way in. */
 const cifpRole = (l) => ("ACD".includes(l[42]) ? "IAF" : "BI".includes(l[42]) ? "IF" : l[42] === "F" ? "FAF" : l[42] === "M" ? "MAP" : null);
 /**
- * Approaches from the FAA CIFP file (ARINC 424-18, 132 columns): approach records (section P, subsection F) with their
- * fixes' positions from the waypoint, runway and navaid records. Legs without a fix (heading and altitude legs) are
- * left out.
+ * Procedures from the FAA CIFP file (ARINC 424-18, 132 columns): approach (section P, subsection F), SID (D) and STAR
+ * (E) records, with their fixes' positions from the waypoint, runway and navaid records. Legs without a fix (heading
+ * and altitude legs) are left out. A SID's or STAR's records go by transition identifier: "RW..." a runway transition,
+ * blank or ALL the common legs, any other an en route transition.
  */
 export function parseCifp(text) {
     const lines = text.split(/\r?\n/);
     const at = cifpPositions(lines);
     const procs = new Map();
     for (const l of lines) {
-        if (l[0] !== "S" || l[4] !== "P" || l[12] !== "F" || !"01".includes(l[38]))
+        if (l[0] !== "S" || l[4] !== "P" || !"DEF".includes(l[12]) || !"01".includes(l[38]))
             continue;
+        const kind = l[12] === "D" ? "SID" : l[12] === "E" ? "STAR" : undefined;
         const airport = l.slice(6, 10).trim();
         const id = l.slice(13, 19).trim();
+        const trans = l.slice(20, 25).trim();
+        const k = `${l[12]} ${airport} ${id}`;
+        let p = procs.get(k);
+        if (!p)
+            procs.set(k, (p = Object.assign((kind ? [airport, id, {}, [], kind, {}] : [airport, approachName(id), {}, []]), { missed: false })));
+        const rwy = kind && trans.startsWith("RW") ? (p[5][trans] ??= []) : null; // named even when its legs have no fix
         const fix = l.slice(29, 34).trim();
         if (!fix)
             continue;
         const pos = at.get(cifpFixKey(l, airport, fix));
         if (!pos)
             continue;
-        const k = `${airport} ${id}`;
-        let p = procs.get(k);
-        if (!p)
-            procs.set(k, (p = Object.assign([airport, approachName(id), {}, []], { missed: false })));
-        const role = p.missed ? "MISSED" : cifpRole(l);
+        const role = kind ? null : p.missed ? "MISSED" : cifpRole(l);
         const leg = [fix, pos[0], pos[1], l.slice(47, 49), cifpAlt(l), role];
-        if (l[19] === "A")
-            (p[2][l.slice(20, 25).trim() || "VECTORS"] ??= []).push(leg);
+        if (rwy)
+            rwy.push(leg);
+        else if (kind)
+            (!trans || trans === "ALL" ? p[3] : (p[2][trans] ??= [])).push(leg);
+        else if (l[19] === "A")
+            (p[2][trans || "VECTORS"] ??= []).push(leg);
         else
             p[3].push(leg);
         if (role === "MAP")
             p.missed = true;
     }
+    const some = (r) => Object.values(r).some((x) => x.length);
     return [...procs.values()]
-        .map(([a, n, t, legs]) => [a, n, { VECTORS: [], ...t }, legs])
-        .filter((p) => p[3].length)
+        .map(([a, n, t, legs, kind, rwys]) => (kind ? [a, n, t, legs, kind, rwys] : [a, n, { VECTORS: [], ...t }, legs]))
+        .filter((p) => p[3].length || (p[4] && (some(p[2]) || some(p[5]))))
         .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
 }
 /**

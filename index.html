@@ -75,6 +75,12 @@
   const airports = [{ id: "KAAA", name: "Demo Field", lat: 33.40, lon: -112.00, elev: 1200, runways: [], freqs: [], approaches: ["ILS RWY 36", "RNAV (GPS) RWY 36"] }];
   const final = [leg("ONEIF", 33.25, "IF"), leg("TWOFA", 33.32, "FAF"), leg("RW36", 33.395, "MAP"), leg("THREE", 33.50, "MISSED")];
   const procedures = ["ILS RWY 36", "RNAV (GPS) RWY 36"].map((name) => ({ airport: "KAAA", name, transitions: { VECTORS: [] }, legs: final }));
+  // A made-up departure and arrival for PROC's SELECT DEPARTURE and SELECT ARRIVAL and the airport page's DP and STAR.
+  const fix = (f, lat, lon) => ({ fix: f, lat, lon, type: "TF", alt: null });
+  procedures.push(
+    { airport: "KAAA", name: "DEMO1", kind: "SID", runways: { RW36: [fix("DEPUP", 33.48, -112.0)] }, legs: [fix("DEPTO", 33.55, -111.95)], transitions: { ABC: [fix("ABC", 33.5, -111.85)] } },
+    { airport: "KAAA", name: "DEMO2", kind: "STAR", transitions: { FIXEE: [fix("FIXEE", 33.55, -112.05)] }, legs: [fix("ARRIV", 33.45, -112.1)], runways: { RW36: [fix("ONEIF", 33.25, -112.0)] } },
+  );
   const ctl = {
     pitch: [-80, 80, 0], roll: [-60, 60, 0], ias: [0, 200, 100], alt: [-500, 15000, 3000], vsi: [-2000, 2000, 0],
     heading: [0, 359, 90], headingBug: [0, 359, 120], course: [0, 359, 100], cdiDots: [-2.4, 2.4, 0.5], gs: [-1, 1, 0.3], selectedAlt: [0, 15000, 4000],

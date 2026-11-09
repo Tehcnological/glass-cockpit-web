@@ -1,6 +1,6 @@
 // PAGE MENU: the MENU key's options for a page, as the v13 trainer lists them. Options this package cannot carry out
 // are dim, as the softkeys are; the cursor skips them. DOM-free, so it can be tested on its own.
-import { cancelParallel, isApproach, isHold, userName, type Airport } from "./nav.js";
+import { cancelParallel, isApproach, isArrival, isDeparture, isHold, userName, type Airport } from "./nav.js";
 import type { LatLon, MapPoint } from "./map.js";
 
 /** One option: no `act` (or `patch`) means dim. */
@@ -24,27 +24,33 @@ export const FPL_OPTIONS = [
 ] as const;
 
 type Route = (string | MapPoint)[];
-type FplPatch = { route: Route; activeLeg: number; directFrom?: LatLon | null; vtf: boolean };
+type FplPatch = { route: Route; activeLeg: number; directFrom?: LatLon | null; vtf?: boolean };
 
 /** The flight plan menu for `route`; `patch` is the change an option makes, absent when it is dim here. */
 export function fplMenu(route: Route, activeLeg: number): { label: string; patch?: FplPatch }[] {
-  // Waypoints entered by hand among the approach fixes stay; the active one is the first kept from the active leg on.
-  // Both edits cancel Parallel Track (Pilot's Guide), so they start from the plan's own points.
-  const enroute = cancelParallel(route).filter((r) => !isApproach(r));
-  const a = enroute.length < route.length;
-  const kept = route.slice(0, activeLeg).filter((r) => !isApproach(r)).length;
+  // Each edit cancels Parallel Track (Pilot's Guide), so they start from the plan's own points.
+  const plain = cancelParallel(route);
   const patches: Partial<Record<(typeof FPL_OPTIONS)[number], FplPatch>> = {};
-  // Inverting drops the approach, as the G1000 does, and flies the first leg. It drops holds too (our choice: a hold
+  // Waypoints entered by hand among a procedure's fixes stay; the active one is the first kept from the active leg on.
+  const remove = (label: "Remove Departure" | "Remove Arrival" | "Remove Approach", gone: (r: string | MapPoint) => boolean) => {
+    const kept = plain.filter((r) => !gone(r));
+    if (kept.length === plain.length) return;
+    const before = plain.slice(0, activeLeg).filter((r) => !gone(r)).length;
+    const patch: FplPatch = { route: kept, activeLeg: Math.min(before, Math.max(0, kept.length - 1)) };
+    // Removing the approach ends vector-to-final (its active leg is the FAF).
+    if (label === "Remove Approach") patch.vtf = false;
+    // A direct-to a removed fix (activating the approach makes one) ends with it; one to a waypoint kept stays.
+    if (plain[activeLeg] !== undefined && gone(plain[activeLeg])) patch.directFrom = null;
+    patches[label] = patch;
+  };
+  // Inverting drops the procedures, as the G1000 does, and flies the first leg. It drops holds too (our choice: a hold
   // would come before its fix).
-  const inverted = enroute.filter((r) => !isHold(r)).reverse();
+  const inverted = plain.filter((r) => !isApproach(r) && !isDeparture(r) && !isArrival(r) && !isHold(r)).reverse();
   if (inverted.length > 1) patches["Invert Flight Plan"] = { route: inverted, activeLeg: 1, directFrom: null, vtf: false };
   if (route.length) patches["Delete Flight Plan"] = { route: [], activeLeg: 0, directFrom: null, vtf: false };
-  if (a) {
-    const patch: FplPatch = { route: enroute, activeLeg: Math.min(kept, Math.max(0, enroute.length - 1)), vtf: false };
-    // A direct-to an approach fix (activating the approach makes one) ends with it; one to a waypoint kept stays.
-    if (route[activeLeg] !== undefined && isApproach(route[activeLeg])) patch.directFrom = null;
-    patches["Remove Approach"] = patch;
-  }
+  remove("Remove Departure", isDeparture);
+  remove("Remove Arrival", isArrival);
+  remove("Remove Approach", isApproach);
   return FPL_OPTIONS.map((label) => ({ label, patch: patches[label] }));
 }
 
@@ -52,13 +58,14 @@ export function fplMenu(route: Route, activeLeg: number): { label: string; patch
 export const destination = (route: Route, airports: Pick<Airport, "id">[]) =>
   [...route].reverse().find((r): r is string => typeof r === "string" && airports.some((a) => a.id === r));
 
-/** WPT - AIRPORT INFORMATION's menu: `airport` shows an airport on the page, `approach` the approach view. */
-export function airportInfoMenu(dest: string | undefined, go: { airport: (id: string) => void; approach: () => void }): MenuOption[] {
-  // Grey where the softkeys are: INFO-2 (the directory) is not ported, and there is no departure, arrival, weather,
-  // NOTAM or chart data.
+/** WPT - AIRPORT INFORMATION's menu: `airport` shows an airport on the page, `approach` the approach view, `departure`
+ * and `arrival` (absent where the airport has none) the departure and arrival views. */
+export function airportInfoMenu(dest: string | undefined,
+  go: { airport: (id: string) => void; approach: () => void; departure?: () => void; arrival?: () => void }): MenuOption[] {
+  // Grey where the softkeys are: INFO-2 (the directory) is not ported, and there is no weather, NOTAM or chart data.
   return [
     { label: "View Destination Airport", act: dest ? () => go.airport(dest) : undefined }, { label: "Show Directory Page" },
-    { label: "Show Departure Page" }, { label: "Show Arrival Page" }, { label: "Show Approach Page", act: go.approach },
+    { label: "Show Departure Page", act: go.departure }, { label: "Show Arrival Page", act: go.arrival }, { label: "Show Approach Page", act: go.approach },
     { label: "Show Weather Page" }, { label: "View NOTAMs" }, { label: "Chart Mode On" },
   ];
 }
