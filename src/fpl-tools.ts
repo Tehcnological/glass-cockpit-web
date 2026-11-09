@@ -1,28 +1,41 @@
-// The windows the flight plan PAGE MENU opens for Closest Point of FPL, Parallel Track and Create ATK Offset Waypoint,
-// shared by the MFD page and the PFD window, from the Pilot's Guide's steps (FG1000 has none). Window titles and
-// field names are drawn here, not the trainer's. DOM-free, so it can be tested on its own.
-import { atkOffset, bearingDistance, cancelParallel, closestPointOfFpl, findPoint, isParallel, parallelTrack, routePoint, vtfEdit } from "./nav.js";
-import type { Airport } from "./nav.js";
-import { deg3 } from "./page.js";
+// The windows the flight plan PAGE MENU opens for Closest Point of FPL, Parallel Track, Create ATK Offset Waypoint,
+// Hold At Waypoint and Hold At Present Position, shared by the MFD page and the PFD window, from the Pilot's Guide's
+// steps (FG1000 has none). Window titles and field names are drawn here, not the trainer's. DOM-free, so it can be
+// tested on its own.
+import { atkOffset, bearingDistance, cancelParallel, closestPointOfFpl, findPoint, holdAtPresentPosition, holdAtWaypoint, isHold, isParallel, parallelTrack, routePoint, vtfEdit } from "./nav.js";
+import type { Airport, Hold } from "./nav.js";
+import { deg3, mod } from "./page.js";
 import type { IdEntry } from "./ui.js";
 import type { LatLon, MapPoint } from "./map.js";
 
-export const FPL_TOOLS = ["Closest Point Of FPL", "Parallel Track", "Create ATK Offset Waypoint"] as const;
+export const FPL_TOOLS = ["Closest Point Of FPL", "Parallel Track", "Create ATK Offset Waypoint", "Hold At Waypoint", "Hold At Present Position"] as const;
 export type FplToolName = (typeof FPL_TOOLS)[number];
 
 type Route = (string | MapPoint)[];
 export type ToolState = LatLon & {
   points: MapPoint[]; airports: Airport[]; route: Route; activeLeg: number; directFrom: LatLon | null; vtf: boolean; magVar: number;
+  /** Magnetic, for Hold At Present Position's course: the MFD's track, else the PFD's heading. */ track?: number; heading?: number;
 };
 export interface ToolRow { label: string; value?: string; cur?: boolean; dim?: boolean; title?: boolean }
 /** What ENT does: the change to make, if any, and whether the window closes. */
-export type ToolEnt = { patch?: { route?: Route; activeLeg?: number; vtf?: boolean; directFrom?: null; points?: MapPoint[] }; close: boolean };
+export type ToolEnt = { patch?: { route?: Route; activeLeg?: number; vtf?: boolean; directFrom?: LatLon | null; points?: MapPoint[]; susp?: boolean }; close: boolean };
 
-/** Whether the flight plan menu offers `name`; ATK needs the waypoint `sel` under the cursor. */
+/** Whether the flight plan menu offers `name`; ATK and Hold At Waypoint need the waypoint `sel` under the cursor. */
 export function toolEnabled(name: FplToolName, s: ToolState, sel: number | null): boolean {
+  if (name === "Hold At Present Position") return true;
+  // On a hold, the menu offers Remove Hold in Hold At Waypoint's place.
+  if (name === "Hold At Waypoint") return sel !== null && !isHold(s.route[sel]) && !!routePoint(s.route[sel] ?? "", s.points, s.airports);
   const legs = s.route.filter((r) => routePoint(r, s.points, s.airports)).length > 1;
-  return name === "Create ATK Offset Waypoint" ? legs && sel !== null && sel < s.route.length : legs;
+  // Not from a hold: its leg has no length to measure along.
+  return name === "Create ATK Offset Waypoint" ? legs && sel !== null && sel < s.route.length && !isHold(s.route[sel]) : legs;
 }
+
+const isHoldTool = (name: FplToolName) => name === "Hold At Waypoint" || name === "Hold At Present Position";
+
+/** A hold leg's flight plan row, MFD and PFD (our own): HOLD, the inbound course, the turns. */
+export const holdRow = (h: Hold) => ({ Leg: "HOLD", DTK: deg3(h.course), DIS: h.turn === "R" ? "RIGHT" : "LEFT" });
+
+const HOLD_ROWS = 4; // course, turn, leg type, leg length; then LOAD?
 
 export class FplTool {
   name: FplToolName = "Parallel Track";
@@ -33,18 +46,56 @@ export class FplTool {
   private sel = 0;
   private ref: string | null = null;
   private found: { brg: number; dist: number } | null = null;
+  // The hold: inbound course (magnetic), turns, legs by time (minutes) or distance (nm).
+  private hold = { course: 360, turn: "R" as "L" | "R", byTime: true, time: 1, dist: 1 };
 
   constructor(private entry: IdEntry) {}
 
-  /** Opens `name`'s window; `sel` is the flight plan waypoint under the cursor (ATK). */
+  /** Opens `name`'s window; `sel` is the flight plan waypoint under the cursor (ATK, Hold At Waypoint). */
   open(name: FplToolName, s: ToolState, sel = 0) {
     [this.name, this.sel, this.row, this.side, this.nm, this.offset, this.ref, this.found] = [name, sel, 0, "L", 1, 1, null, null];
+    // shortcut: 1 minute legs and right turns, the standard hold; time in 0.5 minute steps from 0.5 to 5, distance in
+    // 1 nm steps from 1 to 30. Our own limits; upgrade if the Pilot's Guide gives them.
+    this.hold = { course: Math.round(this.inbound(s)) || 360, turn: "R", byTime: true, time: 1, dist: 1 };
     this.entry.cancel();
     // Pilot's Guide: with Parallel Track on, the window opens on CANCEL PARALLEL TRACK?.
     if (name === "Parallel Track" && s.route.some(isParallel)) this.row = 2;
   }
 
+  /** The hold's default inbound course, magnetic: the leg into the waypoint (from the aircraft on the first), or for
+   * present position the track (the PFD has no track input: its heading). */
+  private inbound(s: ToolState): number {
+    if (this.name === "Hold At Present Position") return s.track ?? s.heading ?? 0;
+    if (this.name !== "Hold At Waypoint") return 0;
+    const at = (i: number) => routePoint(s.route[i] ?? "", s.points, s.airports);
+    const w = at(this.sel);
+    let i = this.sel - 1;
+    while (i >= 0 && isHold(s.route[i])) i--;
+    const from = at(i) ?? s;
+    return w ? mod(bearingDistance(from.lat, from.lon, w.lat, w.lon).brg - s.magVar, 360) : 0;
+  }
+
+  private holdOf(): Hold {
+    const h = this.hold;
+    return { course: h.course, turn: h.turn, ...(h.byTime ? { time: h.time } : { distance: h.dist }) };
+  }
+
   rows(s: ToolState): ToolRow[] {
+    if (isHoldTool(this.name)) {
+      const h = this.hold;
+      const w = routePoint(s.route[this.sel] ?? "", s.points, s.airports);
+      return [
+        { label: this.name === "Hold At Waypoint" ? "HOLD AT WAYPOINT" : "HOLD AT P.POS", title: true },
+        { label: "WAYPOINT", value: this.name === "Hold At Waypoint" ? w?.id ?? "" : "P.POS" },
+        { label: "COURSE", value: deg3(h.course), cur: this.row === 0 },
+        { label: "TURN", value: h.turn === "R" ? "Right" : "Left", cur: this.row === 1 },
+        { label: "LEG", value: h.byTime ? "Time" : "Distance", cur: this.row === 2 },
+        h.byTime
+          ? { label: "TIME", value: `${h.time.toFixed(1)}MIN`, cur: this.row === 3 }
+          : { label: "DISTANCE", value: `${h.dist}NM`, cur: this.row === 3 },
+        { label: "LOAD?", cur: this.row === HOLD_ROWS },
+      ];
+    }
     if (this.name === "Closest Point Of FPL") {
       const f = this.found;
       return [
@@ -81,7 +132,16 @@ export class FplTool {
   }
 
   fms(_s: ToolState, outer: boolean, d: number) {
-    if (this.name === "Closest Point Of FPL") {
+    if (isHoldTool(this.name)) {
+      // shortcut: the course steps 1 degree a click, not digit by digit; upgrade if a lesson needs it.
+      const h = this.hold;
+      if (outer) this.row = Math.max(0, Math.min(HOLD_ROWS, this.row + d));
+      else if (this.row === 0) h.course = mod(h.course - 1 + d, 360) + 1;
+      else if (this.row === 1) h.turn = h.turn === "R" ? "L" : "R";
+      else if (this.row === 2) h.byTime = !h.byTime;
+      else if (this.row === 3 && h.byTime) h.time = Math.max(0.5, Math.min(5, h.time + d / 2));
+      else if (this.row === 3) h.dist = Math.max(1, Math.min(30, h.dist + d));
+    } else if (this.name === "Closest Point Of FPL") {
       if (outer) this.entry.outer(d);
       else {
         this.entry.inner(d);
@@ -104,6 +164,14 @@ export class FplTool {
   }
 
   ent(s: ToolState): ToolEnt {
+    if (isHoldTool(this.name)) {
+      if (this.row < HOLD_ROWS) {
+        this.row++;
+        return { close: false };
+      }
+      const patch = this.name === "Hold At Waypoint" ? holdAtWaypoint(s, this.sel, this.holdOf()) : holdAtPresentPosition(s, this.holdOf());
+      return patch ? { patch, close: true } : { close: false };
+    }
     if (this.name === "Closest Point Of FPL") {
       if (!this.entry.editing) return { close: !!this.found };
       this.ref = this.entry.ent();

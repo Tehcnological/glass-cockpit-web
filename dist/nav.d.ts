@@ -235,4 +235,64 @@ export declare function parallelTrack(s: Plan & {
     activeLeg: number;
     directFrom: LatLon | null;
 }, side: "L" | "R", nm: number): Route | null;
+/** A hold (Pilot's Guide's Hold At Waypoint): inbound `course`, magnetic degrees; turns; legs of `time` minutes or `distance` nm. */
+export interface Hold {
+    course: number;
+    turn: "L" | "R";
+    time?: number;
+    distance?: number;
+}
+/** A hold leg: an entry of its own after the fix it holds at, at the fix's position, with `hold`. */
+export declare const isHold: (r: string | MapPoint | undefined) => r is MapPoint & {
+    hold: Hold;
+};
+/** Hold At Waypoint: `hold` at the plan's entry `at`, as a hold leg after it (replacing a hold already there). */
+export declare function holdAtWaypoint(s: Plan & {
+    activeLeg: number;
+    vtf: boolean;
+}, at: number, hold: Hold): {
+    vtf: boolean;
+    directFrom?: null;
+    route: Route;
+    activeLeg: number;
+} | null;
+/** Hold At Present Position: a user waypoint here (to add to `points`), flown direct, with `hold` after it, before the active waypoint. */
+export declare function holdAtPresentPosition(s: Plan & LatLon & {
+    activeLeg: number;
+}, hold: Hold): {
+    points: MapPoint[];
+    route: Route;
+    activeLeg: number;
+    directFrom: {
+        lat: number;
+        lon: number;
+    };
+    vtf: boolean;
+    susp: boolean;
+};
+/**
+ * The active leg once the aircraft reaches the active waypoint (the host sequences the plan): the next one, except
+ * that a hold stays active until the pilot removes it or activates another leg. Reaching a hold fix makes its hold active.
+ */
+export declare const sequenceLeg: (route: Route, activeLeg: number) => number;
+/** CLR (or Remove Hold) on the plan's entry `at`: deletes it, and a fix's hold with it. Deleting the active leg resumes on the one after. */
+export declare function deleteEntry(s: {
+    route: Route;
+    activeLeg: number;
+    vtf: boolean;
+}, at: number): {
+    vtf: boolean;
+    directFrom?: null;
+    route: (string | MapPoint)[];
+    activeLeg: number;
+};
+/**
+ * A hold's racetrack, our own drawing: the fix, the end of the turn there, the end of the outbound leg and the start of
+ * the inbound leg, with the turn radius `r` in nm. Standard rate turns (180 degrees a minute) at `gs` knots; legs of
+ * the hold's distance, or its time at `gs`.
+ */
+export declare function holdTrack(fix: LatLon, h: Hold, magVar: number, gs: number): {
+    pts: LatLon[];
+    r: number;
+};
 export {};

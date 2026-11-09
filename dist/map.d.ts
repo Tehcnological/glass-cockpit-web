@@ -1,3 +1,4 @@
+import { type Hold } from "./nav.js";
 export interface MapPoint {
     id: string;
     type: "APT" | "VOR" | "NDB" | "FIX" | "WPT";
@@ -14,6 +15,7 @@ export interface MapPoint {
     /** Flight plan legs: the fix's role in an approach (see `ProcLeg`). */ role?: string;
     /** Flight plan legs: the approach PROC loaded this fix from, e.g. "ILS RWY 36". */ approach?: string;
     /** Flight plan legs: Parallel Track's point, offset from this flight plan entry (see `parallelTrack`). */ parallel?: string | MapPoint;
+    /** Flight plan legs: a hold leg, after the fix it holds at and at its position (see `Hold`, `holdAtWaypoint`). */ hold?: Hold;
 }
 /** A position only. */
 export interface LatLon {
