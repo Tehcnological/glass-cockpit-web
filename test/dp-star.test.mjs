@@ -90,6 +90,10 @@ test("loading a departure puts it after the departure airport, replacing one loa
   assert.equal(p.route[p.activeLeg], "BLH", "the active waypoint stays active");
   // With no departure airport in the plan, it goes first.
   assert.deepEqual(procedurePatch([], 0, sid, pts), { route: ["KPSP", ...pts], activeLeg: 1 });
+  assert.deepEqual(procedurePatch([], 1, sid, pts), { route: ["KPSP", ...pts], activeLeg: 1 }, "an empty plan's default active leg");
+  // An active leg past the end stays within the new plan.
+  const p2 = procedurePatch(["KPSP", "KTUS"], 5, sid, pts);
+  assert.ok(p2.activeLeg < p2.route.length);
 });
 
 test("loading an arrival puts it before the approach, or at the end, replacing one loaded before", () => {

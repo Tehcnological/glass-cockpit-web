@@ -148,7 +148,7 @@ export declare const isArrival: (r: string | MapPoint) => r is MapPoint;
  * end. The active waypoint stays active; before takeoff, flying the leg from the departure airport, the departure's first
  * fix becomes the active one, as it does when the active fix was one of those replaced.
  */
-export declare function procedurePatch(route0: Route, activeLeg: number, p: Procedure, pts: MapPoint[]): {
+export declare function procedurePatch(route0: Route, active: number, p: Procedure, pts: MapPoint[]): {
     directFrom?: null | undefined;
     route: (string | MapPoint)[];
     activeLeg: number;

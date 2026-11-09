@@ -200,10 +200,12 @@ export const isArrival = (r: string | MapPoint): r is MapPoint => typeof r !== "
  * end. The active waypoint stays active; before takeoff, flying the leg from the departure airport, the departure's first
  * fix becomes the active one, as it does when the active fix was one of those replaced.
  */
-export function procedurePatch(route0: Route, activeLeg: number, p: Procedure, pts: MapPoint[]) {
+export function procedurePatch(route0: Route, active: number, p: Procedure, pts: MapPoint[]) {
   const sid = p.kind === "SID";
   const mine = sid ? isDeparture : isArrival;
   const route = cancelParallel(route0); // editing the plan cancels Parallel Track (Pilot's Guide)
+  // An active leg past the plan's end (an empty plan's default of 1) counts as its last entry.
+  const activeLeg = Math.max(0, Math.min(active, route.length - 1));
   const removed = route.slice(0, activeLeg).filter(mine).length;
   const kept = route.filter((r) => !mine(r));
   let k = activeLeg - removed;
@@ -216,7 +218,8 @@ export function procedurePatch(route0: Route, activeLeg: number, p: Procedure, p
   const replaced = route[activeLeg] !== undefined && mine(route[activeLeg]);
   const after = sid ? k > at || (k === at && removed > 0) : k >= at;
   const leg = replaced ? at : after ? k + pts.length : k;
-  return { route: [...kept.slice(0, at), ...pts, ...kept.slice(at)], activeLeg: leg, ...(replaced && { directFrom: null }) };
+  const out = [...kept.slice(0, at), ...pts, ...kept.slice(at)];
+  return { route: out, activeLeg: Math.min(leg, Math.max(0, out.length - 1)), ...(replaced && { directFrom: null }) };
 }
 
 /** A fix entered by hand (WAYPOINT ENTRY, DIRECT TO) is an ordinary waypoint, even when picked from a loaded procedure. */
