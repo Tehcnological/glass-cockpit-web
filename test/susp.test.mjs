@@ -1,7 +1,7 @@
 // Approach suspend (SUSP) and missed approach sequencing (Pilot's Guide).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { approachPatch, approachPoints, directToPatch, missedPatch, pastMap, suspended } from "../dist/nav.js";
+import { approachPatch, approachPoints, directToPatch, missedPatch, pastMap, resumePatch, suspended } from "../dist/nav.js";
 import { ProcFlow } from "../dist/procedures.js";
 
 const leg = (fix, lat, role) => ({ fix, lat, lon: -112, type: "TF", alt: null, role });
@@ -40,6 +40,9 @@ test("SUSP and ACTIVATE MISSED APPROACH: the first missed approach leg active", 
   assert.deepEqual(missedPatch(s.route, null), { activeLeg: 5, directFrom: null, vtf: false, susp: false });
   assert.deepEqual(missedPatch(s.route, { lat: 33.4, lon: -112 }), { activeLeg: 5, directFrom: { lat: 33.4, lon: -112 }, vtf: false, susp: false });
   assert.equal(missedPatch(plan(33.40, legs.slice(0, 3)).route, null), null, "no missed approach");
+  // The SUSP key at the MAP: the same patch, and nothing without a missed approach.
+  assert.deepEqual(resumePatch(s), missedPatch(s.route, null));
+  assert.equal(resumePatch(plan(33.40, legs.slice(0, 3))), null);
 });
 
 const activateMissed = (s) => {

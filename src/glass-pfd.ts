@@ -17,7 +17,7 @@ import { DCLTR, drawMap, mapGroup, rangeLabel, stepRange, type Airspace, type La
 import { ProcFlow, PROC_MENU } from "./procedures.js";
 import { MIN_BLANK, minView, stepBaro } from "./apr-info.js";
 import { PanIdle, panInfo, panMarkup, panMove, panStart, panTarget, type Pan, type PanView } from "./pan.js";
-import { bearingDistance, bestApproach, directToPatch, cancelDirectTo, findPoint, latLon, missedPatch, nearest, nrstFreq, planName, routePoint, suspended, type Airport, type Procedure } from "./nav.js";
+import { bearingDistance, bestApproach, directToPatch, cancelDirectTo, findPoint, latLon, nearest, nrstFreq, planName, resumePatch, routePoint, suspended, type Airport, type Procedure } from "./nav.js";
 import { alertsKey, seenAlerts } from "./alerts.js";
 import { cdiLabel, dmeText } from "./radio.js";
 import { BLANK as blank, CYAN, Highlighter, IdEntry, ListView, NS, dimKey, esc, firstRow, key as k, screenBox, type Key } from "./ui.js";
@@ -93,7 +93,7 @@ export interface PfdState {
   /** Set by DIRECT TO and PROC: where the direct leg to the active waypoint starts, for the inset map. */ directFrom: LatLon | null;
   /** Vector-to-final is active (PROC): `directFrom` is its intercept, not a direct-to, so Cancel Direct-To NAV is dim. */ vtf: boolean;
   /** Index into `route` of the active waypoint. */ activeLeg: number;
-  /** Waypoint sequencing is suspended at the approach's missed approach point (SUSP); set as the aircraft passes the MAP. */ susp: boolean;
+  /** Waypoint sequencing is suspended (SUSP): set as the aircraft passes the approach's missed approach point, or while a hold is active. */ susp: boolean;
   /** Airports the NRST window lists, nearest first after sorting here. */ airports: Airport[];
   /** Approaches the PROC window can load, for the airports in `airports`. */ procedures: Procedure[];
   /** Magnetic variation, degrees east positive: bearings to stations are magnetic. */ magVar: number;
@@ -575,12 +575,12 @@ export class GlassPfd {
       case "top": {
         const cdi: CdiSource[] = ["GPS", "NAV1", "NAV2"];
         // v13 trainer: OBS is dim with no flight plan (FG1000 always offers it); while on, it stays so it can be turned off.
-        // Pilot's Guide (FG1000 has no SUSP): suspended at the missed approach point the key reads SUSP, lit, and sequences
-        // onto the missed approach from the MAP; with no missed approach it stays suspended.
+        // Pilot's Guide (FG1000 has no SUSP): suspended at the missed approach point or a hold the key reads SUSP, lit, and
+        // sequences onto the missed approach from the MAP, or the leg after the hold (`resumePatch`).
         return [
           s.reversionary ? k("ENGINE", () => this.go("engine")) : blank,
           off(k("INSET", () => { u.inset = true; this.go("inset"); })), blank, off(k("PFD", () => this.go("pfd"))),
-          s.susp ? k("SUSP", () => { const p = missedPatch(s.route, null); if (p) this.change(p); }, true)
+          s.susp ? k("SUSP", () => { const p = resumePatch(s); if (p) this.change(p); }, true)
             : s.route.length || s.obs ? k("OBS", () => this.change({ obs: !s.obs }), s.obs) : dimKey("OBS"),
           // PFDInstrumentsController.incrCDISource: GPS, NAV1, NAV2.
           k("CDI", () => this.change({ cdiSource: cdi[(cdi.indexOf(s.cdiSource) + 1) % 3] })),
