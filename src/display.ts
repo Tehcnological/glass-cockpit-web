@@ -4,6 +4,9 @@ import BEZEL from "./svg/bezel.js";
 import { clipRect } from "./page.js";
 import type { Input } from "./bezel.js";
 
+// From dist/, the font in src/fonts/ (both ship in the package; README "Font").
+const FONT = new URL("../src/fonts/SairaSemiCondensed-Medium.ttf", import.meta.url).href;
+
 const NS = "http://www.w3.org/2000/svg";
 
 export interface DisplayOptions {
@@ -49,7 +52,15 @@ export function buildDisplay(container: HTMLElement, pages: string[], label: str
       if (left) right!.after(left);
     }
   }
+  // Departs from FG1000 (Liberation Sans Narrow, not bundled): every screen text in Saira Semi Condensed, an open font
+  // close to the v13 trainer's, bundled so it looks the same on every machine. The bezel keeps its own lettering. Digits
+  // are tabular, as Liberation's are, so readouts hold still. A file, not a data: URI, so a site's CSP can keep
+  // font-src 'self': bundlers (Vite, webpack 5) emit it as an asset.
+  const style = svg.appendChild(document.createElementNS(NS, "style"));
+  style.textContent = `@font-face{font-family:"Saira Semi Condensed";src:url(${FONT}) format("truetype")}` +
+    `.gcw-screen text,.gcw-screen tspan{font-family:"Saira Semi Condensed",sans-serif!important;font-stretch:normal!important;font-variant-numeric:tabular-nums}`;
   const screen = svg.appendChild(document.createElementNS(NS, "g"));
+  screen.setAttribute("class", "gcw-screen");
   if (bezel) screen.setAttribute("transform", "translate(187 177)");
   screen.innerHTML = `<rect width="1024" height="768" fill="#000"/>${pages.map((p) => `<g>${scopeIds(p, tag)}</g>`).join("")}`;
   screen.setAttribute("clip-path", `url(#${clipRect(screen, 0, 0, 1024, 768)})`);
