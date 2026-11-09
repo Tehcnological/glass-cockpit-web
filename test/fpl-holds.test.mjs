@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { FplTool, toolEnabled } from "../dist/fpl-tools.js";
-import { deleteEntry, holdAtPresentPosition, holdAtWaypoint, holdTrack, isHold, sequenceLeg } from "../dist/nav.js";
+import { deleteEntry, holdAtPresentPosition, holdAtWaypoint, holdTrack, isHold, resumePatch, sequenceLeg, suspended } from "../dist/nav.js";
 import { fplMenu } from "../dist/page-menu.js";
 import { symbolPoints } from "../dist/map.js";
 import { IdEntry } from "../dist/ui.js";
@@ -165,4 +165,26 @@ test("a hold at an approach fix goes with the approach and does not draw the fix
   assert.equal(route[5].role, undefined, "but is not the FAF");
   const m = { points: s.points, route, airspaces: [], range: 10, lat: 0, lon: 0 };
   assert.equal(symbolPoints(m).filter((p) => p.id === "FAF").length, 1);
+});
+
+test("an active hold suspends sequencing (SUSP), not in OBS mode", () => {
+  const route = holdAtWaypoint(s, 2, H).route; // A B C hold D
+  assert.equal(suspended({ ...s, route, activeLeg: 2 }), false, "flying to the fix");
+  assert.equal(suspended({ ...s, route, activeLeg: 3 }), true, "the hold active");
+  assert.equal(suspended({ ...s, route, activeLeg: 3, obs: true }), false, "not in OBS mode");
+  assert.equal(suspended({ ...s, route, activeLeg: 4, susp: true }), false, "a shared susp ends once the hold is not active");
+});
+
+test("SUSP at a hold resumes on the leg from the hold fix; with nothing after the hold it keeps holding", () => {
+  const route = holdAtWaypoint(s, 2, H).route;
+  // directFrom null: the leg into D is drawn from the hold entry, at the fix, and is not a direct-to.
+  assert.deepEqual(resumePatch({ route, activeLeg: 3 }), { activeLeg: 4, directFrom: null, vtf: false, susp: false });
+  const last = holdAtWaypoint(s, 3, H).route; // A B C D hold
+  assert.equal(resumePatch({ route: last, activeLeg: 4 }), null);
+});
+
+test("removing the hold while suspended at it resumes on the leg after it and ends SUSP", () => {
+  const route = holdAtWaypoint(s, 2, H).route;
+  const p = deleteEntry({ route, activeLeg: 3, vtf: false }, 3);
+  assert.equal(suspended({ ...s, ...p, susp: true }), false);
 });

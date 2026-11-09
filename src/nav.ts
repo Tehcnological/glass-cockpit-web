@@ -221,17 +221,27 @@ export function pastMap(s: Active): boolean {
 /**
  * SUSP (Pilot's Guide; FG1000 sequences onto the missed approach): past the loaded approach's missed approach point
  * waypoint sequencing suspends, the MAP staying active, until SUSP or ACTIVATE MISSED APPROACH makes the missed
- * approach active. It ends whenever the MAP stops being the active waypoint. Never in OBS mode, even when a host
- * shares `susp` from a unit that cannot see OBS (the MFD), so the OBS key can always be turned off.
+ * approach active. It ends whenever the MAP stops being the active waypoint. An active hold suspends it too, until SUSP
+ * or Remove Hold. Never in OBS mode, even when a host shares `susp` from a unit that cannot see OBS (the MFD), so the
+ * OBS key can always be turned off.
  */
 export function suspended(s: Active & { susp?: boolean; obs?: boolean }): boolean {
-  return activeMap(s) !== null && !s.obs && (!!s.susp || pastMap(s));
+  return !s.obs && (isHold(s.route[s.activeLeg]) || (activeMap(s) !== null && (!!s.susp || pastMap(s))));
 }
 
 /** SUSP and ACTIVATE MISSED APPROACH: the first missed approach leg active, from `from` (null: from the MAP, as both use it). Null with no missed approach. */
 export function missedPatch(route: Route, from: LatLon | null) {
   const i = route.findIndex((r) => isApproach(r) && r.role === "MISSED");
   return i < 0 ? null : { activeLeg: i, directFrom: from, vtf: false, susp: false };
+}
+
+/**
+ * The SUSP key: at a hold, the leg after it, drawn from the hold entry at the fix (not a direct-to); at the MAP, the
+ * missed approach. Null keeps it suspended: a hold last in the plan (our reading: nothing to sequence onto), no missed approach.
+ */
+export function resumePatch(s: { route: Route; activeLeg: number }) {
+  if (!isHold(s.route[s.activeLeg])) return missedPatch(s.route, null);
+  return s.activeLeg + 1 < s.route.length ? { activeLeg: s.activeLeg + 1, directFrom: null, vtf: false, susp: false } : null;
 }
 
 /**
