@@ -17,12 +17,27 @@ export interface DisplayOptions {
   afcsKeys?: boolean;
 }
 
+let displayCount = 0;
+
+/**
+ * Prefixes every id the markup references (`url(#id)`, `href="#id"`) with `tag`. A reference resolves to the first
+ * element in the document with that id, so two displays inlining the same art would share one copy, and if that copy
+ * sits in a display:none display, the other display's gradients and filters do not paint. Ids nothing references keep
+ * their names, so `Page.el` and the bezel find them as before.
+ */
+export function scopeIds(markup: string, tag: string): string {
+  const ref = /(url\(#|href="#)([^)"]+)/g;
+  const refs = new Set(Array.from(markup.matchAll(ref), (m) => m[2]));
+  return markup.replace(ref, (_, a, id) => a + tag + id).replace(/(\sid=")([^"]+)"/g, (m, a, id) => (refs.has(id) ? `${a}${tag}${id}"` : m));
+}
+
 export function buildDisplay(container: HTMLElement, pages: string[], label: string, { bezel }: DisplayOptions) {
+  const tag = `glass-d${++displayCount}-`;
   container.innerHTML = `<svg xmlns="${NS}" viewBox="${bezel ? "1 132 1407 918" : "0 0 1024 768"}" role="img"></svg>`;
   const svg = container.querySelector("svg")!;
   svg.setAttribute("aria-label", label);
   if (bezel) {
-    svg.innerHTML = BEZEL;
+    svg.innerHTML = scopeIds(BEZEL, tag);
     // fascia.svg shades its two side columns unevenly (the left has an extra black overlay and a fainter edge strip), so
     // the left reads darker. Replace the left column's shading with a mirror image of the right's.
     for (const id of ["rect8520", "path12506", "path12557"]) svg.querySelector<SVGElement>(`#${id}`)?.style.setProperty("display", "none");
@@ -36,7 +51,7 @@ export function buildDisplay(container: HTMLElement, pages: string[], label: str
   }
   const screen = svg.appendChild(document.createElementNS(NS, "g"));
   if (bezel) screen.setAttribute("transform", "translate(187 177)");
-  screen.innerHTML = `<rect width="1024" height="768" fill="#000"/>${pages.map((p) => `<g>${p}</g>`).join("")}`;
+  screen.innerHTML = `<rect width="1024" height="768" fill="#000"/>${pages.map((p) => `<g>${scopeIds(p, tag)}</g>`).join("")}`;
   screen.setAttribute("clip-path", `url(#${clipRect(screen, 0, 0, 1024, 768)})`);
   return { svg, screen };
 }
