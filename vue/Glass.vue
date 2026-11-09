@@ -7,6 +7,7 @@
 // The bezel's knobs work with the mouse; changes to FlightState values come back as a `change` event.
 // Autopilot: the MFD's GFC 700 keys come out as a `key` event for the host's `Afcs`; its `update` gives `afcs` (the
 // annunciations) and `fd` (the command bars) to pass back to the PFD. `afcsKeys` on the PFD in the MFD's place draws them there.
+// `startup` is the PFD's AHRS alignment at power-up, seconds (the package's default when not given; 0 skips it).
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import type { AfcsDisplay, AfcsKey, GlassMfd, GlassPfd, MfdState, PfdOptions, PfdState } from "glass-cockpit-web";
 import type { FlightState } from "./state";
@@ -15,7 +16,7 @@ import { tuneNav } from "glass-cockpit-web/radio";
 const props = withDefaults(defineProps<{
   state: FlightState; unit?: "pfd" | "mfd"; bezel?: boolean;
   mfd?: Partial<MfdState>; vspeeds?: PfdOptions["vspeeds"]; reversionary?: boolean;
-  afcs?: AfcsDisplay | null; fd?: PfdState["fd"]; afcsKeys?: boolean;
+  afcs?: AfcsDisplay | null; fd?: PfdState["fd"]; afcsKeys?: boolean; startup?: number;
 }>(), {
   unit: "pfd",
   bezel: true,
@@ -23,6 +24,7 @@ const props = withDefaults(defineProps<{
   afcs: null,
   fd: null,
   afcsKeys: undefined,
+  startup: undefined,
 });
 const emit = defineEmits<{ change: [patch: Partial<FlightState>]; mfd: [patch: Partial<MfdState>]; key: [key: AfcsKey] }>();
 const box = ref<HTMLDivElement>();
@@ -61,7 +63,7 @@ onMounted(async () => {
   };
   const onInput = ({ control }: { control: string }) => (lib.AFCS_KEYS as readonly string[]).includes(control) && emit("key", control as AfcsKey);
   if (props.unit === "mfd") mfd = new lib.GlassMfd(box.value!, { bezel: props.bezel, onChange, onInput, afcsKeys: props.afcsKeys });
-  else pfd = new lib.GlassPfd(box.value!, { bezel: props.bezel, onChange, vspeeds: props.vspeeds, onInput, afcsKeys: props.afcsKeys });
+  else pfd = new lib.GlassPfd(box.value!, { bezel: props.bezel, onChange, vspeeds: props.vspeeds, onInput, afcsKeys: props.afcsKeys, startup: props.startup });
   draw(props.state);
 });
 onUnmounted(() => (pfd?.destroy(), mfd?.destroy()));
