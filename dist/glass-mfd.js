@@ -156,6 +156,8 @@ export class GlassMfd {
                 this.surround.toggle(i.control === "NAV_TOGGLE" ? "nav" : "com");
                 return this.set({});
             case "SOFTKEY":
+                // A softkey (APR, DP, ...) leaves the page as pan mode's ENT opened it: CLR is the page's own again.
+                this.panBack = null;
                 this.softkeys()[i.value - 1]?.act?.();
                 return this.set({});
             case "RANGE":
@@ -424,7 +426,8 @@ export class GlassMfd {
     panWaypoint() {
         const q = panUnder(this.ui.pan, this.panView(), this.panPoints());
         const name = q && PAN_WPT_PAGES[q.type];
-        const target = name && this.pages.groups[1][PAGE_GROUPS[1].pages.indexOf(name)];
+        const wpt = PAGE_GROUPS.findIndex((g) => g.group === "WPTPageGroup");
+        const target = name && this.pages.groups[wpt][PAGE_GROUPS[wpt].pages.indexOf(name)];
         if (!target || !target.showWaypoint(q.id))
             return false;
         const [gi, pi] = this.ui.shown;
