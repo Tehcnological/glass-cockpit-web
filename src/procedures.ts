@@ -192,7 +192,7 @@ export class ProcFlow {
     return {
       apt: this.entry.editing ? this.entry.value : this.airport ?? "____",
       aptCur: on("APT") || this.entry.editing,
-      approaches: procs.map((x, i): AprRow => ({ label: x.name, cur: on("APR") && i === this.apr })),
+      approaches: procs.length ? procs.map((x, i): AprRow => ({ label: x.name, cur: on("APR") && i === this.apr })) : [{ label: "NONE", cur: false, dim: true }],
       transitions: this.transitions().map((label, i): AprRow => ({ label, cur: on("TRANS") && i === this.trans })),
       min: { mode: this.baro === null ? "OFF" : "BARO", alt: this.baro === null ? "_____FT" : `${this.baro}FT`, cur: on("MIN"), altCur: on("MINALT") },
       sequence: (p ? approachPoints(p, this.transitions()[this.trans]) : []).map((x): AprRow => ({ label: x.id, role: ROLE[x.role ?? ""] ?? "", cur: false })),

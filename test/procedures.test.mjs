@@ -117,3 +117,11 @@ test("the loading page's view: approaches, the fix sequence with roles, and LOAD
   assert.deepEqual(v.sequence.map((r) => [r.label, r.role]), [["ONEIF", "IF"], ["TWOFA", "FAF"], ["RW36", "MAP"], ["THREE", "MA"]]);
   assert.deepEqual([v.load, v.activate, v.min.mode], [true, false, "OFF"]);
 });
+
+test("an airport with no approach data lists NONE", () => {
+  const h = host();
+  h.s.procedures = [];
+  h.flow.open();
+  h.flow.ent();
+  assert.deepEqual(h.flow.loading(true).approaches.map((r) => [r.label, r.cur, r.dim]), [["NONE", false, true]]);
+});

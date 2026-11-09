@@ -598,7 +598,8 @@ const APR_BOXES = { AIRPORT: [77, 2], APPROACHES: [166, 5], TRANSITIONS: [338, 3
 function aprPanel(v: ReturnType<AprInfo["view"]>, use: string, name: string, ask?: { load: boolean; activate: boolean }): string {
   const BG = "#1a3030";
   let out = `<rect x="724.5" y="53.5" width="310" height="689" fill="${BG}" stroke="#ffffff"/>`;
-  const rowsOf = (title: keyof typeof APR_BOXES) => (ask && title === "SEQUENCE" ? 4 : APR_BOXES[title][1]);
+  // shortcut: the loading page's sequence shows its first 5 fixes (it is not a cursor stop there); the map shows them all.
+  const rowsOf = (title: keyof typeof APR_BOXES) => (ask && title === "SEQUENCE" ? 5 : APR_BOXES[title][1]);
   const box = (title: keyof typeof APR_BOXES) => {
     const [y] = APR_BOXES[title];
     const n = rowsOf(title);
@@ -627,8 +628,8 @@ function aprPanel(v: ReturnType<AprInfo["view"]>, use: string, name: string, ask
   out += panelText(v.min.mode, 740, min(0), "start", v.min.cur ? "#000000" : CYAN, v.min.cur) +
     panelText(v.min.alt, 1010, min(0), "end", v.min.altCur ? "#000000" : v.min.mode === "OFF" ? "#808080" : CYAN, v.min.altCur);
   list("SEQUENCE", v.sequence, () => "#ffffff");
-  if (ask) out += panelText("LOAD?", 874, 684, "middle", ask.load ? "#000000" : "#ffffff", ask.load) +
-    panelText("ACTIVATE?", 874, 718, "middle", ask.activate ? "#000000" : "#ffffff", ask.activate);
+  if (ask) out += panelText("LOAD?", 874, 696, "middle", ask.load ? "#000000" : "#ffffff", ask.load) +
+    panelText("ACTIVATE?", 874, 726, "middle", ask.activate ? "#000000" : "#ffffff", ask.activate);
   return out;
 }
 
