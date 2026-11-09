@@ -31,10 +31,12 @@ const sliders: [keyof FlightState, number, number, number][] = [
 const afcs = new Afcs({ maxSpeed: 140 });
 const out = shallowRef<AfcsOutput | null>(null);
 let aligned = false, last = 0, drawnAt = 0, raf = 0;
-function tick(now = performance.now()) {
+function tick() {
+  const now = performance.now(); // one clock: a frame's own timestamp can be earlier than a key press in it
   const dt = Math.min(0.1, (now - last) / 1000); // a background tab pauses frames: no jump after
   last = now;
   // No autopilot until the PFD's AHRS has aligned.
+  // shortcut: NAV1 whatever the PFD's CDI softkey shows (Glass.vue keeps the CDI source in the display); upgrade when it hands it back.
   const o = (out.value = afcs.update({
     ...s, cdiDots: s.cdi * 2, selectedAlt: mfd.selectedAlt ?? null, radios: mfd.radios!, cdiSource: "NAV1", cdiValid: true, gpsMode: "ENR", failed: { attitude: !aligned },
   }, now));
@@ -50,9 +52,9 @@ function loop(now: number) {
   const o = out.value;
   if (!o || (!o.fd && !o.display.status.text && !o.display.alert.text) || now - drawnAt < (o.ap ? 33 : 100)) return;
   drawnAt = now;
-  tick(now);
+  tick();
 }
-const press = (k: AfcsKey) => (afcs.press(k), tick());
+const press = (k: AfcsKey) => (tick(), afcs.press(k), tick()); // a key acts on the last update's state: the sliders as they are now
 const onAligned = () => ((aligned = true), tick()); // starts the preflight test
 onMounted(() => (raf = requestAnimationFrame(loop)));
 onUnmounted(() => cancelAnimationFrame(raf));
@@ -64,7 +66,7 @@ onUnmounted(() => cancelAnimationFrame(raf));
       <label v-for="[k, min, max, step] in sliders" :key="k">
         <span>{{ k }}</span>
         <input type="range" :min="min" :max="max" :step="step" v-model.number="(s as any)[k]" />
-        <output>{{ +Number(s[k]).toFixed(2) }}</output>
+        <output aria-live="off">{{ +Number(s[k]).toFixed(2) }}</output>
       </label>
       <label><span>from</span><input type="checkbox" v-model="s.from" /></label>
       <label><span>range</span><input type="range" min="1" max="200" v-model.number="mfd.range" /><output>{{ mfd.range }}</output></label>

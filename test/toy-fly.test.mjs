@@ -55,6 +55,8 @@ test("KitDemo.vue owns an Afcs: takes Glass's key event, passes afcs and fd to t
   assert.match(pfd[0], /@aligned="/);
   assert.match(mfd[0], /@key="/);
   assert.match(kit, /cancelAnimationFrame/);
+  assert.ok(kit.includes("(tick(), afcs.press(k), tick())"), "a key press feeds the sliders in first: Afcs.press acts on the last update");
+  assert.ok(kit.includes('<output aria-live="off">'), "the readouts change 30 times a second while it flies: not live regions");
 });
 
 test("Glass.vue emits aligned when the PFD's AHRS has aligned", () => {
