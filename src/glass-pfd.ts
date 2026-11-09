@@ -1032,7 +1032,7 @@ export class GlassPfd {
 
   private updateAI(pitch: number, roll: number, slip: number) {
     pitch = clamp(pitch, -80, 80);
-    this.p.tf("Horizon", { ty: pitch * 6.849, rot: -roll, center: [459, 282.8 - 6.849 * pitch] });
+    this.p.tf("Horizon", { ty: pitch * 6.849, rot: -roll, glide: true, center: [459, 282.8 - 6.849 * pitch] });
     this.p.tf("bankPointer", { rot: -roll });
     this.p.tf("SlipSkid", { tx: -20 * slip });
     // The ladder moves inside the horizon; its window stays put on the screen. Only the horizon's own transform changes,
@@ -1115,8 +1115,8 @@ export class GlassPfd {
   private updateIAS(ias: number, trend: number) {
     const on = this.state.vspeedsOn;
     this.p.text("Speed110", ias >= 10 ? pad(Math.floor(ias / 10), 2) : "");
-    this.p.tf("SpeedLint1", { ty: (mod(ias, 10) + (ias >= 10 ? 10 : 0)) * 36 });
-    this.p.tf("SpeedTape", { ty: ias * 5.711 });
+    this.p.tf("SpeedLint1", { ty: (mod(ias, 10) + (ias >= 10 ? 10 : 0)) * 36, glide: true });
+    this.p.tf("SpeedTape", { ty: ias * 5.711, glide: true });
     trend = clamp(trend, -30, 30);
     this.p.tf("Airspeed-Trend-Indicator", { sy: trend, ty: -284.5 * (trend - 1) });
     const bg = this.p.el("IAS-bg");
@@ -1131,7 +1131,7 @@ export class GlassPfd {
   }
 
   private updateVSI(vsi: number) {
-    this.p.tf("VSI", { ty: vsiPointer(vsi) });
+    this.p.tf("VSI", { ty: vsiPointer(vsi), glide: true });
     this.p.text("VSIText", vsiText(vsi));
   }
 
@@ -1140,12 +1140,12 @@ export class GlassPfd {
     else if (alt < 100) this.p.text("Alt11100", "");
     else this.p.text("Alt11100", pad(Math.floor(alt / 100), 3));
 
-    this.p.tf("AltLint00011", { ty: (alt % 100) * 1.24 }); // math.fmod keeps the sign of alt
+    this.p.tf("AltLint00011", { ty: (alt % 100) * 1.24, glide: true }); // math.fmod keeps the sign of alt
 
     if (alt > -1000 && alt < 1000000) {
       const neg = alt < 0;
       const a = Math.abs(alt);
-      this.p.tf("LintAlt", { ty: mod(a, 100) * (neg ? -0.57375 : 0.57375) });
+      this.p.tf("LintAlt", { ty: mod(a, 100) * (neg ? -0.57375 : 0.57375), glide: true });
       const central = (neg ? -1 : 1) * Math.trunc(a / 100) * 100;
       this.p.text("AltBigC", "");
       this.p.text("AltSmallC", "");
