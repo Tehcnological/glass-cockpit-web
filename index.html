@@ -84,11 +84,13 @@
   f.insertAdjacentHTML("beforeend", `<label>message<input type="checkbox" name="alert"></label><label>fail AHRS<input type="checkbox" name="ahrs"></label><label>fail ADC<input type="checkbox" name="adc"></label><label>fail PFD<input type="checkbox" name="pfdFail"></label><label>fail MFD<input type="checkbox" name="mfdFail"></label>`);
   // The aircraft: the sliders set it, and the autopilot loop moves it (in finer steps than the sliders show).
   const ac = Object.fromEntries([...f.querySelectorAll("input[type=range]")].map((i) => [i.name, Number(i.value)]));
-  // `flying`: the autopilot loop's redraw, every frame for the PFD; the MFD (a few ms a draw) 30 times a second.
+  // `flying`: the autopilot loop's redraw, every frame for the PFD; the MFD (a few ms a draw) 30 times a second, and the
+  // sliders' readouts by the loop itself.
   let mfdAt = 0;
+  const readouts = () => f.querySelectorAll("label").forEach((l) => l.querySelector("output") && (l.querySelector("output").value = l.querySelector("input").value));
   const update = (flying = false) => {
     const s = { ...ac };
-    f.querySelectorAll("label").forEach((l) => l.querySelector("output") && (l.querySelector("output").value = l.querySelector("input").value));
+    if (!flying) readouts();
     const engine = { rpm: s.rpm, fuelFlow: 9.5, oilPressure: 60, oilTemp: 190, egt: 0.7, vacuum: 5, fuelLeft: 20, fuelRight: 18, volts: 28.1, engineHours: 1234.5 };
     const modes = displayModes(backup, !f.pfdFail.checked, !f.mfdFail.checked);
     const failed = { attitude: f.ahrs.checked, airspeed: f.adc.checked, altitude: f.adc.checked, vsi: f.adc.checked };
@@ -113,15 +115,26 @@
   ga.onclick = () => (afcs.press("GA"), update());
   cws.onpointerdown = () => (afcs.cws(true), update());
   cws.onpointerup = cws.onpointerleave = () => (afcs.cws(false), update());
-  // Every frame: move toward the command bars while the autopilot flies, and redraw while the AFCS shows anything.
+  // Every frame while the autopilot flies: move toward the command bars. Otherwise, while the AFCS shows anything, redraw
+  // 10 times a second (annunciations flash); once it shows nothing, one last full redraw. The sliders follow 10 times a second.
   const toward = (v, target, rate) => v + Math.max(-rate, Math.min(rate, target - v));
-  let last = performance.now();
+  let last = performance.now(), drawnAt = 0, formAt = 0, shown = false, moved = false;
+  const syncForm = () => {
+    for (const k of ["pitch", "roll", "ias", "vsi", "alt", "heading", "cdiDots"]) f.elements[k].value = ac[k];
+    readouts();
+  };
   const fly = (now) => {
     requestAnimationFrame(fly);
     const dt = Math.min(0.1, (now - last) / 1000), rad = Math.PI / 180; // a background tab pauses frames: no jump after
     last = now;
-    if (!out || (!out.fd && !out.display.status.text)) return;
-    if (out.ap && out.fd) {
+    const moving = !!(out?.ap && out.fd);
+    if (moved && !moving) syncForm(); // the autopilot let go: the sliders show where it left the aircraft
+    moved = moving;
+    if (!out || (!out.fd && !out.display.status.text)) return void (shown && ((shown = false), update()));
+    shown = true;
+    if (!moving && now - drawnAt < 100) return;
+    drawnAt = now;
+    if (moving) {
       ac.pitch = toward(ac.pitch, out.fd.pitch, 3 * dt);
       ac.roll = toward(ac.roll, out.fd.roll, 8 * dt);
       ac.ias = toward(ac.ias, Math.max(55, 105 - 3 * (ac.pitch - 1)), 2 * dt); // fixed power: nose up slows
@@ -129,7 +142,7 @@
       ac.alt += (ac.vsi * dt) / 60;
       ac.heading = (ac.heading + ((1091 * Math.tan(ac.roll * rad)) / (ac.ias + 6)) * dt + 360) % 360;
       ac.cdiDots = Math.max(-2.4, Math.min(2.4, ac.cdiDots - Math.sin((ac.heading - ac.course) * rad) * (ac.ias / 3600) * dt / 0.3));
-      for (const k of ["pitch", "roll", "ias", "vsi", "alt", "heading", "cdiDots"]) f.elements[k].value = ac[k];
+      if (now - formAt >= 100) (formAt = now), syncForm();
     }
     update(true);
   };

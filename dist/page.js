@@ -1,3 +1,7 @@
+// Degrees. Chrome draws text under a pure translation on whole pixels, so moving numbers stepped while the lines beside
+// them glided. A rotation this small, under a tenth of a pixel across a label, lets the text move as smoothly.
+// Not in FG1000 (README "Where it follows the G1000 trainer").
+export const TEXT_GLIDE = 0.05;
 const NS = "http://www.w3.org/2000/svg";
 let clipCount = 0;
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -62,9 +66,12 @@ export class Page {
         let out = (t.tx || t.ty ? `translate(${t.tx ?? 0} ${t.ty ?? 0}) ` : "") + this.base.get(e);
         if ((t.sy !== undefined && t.sy !== 1) || (t.sx !== undefined && t.sx !== 1))
             out += ` scale(${t.sx ?? 1} ${t.sy ?? 1})`;
-        if (t.rot) {
+        let rot = t.rot ?? 0;
+        if (t.glide && Math.abs(rot) < TEXT_GLIDE)
+            rot = Math.sign(rot || 1) * TEXT_GLIDE; // keeps the direction it turns
+        if (rot) {
             const [cx, cy] = t.center ?? this.center(e);
-            out += ` rotate(${t.rot} ${cx} ${cy})`;
+            out += ` rotate(${rot} ${cx} ${cy})`;
         }
         e.setAttribute("transform", out.trim());
     }
@@ -74,7 +81,8 @@ export class Page {
         if (!c) {
             const b = e.getBBox();
             c = [b.x + b.width / 2 + Number(e.dataset.tcx ?? 0), b.y + b.height / 2 - Number(e.dataset.tcy ?? 0)];
-            this.centers.set(e, c);
+            if (b.width || b.height)
+                this.centers.set(e, c); // a display not laid out yet (hidden) measures empty: ask again later
         }
         return c;
     }
