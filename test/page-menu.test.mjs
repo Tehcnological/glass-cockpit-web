@@ -1,7 +1,7 @@
 // PAGE MENU option lists and cursor, as on the v13 trainer.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FPL_OPTIONS, fplMenu, stepMenu } from "../dist/page-menu.js";
+import { FPL_OPTIONS, airportInfoMenu, destination, fplMenu, gpsStatusMenu, nearestVorMenu, stepMenu, tripMenu } from "../dist/page-menu.js";
 
 test("the cursor skips dim options and stops at the ends", () => {
   const on = [true, false, true, false, false, true];
@@ -56,4 +56,50 @@ test("removing the approach ends a direct-to its active fix, not one to a waypoi
   const remove = (leg) => fplMenu(route, leg).find((o) => o.label === "Remove Approach").patch;
   assert.equal(remove(2).directFrom, null);
   assert.equal("directFrom" in remove(1), false);
+});
+
+// The pages that had no menu: airport information, nearest VOR, trip planning, GPS status.
+const labels = (menu) => menu.map((o) => o.label);
+const live = (menu) => menu.filter((o) => o.act).map((o) => o.label);
+
+test("airport information: the trainer's options, grey where there is no data", () => {
+  const did = [];
+  const go = { airport: (id) => did.push(id), approach: () => did.push("APR") };
+  const airports = [{ id: "KAAA" }, { id: "KBBB" }];
+  assert.equal(destination(["KAAA", "ABC", "KBBB", pt("A", "ILS")], airports), "KBBB");
+  assert.equal(destination(["ABC"], airports), undefined);
+  const menu = airportInfoMenu("KBBB", go);
+  assert.deepEqual(labels(menu), ["View Destination Airport", "Show Directory Page", "Show Departure Page", "Show Arrival Page",
+    "Show Approach Page", "Show Weather Page", "View NOTAMs", "Chart Mode On"]);
+  assert.deepEqual(live(menu), ["View Destination Airport", "Show Approach Page"]);
+  menu[0].act();
+  menu[4].act();
+  assert.deepEqual(did, ["KBBB", "APR"]);
+  assert.deepEqual(live(airportInfoMenu(undefined, go)), ["Show Approach Page"], "no destination without a flight plan airport");
+});
+
+test("nearest VOR: the menu selects the VOR and frequency windows", () => {
+  const did = [];
+  const menu = nearestVorMenu((w) => did.push(w));
+  assert.deepEqual(labels(menu), ["Select VOR Window", "Select Frequency Window"]);
+  menu.forEach((o) => o.act());
+  assert.deepEqual(did, ["LIST", "FREQ"]);
+});
+
+test("trip planning: flight plan, auto and manual modes; no waypoints mode", () => {
+  const did = [];
+  const menu = tripMenu((manual) => did.push(manual));
+  assert.deepEqual(labels(menu), ["Flight Plan Mode", "Waypoints Mode", "Auto Mode", "Manual Mode"]);
+  assert.deepEqual(live(menu), ["Flight Plan Mode", "Auto Mode", "Manual Mode"]);
+  menu.forEach((o) => o.act?.());
+  assert.deepEqual(did, [false, true]);
+});
+
+test("GPS status: Set WPT to Present Position makes a user waypoint at the aircraft", () => {
+  const did = [];
+  const s = { lat: 33.5, lon: -112.1, route: ["PPOS1"], points: [{ id: "PPOS2", type: "WPT", lat: 0, lon: 0 }], airports: [] };
+  const menu = gpsStatusMenu(() => s, (p) => did.push(p));
+  assert.deepEqual(labels(menu), ["Set WPT to Present Position"]);
+  menu[0].act();
+  assert.deepEqual(did, [{ id: "PPOS3", type: "WPT", lat: 33.5, lon: -112.1 }], "named apart from the plan's and the points'");
 });
