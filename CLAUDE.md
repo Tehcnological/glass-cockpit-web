@@ -35,4 +35,4 @@ GitHub Actions runs on every PR and every push to main, on standard hosted runne
 
 When public API, controls or the "Not ported" list change, update README.md and CHANGELOG.md in the same PR.
 
-Commit as `git -c user.name="Chris DeFoe" -c user.email="chris@defoe.me"`.
+Commit as `git -c user.name="Christopher DeFoe" -c user.email="243516562+Tehcnological@users.noreply.github.com"`.
