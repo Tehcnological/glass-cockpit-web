@@ -4,14 +4,15 @@
 // `layout`: `auto` (default) picks `none` on a phone (touch, short side under 600 px), `single` on another touch screen,
 // else `both`; it is resolved once on mount and reported as a `layout` event.
 // - `both`: PFD over MFD.
-// - `single`: one at a time, with a PFD | MFD switcher. Both keep running, hidden but laid out (their text is measured
+// - `single`: one at a time, with a PFD | MFD switcher, over the whole window with the unit as large as fits it (the
+//   page under it does not scroll while it is up). Both keep running, hidden but laid out (their text is measured
 //   with getBBox, which a display:none unit cannot do), so alignment and pages survive a switch; the PFD draws the
-//   GFC 700's keys, as the MFD's are out of sight.
+//   GFC 700's keys, as the MFD's are out of sight. The `bar` slot fills the middle of the bar above the units.
 // - `none`: no displays, the `phone` slot (default: a line asking for a tablet or computer).
 // DISPLAY BACKUP puts the PFD in reversionary mode and shows a second, reversionary PFD in the MFD's place, over the MFD,
 // which keeps its pages for when it is pushed again (as index.html does). `autopilot: false` drops the GFC 700: no keys
 // on either bezel and no annunciations. A host that wants another layout uses Glass.vue directly.
-import { nextTick, onMounted, ref } from "vue";
+import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import type { AfcsDisplay, AfcsKey, MfdState, PfdOptions, PfdState } from "glass-cockpit-web";
 import type { FlightState } from "./state";
 import Glass from "./Glass.vue";
@@ -29,6 +30,8 @@ const resolved = ref<Layout>();
 const view = ref<"pfd" | "mfd">("pfd");
 const backup = ref(false);
 const backupEl = ref<HTMLDivElement>();
+let pageOverflow: string | undefined;
+onUnmounted(() => pageOverflow !== undefined && (document.documentElement.style.overflow = pageOverflow));
 
 onMounted(async () => {
   let l = props.layout;
@@ -38,6 +41,7 @@ onMounted(async () => {
   }
   resolved.value = l;
   emit("layout", l);
+  if (l === "single") (pageOverflow = document.documentElement.style.overflow), (document.documentElement.style.overflow = "hidden");
   if (l === "none") return;
   const { DisplayBackup } = await import("glass-cockpit-web");
   await nextTick();
@@ -53,6 +57,7 @@ onMounted(async () => {
         <div v-if="resolved === 'single'" class="switch" role="group" aria-label="Display">
           <button v-for="u in (['pfd', 'mfd'] as const)" :key="u" type="button" :aria-pressed="view === u" @click="view = u">{{ u.toUpperCase() }}</button>
         </div>
+        <div class="middle"><slot name="bar" /></div>
         <div ref="backupEl" class="backup"></div>
       </div>
       <div class="units">
@@ -76,7 +81,8 @@ onMounted(async () => {
 <style scoped>
   .cockpit { display: grid; gap: 8px; touch-action: manipulation; }
   .bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
-  .switch { display: flex; margin-right: auto; }
+  .switch { display: flex; }
+  .middle { flex: 1; text-align: center; }
   .switch button { font: 600 14px var(--mono, monospace); padding: 8px 18px; min-height: 44px; border: 1px solid #555; background: #111; color: #ccc; }
   .switch button[aria-pressed="true"] { background: #e6e6e6; color: #000; }
   .backup { width: 56px; }
@@ -84,9 +90,10 @@ onMounted(async () => {
   /* A place stacks its units in one cell: the reversionary PFD over the MFD. */
   .place { display: grid; }
   .place > * { grid-area: 1 / 1; }
-  /* One at a time: both places in one cell, as large as the screen's height allows. */
-  .single .units { grid-template: 1fr / 1fr; }
-  .single .place { grid-area: 1 / 1; width: min(100%, calc((100dvh - 72px) * 1407 / 918)); margin-inline: auto; }
+  /* One at a time: the whole window, both places in one cell, each as large as the space under the bar allows. */
+  .cockpit.single { position: fixed; inset: 0; z-index: 10; padding: 8px; grid-template-rows: auto 1fr; background: var(--bg, #000); overscroll-behavior: contain; }
+  .single .units { grid-template: 1fr / 1fr; min-height: 0; container-type: size; }
+  .single .place { grid-area: 1 / 1; width: min(100cqw, 100cqh * 1407 / 918); margin: auto; }
   /* !important: the bezel art sets visibility:visible inline on its shapes, which a plain inherited hidden loses to. */
   .hidden, .hidden :deep(*) { visibility: hidden !important; pointer-events: none !important; }
   .phone { padding: 24px 0; }

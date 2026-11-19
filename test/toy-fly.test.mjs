@@ -72,6 +72,13 @@ test("Cockpit.vue: PFD and MFD wired as KitDemo had them, the autopilot gating e
   // The bezel art sets visibility:visible inline on its shapes, which would show through a plain visibility: hidden.
   assert.match(src, /\.hidden, \.hidden :deep\(\*\) \{ visibility: hidden !important; pointer-events: none !important; \}/);
   assert.match(src, /\.cockpit \{[^}]*touch-action: manipulation/);
+  // One at a time takes the whole window, the unit as large as fits it: no scrolling.
+  assert.match(src, /\.cockpit\.single \{[^}]*position: fixed; inset: 0;/);
+  assert.match(src, /\.single \.units \{[^}]*container-type: size;/);
+  assert.match(src, /min\(100cqw, 100cqh \* 1407 \/ 918\)/);
+  assert.match(src, /document\.documentElement\.style\.overflow = "hidden"/);
+  assert.match(src, /onUnmounted\(\(\) => [^\n]*documentElement\.style\.overflow = /, "the page scrolls again after");
+  assert.match(src, /<slot name="bar"/);
   assert.match(src, /<slot v-if="resolved === 'none'" name="phone">/);
   assert.match(src, /new DisplayBackup\(/);
 });

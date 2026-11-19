@@ -79,8 +79,11 @@ onUnmounted(() => cancelAnimationFrame(raf));
       <label><span>range</span><input type="range" min="1" max="200" v-model.number="mfd.range" /><output>{{ mfd.range }}</output></label>
     </form>
     <Cockpit :state="s" :mfd="mfd" :vspeeds="vspeeds" :afcs="out?.display" :fd="out?.fd" :layout="layout" :autopilot="autopilot"
-      @layout="(l) => (shown = l)" @aligned="onAligned" @key="press" @change="(p) => Object.assign(s, p)" @mfd="(p) => Object.assign(mfd, p)" />
-    <small><a href="/credits/">FAA NASR {{ cycle }}</a> · Not for navigation</small>
+      @layout="(l) => (shown = l)" @aligned="onAligned" @key="press" @change="(p) => Object.assign(s, p)" @mfd="(p) => Object.assign(mfd, p)">
+      <!-- With one display the cockpit covers the window, so the credit line goes in its bar. -->
+      <template v-if="shown === 'single'" #bar><small><a href="/credits/">FAA NASR {{ cycle }}</a> · Not for navigation</small></template>
+    </Cockpit>
+    <small v-if="shown !== 'single'"><a href="/credits/">FAA NASR {{ cycle }}</a> · Not for navigation</small>
     <template v-if="shown === 'both'">
       <Steam :state="s" />
       <Steam :state="s" :gauges="['vor', 'adf']" />
