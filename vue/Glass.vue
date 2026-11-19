@@ -4,7 +4,8 @@
 // (the PFD uses its position, map and airports for the inset map and NRST window); `vspeeds` sets the PFD's speed references.
 // `reversionary` puts a PFD in reversionary mode, with `mfd.engine` in its engine strip; for the MFD's place in
 // reversionary mode, the host shows a second `unit="pfd"` with it set.
-// The bezel's knobs work with the mouse; changes to FlightState values come back as a `change` event.
+// For both units laid out for the device, with DISPLAY BACKUP, see Cockpit.vue.
+// The bezel's knobs work with the mouse and touch; changes to FlightState values come back as a `change` event.
 // Autopilot: the MFD's GFC 700 keys come out as a `key` event for the host's `Afcs`; its `update` gives `afcs` (the
 // annunciations) and `fd` (the command bars) to pass back to the PFD. `afcsKeys` on the PFD in the MFD's place draws them there.
 // The preflight test (PFT) and its `pft` and `onPreflightPass` options are the host's `Afcs`'s; `afcs` carries its alert.

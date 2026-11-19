@@ -163,6 +163,9 @@ terrain, charts, Iridium or a database GCW does not carry.
 Each needs a pass on the trainer before it is built: the page menus above against the trainer's lists, the WPT
 airport sub-pages, the AUX pages, the SUSP key (built from the Pilot's Guide) and hold entry. Read the Pilot's Guide first.
 
+Not checked on a real tablet yet (built in a desktop browser): `Cockpit.vue`'s single layout on an iPad, taps, long
+presses, the knob arrows' touch hotspots, the joystick's pan arrows, and redraw cost with the autopilot flying.
+
 ## Phases
 
 1. **Controls that did nothing:** joystick pan mode, COM squelch, PFD DIRECT TO and PROC, long presses. Done.

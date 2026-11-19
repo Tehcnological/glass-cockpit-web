@@ -40,23 +40,38 @@ test("toyFly is exported from the package's main entry", () => {
   assert.equal(main.toyFly, afcs.toyFly);
 });
 
-test("KitDemo.vue owns an Afcs: takes Glass's key event, passes afcs and fd to the PFD, from the light export", () => {
+// A self-closing Vue tag, across its lines (its handlers' arrows hold ">").
+const tags = (src, name) => src.match(new RegExp(`<${name}\\b[\\s\\S]*?/>`, "g")) ?? [];
+
+test("KitDemo.vue owns an Afcs: takes Cockpit's key event, passes afcs and fd to it, from the light export", () => {
   const kit = readFileSync(new URL("../vue/KitDemo.vue", import.meta.url), "utf8");
   assert.match(kit, /from "glass-cockpit-web\/afcs"/);
   assert.doesNotMatch(kit, /^import(?! type)[^\n]*from "glass-cockpit-web";/m, "no runtime import of the display bundle");
   assert.match(kit, /new Afcs\(\{ maxSpeed: 140 \}\)/);
-  const tags = kit.match(/^\s*<Glass\b.*$/gm) ?? [];
-  const pfd = tags.filter((t) => !t.includes('unit="mfd"'));
-  const mfd = tags.filter((t) => t.includes('unit="mfd"'));
-  assert.equal(pfd.length, 1);
-  assert.equal(mfd.length, 1);
-  assert.match(pfd[0], /:afcs="/);
-  assert.match(pfd[0], /:fd="/);
-  assert.match(pfd[0], /@aligned="/);
-  assert.match(mfd[0], /@key="/);
+  const [c, ...more] = tags(kit, "Cockpit");
+  assert.equal(more.length, 0);
+  for (const attr of [':afcs="', ':fd="', '@aligned="', '@key="', ':layout="', ':autopilot="', '@layout="']) assert.ok(c.includes(attr), attr);
+  assert.match(kit, /props\.autopilot && \(raf = requestAnimationFrame/, "no autopilot loop without the autopilot");
   assert.match(kit, /cancelAnimationFrame/);
   assert.ok(kit.includes("(tick(), afcs.press(k), tick())"), "a key press feeds the sliders in first: Afcs.press acts on the last update");
   assert.ok(kit.includes('<output aria-live="off">'), "the readouts change 30 times a second while it flies: not live regions");
+});
+
+test("Cockpit.vue: PFD and MFD wired as KitDemo had them, the autopilot gating every unit, hidden units laid out", () => {
+  const src = readFileSync(new URL("../vue/Cockpit.vue", import.meta.url), "utf8");
+  const g = tags(src, "Glass");
+  const mfd = g.filter((t) => t.includes('unit="mfd"'));
+  const [pfd, rev] = g.filter((t) => !t.includes('unit="mfd"'));
+  assert.equal(g.length, 3);
+  assert.ok(pfd.includes('@aligned="') && !rev.includes("@aligned"), "only the PFD reports alignment");
+  for (const t of [pfd, rev]) for (const attr of [':afcs="autopilot ? afcs : null"', ':fd="autopilot ? fd : null"', '@key="']) assert.ok(t.includes(attr), attr);
+  assert.ok(pfd.includes(`:afcs-keys="autopilot && resolved === 'single'"`));
+  assert.ok(rev.includes(':afcs-keys="autopilot"') && rev.includes(':startup="0"') && /\sreversionary\s/.test(rev));
+  assert.ok(mfd[0].includes(':afcs-keys="autopilot"') && mfd[0].includes('@key="'));
+  assert.doesNotMatch(src, /v-show/, "a display:none unit cannot measure its text");
+  assert.match(src, /\.hidden \{ visibility: hidden; \}/);
+  assert.match(src, /<slot v-if="resolved === 'none'" name="phone">/);
+  assert.match(src, /new DisplayBackup\(/);
 });
 
 test("Glass.vue emits aligned when the PFD's AHRS has aligned", () => {
