@@ -69,7 +69,9 @@ test("Cockpit.vue: PFD and MFD wired as KitDemo had them, the autopilot gating e
   assert.ok(rev.includes(':afcs-keys="autopilot"') && rev.includes(':startup="0"') && /\sreversionary\s/.test(rev));
   assert.ok(mfd[0].includes(':afcs-keys="autopilot"') && mfd[0].includes('@key="'));
   assert.doesNotMatch(src, /v-show/, "a display:none unit cannot measure its text");
-  assert.match(src, /\.hidden \{ visibility: hidden; \}/);
+  // The bezel art sets visibility:visible inline on its shapes, which would show through a plain visibility: hidden.
+  assert.match(src, /\.hidden, \.hidden :deep\(\*\) \{ visibility: hidden !important; pointer-events: none !important; \}/);
+  assert.match(src, /\.cockpit \{[^}]*touch-action: manipulation/);
   assert.match(src, /<slot v-if="resolved === 'none'" name="phone">/);
   assert.match(src, /new DisplayBackup\(/);
 });

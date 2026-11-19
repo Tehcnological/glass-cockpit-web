@@ -37,8 +37,9 @@ export function scopeIds(markup: string, tag: string): string {
 
 export function buildDisplay(container: HTMLElement, pages: string[], label: string, { bezel }: DisplayOptions) {
   const tag = `glass-d${++displayCount}-`;
-  // A display is a control surface (clicks and double clicks work its keys and knobs), so its text does not select.
-  container.innerHTML = `<svg xmlns="${NS}" viewBox="${bezel ? "1 132 1407 918" : "0 0 1024 768"}" role="img" style="${NO_SELECT}"></svg>`;
+  // A display is a control surface (clicks and double clicks work its keys and knobs), so its text does not select, and
+  // quick taps on it do not zoom the page.
+  container.innerHTML = `<svg xmlns="${NS}" viewBox="${bezel ? "1 132 1407 918" : "0 0 1024 768"}" role="img" style="${NO_SELECT};touch-action:manipulation"></svg>`;
   const svg = container.querySelector("svg")!;
   svg.setAttribute("aria-label", label);
   if (bezel) {

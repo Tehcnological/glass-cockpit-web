@@ -262,14 +262,21 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
     }
   }, { passive: false });
 
-  // Arrows turn on press and keep turning while held; other spots act on click.
+  // Arrows turn on press and keep turning while held; other spots act on click, or for touch on lifting the finger
+  // over the spot it went down on (a touch held past about half a second gets no click).
   let timer = 0;
   let held = false;
+  let down: Spot | undefined;
+  let tapped = false; // a touch acted on pointerup: skip the click that may follow
   const stop = () => clearTimeout(timer);
   layer.addEventListener("pointerdown", (e) => {
     const s = spot(e);
     if (e.button !== 0) return;
     held = false; // a long press released off the bezel never got its click: don't swallow this gesture's
+    tapped = false;
+    down = s;
+    // A touch is captured by the spot it starts on; released, sliding off fires pointerout and stops an arrow.
+    if (e.pointerType !== "mouse") (e.target as Element).releasePointerCapture?.(e.pointerId);
     if (s?.shiftClick && !s.arrow) {
       stop();
       const control = s.shiftClick;
@@ -286,8 +293,15 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
   layer.addEventListener("pointerout", stop);
   layer.addEventListener("pointercancel", stop);
   window.addEventListener("pointerup", stop);
+  layer.addEventListener("pointerup", (e) => {
+    const s = spot(e);
+    if (e.pointerType === "mouse" || !s || s !== down || s.arrow || held || !s.click) return;
+    tapped = true;
+    fire(s, s.click);
+  });
   layer.addEventListener("click", (e) => {
     const s = spot(e);
+    if (tapped) return void (tapped = false);
     if (!s || s.arrow) return;
     if (held) return void (held = false); // the long press already acted
     const control = e.shiftKey ? s.shiftClick : s.click;

@@ -74,7 +74,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-  .cockpit { display: grid; gap: 8px; }
+  .cockpit { display: grid; gap: 8px; touch-action: manipulation; }
   .bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
   .switch { display: flex; margin-right: auto; }
   .switch button { font: 600 14px var(--mono, monospace); padding: 8px 18px; min-height: 44px; border: 1px solid #555; background: #111; color: #ccc; }
@@ -87,6 +87,7 @@ onMounted(async () => {
   /* One at a time: both places in one cell, as large as the screen's height allows. */
   .single .units { grid-template: 1fr / 1fr; }
   .single .place { grid-area: 1 / 1; width: min(100%, calc((100dvh - 72px) * 1407 / 918)); margin-inline: auto; }
-  .hidden { visibility: hidden; }
+  /* !important: the bezel art sets visibility:visible inline on its shapes, which a plain inherited hidden loses to. */
+  .hidden, .hidden :deep(*) { visibility: hidden !important; pointer-events: none !important; }
   .phone { padding: 24px 0; }
 </style>
