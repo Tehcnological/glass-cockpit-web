@@ -103,3 +103,10 @@ test("Cockpit.vue: unmounted while the displays load, it builds no DISPLAY BACKU
   const src = readFileSync(new URL("../vue/Cockpit.vue", import.meta.url), "utf8");
   assert.match(src, /if \(!backupEl\.value\) return;[^\n]*\s*new DisplayBackup\(backupEl\.value,/);
 });
+
+test("KitDemo.vue: over the whole window on a tablet, its bar has a way out (Exit to the site's home)", () => {
+  const kit = readFileSync(new URL("../vue/KitDemo.vue", import.meta.url), "utf8");
+  const bar = kit.match(/<template v-if="shown === 'single'" #bar>([\s\S]*?)<\/template>/)?.[1] ?? "";
+  assert.match(bar, /<a href="\/">Exit<\/a>/);
+  assert.match(bar, /Not for navigation/);
+});
