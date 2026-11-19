@@ -1,4 +1,4 @@
-import type { Input, Spot } from "./bezel.js";
+import type { Control, Input, Spot } from "./bezel.js";
 /** A press that moves less than this (CSS px) is a tap; past it a single knob's press is a slide and never a push. */
 export declare const MOVE_PX = 10;
 /** CSS px of slide per detent. */
@@ -32,7 +32,9 @@ type Ev = PointerEvent;
  * and `width` the viewBox's. The bezel's own handlers call `down` and `up` first and skip the press when they return
  * true, and skip a whole gesture while `swallowed()` (a tap outside an open popout closes it and does nothing else).
  */
-export declare function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offset: [number, number], width: number, spots: Spot[]): {
+export declare function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offset: [number, number], width: number, spots: Spot[], 
+/** Detents one detent of a slide turns, from the ms since the last: bezel.ts's wheelStep (HDG 5 when fast). */
+step?: (control: Control, gap: number) => number): {
     swallowed: () => boolean;
     /** A touch or pen press on a spot; true when it is a knob's, handled here. */
     down(e: Ev, spot: Spot | undefined): boolean;

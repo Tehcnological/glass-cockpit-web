@@ -58,7 +58,8 @@ test("a single knob: a tap pushes, a slide turns and never pushes, a long still 
   assert.deepEqual(inputs, ["HEADING_PRESS 1"]);
   inputs.length = 0;
   ev(hdg, "pointerdown", 100, 100);
-  ev(hdg, "pointermove", 100, 100 - MOVE_PX - 2 * SLIDE_PX); // up, clockwise
+  ev(hdg, "pointermove", 100, 100 - MOVE_PX - SLIDE_PX, 200); // up, clockwise, slowly
+  ev(hdg, "pointermove", 100, 100 - MOVE_PX - 2 * SLIDE_PX, 200);
   ev(hdg, "pointerup", 100, 100 - MOVE_PX - 2 * SLIDE_PX, 50);
   ev(hdg, "click");
   assert.deepEqual(inputs, ["HEADING 1", "HEADING 1"]); // 38 px from the start: two whole detents
@@ -231,7 +232,7 @@ test("a single knob shows its slide only while pressed: a long vertical line wit
   assert.equal(hints().length, 0, "dual knobs have none");
 });
 
-test("by touch or pen a knob's arrows belong to the knob: they open its popout or push it, never turn it", () => {
+test("by touch or pen a knob's arrows belong to the knob: they open its popout, never turn it, and push nothing", () => {
   const { inputs, layer, pop, ev, tap } = bezel();
   const arrow = (pred) => layer.children.find((c) => c.dataset.spot === String(SPOTS.findIndex(pred)));
   tap(arrow((s) => s.arrow === "drawn" && s.click === "ALT_OUTER" && s.value === 1));
@@ -244,7 +245,7 @@ test("by touch or pen a knob's arrows belong to the knob: they open its popout o
   assert.ok(pop(), "RANGE's printed + opened RANGE's popout");
   tap(layer);
   tap(arrow((s) => s.arrow === "drawn" && s.click === "HEADING" && s.value === -1));
-  assert.deepEqual(inputs, ["HEADING_PRESS 1"], "HDG's arrow is HDG: a tap pushes it");
+  assert.deepEqual(inputs, [], "HDG's arrow is bezel art: a tap there is no HDG SYNC");
   inputs.length = 0;
   const vol = arrow((s) => s.arrow === "drawn" && s.click === "COM_VOL" && s.value === 1);
   for (const type of ["pointerdown", "pointerup", "click"]) ev(vol, type, 0, 0, 10, "mouse");
@@ -325,4 +326,68 @@ test("a right-click on a popout key does nothing", () => {
     ev(key(label), "pointerup", 0, 0, 10, "mouse", { button: 2 });
   }
   assert.deepEqual(inputs, []);
+});
+
+test("a fast HDG slide turns 5° a detent, as a fast wheel spin does; a slow one 1°; volume always 1", () => {
+  const { inputs, knob, ev } = bezel();
+  const slide = (click, gap) => {
+    const k = knob(click);
+    ev(k, "pointerdown", 0, 0, 1000);
+    for (let i = 1; i <= 3; i++) ev(k, "pointermove", 0, -(MOVE_PX + i * SLIDE_PX), gap);
+    ev(k, "pointerup", 0, -(MOVE_PX + 3 * SLIDE_PX), 10);
+  };
+  slide("HEADING_PRESS", 200);
+  assert.deepEqual(inputs, ["HEADING 1", "HEADING 1", "HEADING 1"]);
+  inputs.length = 0;
+  slide("HEADING_PRESS", 30);
+  assert.deepEqual(inputs, ["HEADING 1", "HEADING 5", "HEADING 5"], "the first detent is always 1");
+  inputs.length = 0;
+  slide("COM_VOL_TOGGLE", 30);
+  assert.deepEqual(inputs, ["COM_VOL 1", "COM_VOL 1", "COM_VOL 1"]);
+});
+
+test("by touch a single knob's arrow is bezel art: a tap on it does nothing, a slide from it turns the knob", () => {
+  const { inputs, layer, ev, tap } = bezel();
+  const arrow = layer.children.find((c) => c.dataset.spot === String(SPOTS.findIndex((s) => s.arrow === "drawn" && s.click === "HEADING" && s.value === 1)));
+  tap(arrow);
+  assert.deepEqual(inputs, [], "no HDG SYNC from the arrow");
+  ev(arrow, "pointerdown", 0, 0, 1000);
+  ev(arrow, "pointermove", 0, -(MOVE_PX + SLIDE_PX), 200);
+  ev(arrow, "pointerup", 0, -(MOVE_PX + SLIDE_PX), 10);
+  assert.deepEqual(inputs, ["HEADING 1"]);
+});
+
+test("a second finger on another knob does not take the first finger's slide", () => {
+  const { inputs, knob, ev } = bezel();
+  const hdg = knob("HEADING_PRESS");
+  ev(hdg, "pointerdown", 0, 0, 1000);
+  ev(knob("COM_VOL_TOGGLE"), "pointerdown", 500, 0, 10, "touch", { pointerId: 2, isPrimary: false });
+  ev(hdg, "pointermove", 0, -(MOVE_PX + SLIDE_PX), 200);
+  ev(hdg, "pointerup", 0, -(MOVE_PX + SLIDE_PX), 10);
+  assert.deepEqual(inputs, ["HEADING 1"]);
+});
+
+test("a second finger landing does not undo the swallowing of the first finger's dismissal", () => {
+  const { inputs, knob, layer, pop, ev, tap } = bezel();
+  tap(knob("FMS_CRSR"));
+  const ent = knob("ENT");
+  ev(ent, "pointerdown", 0, 0, GUARD_MS); // closes the popout, swallowed
+  ev(layer, "pointerdown", 0, 0, 10, "touch", { pointerId: 2, isPrimary: false });
+  ev(ent, "pointerup", 0, 0, 10);
+  ev(ent, "click");
+  assert.equal(pop(), undefined);
+  assert.deepEqual(inputs, []);
+});
+
+test("popout keys are sized from the bezel's real scale, and a popout never leaves the art on a small display", () => {
+  const { svg, knob, pop, tap } = bezel();
+  svg.getScreenCTM = () => ({ a: 0.5 }); // the art letterboxed in a wider box: half size, not 1012/1407
+  tap(knob("ALT_PRESS"));
+  const [, , k] = pop().children;
+  assert.ok(+k.attrs.width * 0.5 >= 44);
+  tap(knob("ENT"));
+  svg.getScreenCTM = () => ({ a: 0.15 }); // tiny
+  tap(knob("JOYSTICK_PRESS"));
+  const bg = pop().children[1];
+  assert.ok(+bg.attrs.y >= 132 && +bg.attrs.y + +bg.attrs.height <= 132 + 918, "inside vertically");
 });

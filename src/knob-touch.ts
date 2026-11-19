@@ -5,8 +5,9 @@
 // included, closes it and does nothing else; it also closes after IDLE_MS without input. Turn and direction keys act on
 // press and repeat while held (CRS 5° a repeat, as a fast wheel spin); PUSH and PAN act on lift, over the same key.
 // While a single knob is pressed it shows its slide: a long vertical line with a dot in the middle (up clockwise).
-// A knob's arrows (and RANGE's printed joystick arrows, - and +) are its own here: a press on one is a press on the
-// knob, so nothing small turns by touch. They stay drawn, as bezel art; bezelInput lights them on hover for the mouse only.
+// A knob's arrows (and RANGE's printed joystick arrows, - and +) are its own here: a slide from one is the knob's and a
+// tap opens a dual knob's popout, but a tap on a single knob's arrow pushes nothing (HDG SYNC would lose the bug). A
+// fast slide turns HDG 5° a detent, as a fast wheel spin does. They stay drawn, as bezel art; bezelInput lights them on hover for the mouse only.
 import type { Control, Input, Spot } from "./bezel.js";
 
 /** A press that moves less than this (CSS px) is a tap; past it a single knob's press is a slide and never a push. */
@@ -69,7 +70,11 @@ let dismissal: { down?: Event; on: boolean } = { on: false };
  * and `width` the viewBox's. The bezel's own handlers call `down` and `up` first and skip the press when they return
  * true, and skip a whole gesture while `swallowed()` (a tap outside an open popout closes it and does nothing else).
  */
-export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offset: [number, number], width: number, spots: Spot[]) {
+export function knobTouch(
+  svg: SVGSVGElement, onInput: (i: Input) => void, offset: [number, number], width: number, spots: Spot[],
+  /** Detents one detent of a slide turns, from the ms since the last: bezel.ts's wheelStep (HDG 5 when fast). */
+  step: (control: Control, gap: number) => number = () => 1,
+) {
   const [DX, DY] = offset;
   // The knob an arrow belongs to: the nearest knob to it.
   const knobs = spots.filter((s) => !s.arrow && (slides(s) || popKeys(s)));
@@ -89,7 +94,8 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
   };
   const hideHint = () => (hint?.remove(), (hint = undefined));
   // `id`: the pointer that pressed; `moved`: it has been MOVE_PX from where it went down, so it is not a tap.
-  let press: { s: Spot; id: number; x: number; y: number; t: number; axis?: "x" | "y"; travel: number; moved: boolean } | undefined;
+  // `fromArrow`: it began on one of the knob's arrows, bezel art by touch, so a tap there pushes nothing.
+  let press: { s: Spot; id: number; x: number; y: number; t: number; axis?: "x" | "y"; travel: number; moved: boolean; fromArrow: boolean; last: number } | undefined;
   let pop: { s: Spot; g: SVGGElement; at: number } | undefined;
   let repeat = 0;
   let idle = 0;
@@ -105,10 +111,12 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
 
   function open(s: Spot, at: number) {
     const layout = popKeys(s)!;
-    const scale = svg.getBoundingClientRect().width / width || 1;
-    const K = Math.max(48, KEY_PX / scale);
-    const gap = K * 0.125, pad = K * 0.15;
+    // The art's real scale (getScreenCTM), not the box's: a box wider than the art letterboxes it.
+    const scale = svg.getScreenCTM?.()?.a || svg.getBoundingClientRect().width / width || 1;
     const rows = Math.ceil(layout.keys.reduce((n, k) => n + (k.span ?? 1), 0) / layout.cols);
+    // Finger-sized, but never taller than the art (918 high, 4 margin each side): H = K * (1.125 rows + 0.175).
+    const K = Math.min(Math.max(48, KEY_PX / scale), 910 / (1.125 * rows + 0.175));
+    const gap = K * 0.125, pad = K * 0.15;
     const W = layout.cols * K + (layout.cols - 1) * gap + 2 * pad;
     const H = rows * K + (rows - 1) * gap + 2 * pad;
     const [x1, y1, x2, y2] = s.box;
@@ -190,7 +198,9 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
     while (Math.abs(along - press.travel) >= SLIDE_PX) {
       const dir = along > press.travel ? 1 : -1;
       press.travel += dir * SLIDE_PX;
-      onInput({ control: press.s.wheel!, value: dir });
+      const n = step(press.s.wheel!, e.timeStamp - press.last);
+      press.last = e.timeStamp;
+      onInput({ control: press.s.wheel!, value: dir * n });
     }
   };
   // A press lifted off the bezel, or taken over by the browser, ends here (after the bezel's own pointerup).
@@ -204,9 +214,10 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
     swallowed: () => dismissal.on,
     /** A touch or pen press on a spot; true when it is a knob's, handled here. */
     down(e: Ev, spot: Spot | undefined): boolean {
+      if (press && press.id !== e.pointerId) return true; // another finger already holds a knob: this one waits
       const s = spot?.arrow ? owner(spot) : spot;
       if (!s || !(slides(s) || popKeys(s))) return false;
-      press = { s, id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, travel: 0, moved: false };
+      press = { s, id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, travel: 0, moved: false, fromArrow: !!spot?.arrow, last: -Infinity };
       hideHint();
       if (slides(s)) showHint(s);
       return true;
@@ -219,7 +230,7 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
       hideHint();
       const still = !p.moved && Math.hypot(e.clientX - p.x, e.clientY - p.y) < MOVE_PX && e.timeStamp - p.t < TAP_MS;
       if (!still) return true;
-      if (slides(p.s)) onInput({ control: p.s.click!, value: 1 });
+      if (slides(p.s)) { if (!p.fromArrow) onInput({ control: p.s.click!, value: 1 }); }
       else open(p.s, e.timeStamp);
       return true;
     },

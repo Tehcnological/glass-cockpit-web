@@ -284,9 +284,12 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
   // pointercancel). Chrome reads touch-action on the svg root only, not on its children.
   svg.style.touchAction = "none";
   // Knobs by touch or pen: slides, taps and popouts (knob-touch.ts).
-  const touch = knobTouch(svg, onInput, [DX, DY], 1407, spots);
+  const touch = knobTouch(svg, onInput, [DX, DY], 1407, spots, wheelStep);
   // Arrows light on hover only for the mouse; by touch or pen they are bezel art, their presses the knob's (knob-touch.ts).
-  const mode = (e: PointerEvent) => layer.setAttribute("data-input", e.pointerType === "mouse" ? "mouse" : "touch");
+  const mode = (e: PointerEvent) => {
+    const m = e.pointerType === "mouse" ? "mouse" : "touch";
+    if (layer.getAttribute("data-input") !== m) layer.setAttribute("data-input", m); // moves come dozens a second
+  };
   layer.setAttribute("data-input", typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? "touch" : "mouse");
   svg.addEventListener("pointerdown", mode);
   svg.addEventListener("pointermove", mode);

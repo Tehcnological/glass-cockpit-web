@@ -52,7 +52,9 @@ let dismissal = { on: false };
  * and `width` the viewBox's. The bezel's own handlers call `down` and `up` first and skip the press when they return
  * true, and skip a whole gesture while `swallowed()` (a tap outside an open popout closes it and does nothing else).
  */
-export function knobTouch(svg, onInput, offset, width, spots) {
+export function knobTouch(svg, onInput, offset, width, spots, 
+/** Detents one detent of a slide turns, from the ms since the last: bezel.ts's wheelStep (HDG 5 when fast). */
+step = () => 1) {
     const [DX, DY] = offset;
     // The knob an arrow belongs to: the nearest knob to it.
     const knobs = spots.filter((s) => !s.arrow && (slides(s) || popKeys(s)));
@@ -72,6 +74,7 @@ export function knobTouch(svg, onInput, offset, width, spots) {
     };
     const hideHint = () => (hint?.remove(), (hint = undefined));
     // `id`: the pointer that pressed; `moved`: it has been MOVE_PX from where it went down, so it is not a tap.
+    // `fromArrow`: it began on one of the knob's arrows, bezel art by touch, so a tap there pushes nothing.
     let press;
     let pop;
     let repeat = 0;
@@ -87,10 +90,12 @@ export function knobTouch(svg, onInput, offset, width, spots) {
     const wake = () => (clearTimeout(idle), (idle = window.setTimeout(close, IDLE_MS)));
     function open(s, at) {
         const layout = popKeys(s);
-        const scale = svg.getBoundingClientRect().width / width || 1;
-        const K = Math.max(48, KEY_PX / scale);
-        const gap = K * 0.125, pad = K * 0.15;
+        // The art's real scale (getScreenCTM), not the box's: a box wider than the art letterboxes it.
+        const scale = svg.getScreenCTM?.()?.a || svg.getBoundingClientRect().width / width || 1;
         const rows = Math.ceil(layout.keys.reduce((n, k) => n + (k.span ?? 1), 0) / layout.cols);
+        // Finger-sized, but never taller than the art (918 high, 4 margin each side): H = K * (1.125 rows + 0.175).
+        const K = Math.min(Math.max(48, KEY_PX / scale), 910 / (1.125 * rows + 0.175));
+        const gap = K * 0.125, pad = K * 0.15;
         const W = layout.cols * K + (layout.cols - 1) * gap + 2 * pad;
         const H = rows * K + (rows - 1) * gap + 2 * pad;
         const [x1, y1, x2, y2] = s.box;
@@ -181,7 +186,9 @@ export function knobTouch(svg, onInput, offset, width, spots) {
         while (Math.abs(along - press.travel) >= SLIDE_PX) {
             const dir = along > press.travel ? 1 : -1;
             press.travel += dir * SLIDE_PX;
-            onInput({ control: press.s.wheel, value: dir });
+            const n = step(press.s.wheel, e.timeStamp - press.last);
+            press.last = e.timeStamp;
+            onInput({ control: press.s.wheel, value: dir * n });
         }
     };
     // A press lifted off the bezel, or taken over by the browser, ends here (after the bezel's own pointerup).
@@ -194,10 +201,12 @@ export function knobTouch(svg, onInput, offset, width, spots) {
         swallowed: () => dismissal.on,
         /** A touch or pen press on a spot; true when it is a knob's, handled here. */
         down(e, spot) {
+            if (press && press.id !== e.pointerId)
+                return true; // another finger already holds a knob: this one waits
             const s = spot?.arrow ? owner(spot) : spot;
             if (!s || !(slides(s) || popKeys(s)))
                 return false;
-            press = { s, id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, travel: 0, moved: false };
+            press = { s, id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, travel: 0, moved: false, fromArrow: !!spot?.arrow, last: -Infinity };
             hideHint();
             if (slides(s))
                 showHint(s);
@@ -213,8 +222,10 @@ export function knobTouch(svg, onInput, offset, width, spots) {
             const still = !p.moved && Math.hypot(e.clientX - p.x, e.clientY - p.y) < MOVE_PX && e.timeStamp - p.t < TAP_MS;
             if (!still)
                 return true;
-            if (slides(p.s))
-                onInput({ control: p.s.click, value: 1 });
+            if (slides(p.s)) {
+                if (!p.fromArrow)
+                    onInput({ control: p.s.click, value: 1 });
+            }
             else
                 open(p.s, e.timeStamp);
             return true;
