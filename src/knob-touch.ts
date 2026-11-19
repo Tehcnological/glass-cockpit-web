@@ -149,16 +149,22 @@ export function knobTouch(
   }
 
   function keyEvents(r: SVGRectElement, k: Key) {
-    let downHere = false;
+    // The pointer that pressed this key, if one holds it: other fingers neither act on it nor end it.
+    let downId: number | undefined;
     const lit = (on: boolean) => r.setAttribute("fill", on ? "rgba(255,255,255,.35)" : "rgba(0,0,0,.45)");
-    const release = () => (stopRepeat(), (downHere = false), lit(false));
+    const release = (e: Ev) => {
+      if (e.pointerId !== downId) return;
+      stopRepeat();
+      downId = undefined;
+      lit(false);
+    };
     r.addEventListener("pointerdown", (e: Ev) => {
-      downHere = false;
+      if (downId !== undefined) return;
       if (e.button !== 0 || !pop || e.timeStamp - pop.at < GUARD_MS) return;
       lit(true);
       const t = e.target as Element;
       if (t.hasPointerCapture?.(e.pointerId)) t.releasePointerCapture(e.pointerId);
-      downHere = true;
+      downId = e.pointerId;
       wake();
       if (!k.hold) return;
       stopRepeat();
@@ -168,9 +174,9 @@ export function knobTouch(
       const again = (wait: number) => (repeat = window.setTimeout(() => (send(step), wake(), again(REPEAT_EVERY)), wait));
       again(REPEAT_DELAY);
     });
-    r.addEventListener("pointerup", () => {
-      if (downHere && !k.hold) send(k);
-      release();
+    r.addEventListener("pointerup", (e: Ev) => {
+      if (e.pointerId === downId && !k.hold) send(k);
+      release(e);
     });
     r.addEventListener("pointerout", release);
     r.addEventListener("pointercancel", release);

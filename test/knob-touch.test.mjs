@@ -391,3 +391,20 @@ test("popout keys are sized from the bezel's real scale, and a popout never leav
   const bg = pop().children[1];
   assert.ok(+bg.attrs.y >= 132 && +bg.attrs.y + +bg.attrs.height <= 132 + 918, "inside vertically");
 });
+
+test("a popout key answers only the finger that pressed it", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { inputs, knob, key, ev, tap } = bezel();
+  tap(knob("FMS_CRSR"));
+  ev(key("CRSR"), "pointerdown", 0, 0, GUARD_MS);
+  ev(key("CRSR"), "pointerup", 0, 0, 10, "touch", { pointerId: 2 }); // another finger lifts over it
+  assert.deepEqual(inputs, []);
+  ev(key("CRSR"), "pointerup", 0, 0, 10);
+  assert.deepEqual(inputs, ["FMS_CRSR 1"]);
+  inputs.length = 0;
+  ev(key("▶"), "pointerdown", 0, 0, 10);
+  ev(key("▶"), "pointerout", 0, 0, 0, "touch", { pointerId: 2 }); // another finger passes over it
+  t.mock.timers.tick(350);
+  ev(key("▶"), "pointerup", 0, 0, 0);
+  assert.deepEqual(inputs, ["FMS_INNER 1", "FMS_INNER 1"], "the hold kept repeating");
+});
