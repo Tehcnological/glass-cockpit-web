@@ -45,7 +45,8 @@ onMounted(async () => {
   if (l === "none") return;
   const { DisplayBackup } = await import("glass-cockpit-web");
   await nextTick();
-  new DisplayBackup(backupEl.value!, { onChange: (on) => (backup.value = on) });
+  if (!backupEl.value) return; // unmounted while the displays loaded
+  new DisplayBackup(backupEl.value, { onChange: (on) => (backup.value = on) });
 });
 </script>
 

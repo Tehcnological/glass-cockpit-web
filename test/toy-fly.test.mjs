@@ -98,3 +98,8 @@ test("package.json exports glass-cockpit-web/afcs, with no runtime import of the
   assert.deepEqual(imports.sort(), ["page.js", "radio.js"]);
   for (const f of imports) assert.doesNotMatch(readFileSync(new URL(`../dist/${f}`, import.meta.url), "utf8"), /^import /m, `${f} imports nothing`);
 });
+
+test("Cockpit.vue: unmounted while the displays load, it builds no DISPLAY BACKUP on nothing", () => {
+  const src = readFileSync(new URL("../vue/Cockpit.vue", import.meta.url), "utf8");
+  assert.match(src, /if \(!backupEl\.value\) return;[^\n]*\s*new DisplayBackup\(backupEl\.value,/);
+});

@@ -268,6 +268,7 @@ Keep the output small for the client: `near` once at build time, and ship only i
 - `Cockpit.vue`: both units, the red DISPLAY BACKUP button and a layout for the device. Same props and events as `Glass.vue` (`state`, `mfd`, `vspeeds`, `afcs`, `fd`, `startup`; `change`, `mfd`, `key`, `aligned`), plus:
   - `layout`: `auto` (default), `both`, `single` or `none`. `auto` picks `none` on a phone (primary pointer coarse and the window's short side under 600 px), `single` on another touch screen, `both` otherwise, once on mount; the `layout` event reports which. `both` is the PFD over the MFD. `single` is one at a time with a PFD | MFD switcher, over the whole window with the unit as large as fits (no scrolling; the page under it does not scroll while it is up); the hidden one keeps running, and the PFD draws the GFC 700 keys. The `bar` slot fills the middle of the bar (KitDemo puts its credit and "Not for navigation" line there). `none` shows the `phone` slot, by default "Open this on a tablet or computer."
   - `autopilot` (default `true`): `false` is a G1000 without the GFC 700, with no AFCS keys on either bezel and no annunciations.
+  - `layout` and `autopilot` are read once, on mount: to change either, re-key the component.
   - DISPLAY BACKUP puts the PFD in reversionary mode and lays a reversionary PFD over the MFD, which keeps its pages.
 
   To change it: pass `layout` to force one (`both` on a tablet, say), fill the `phone` slot with your own message, or lay out `Glass.vue` units yourself with `DisplayBackup` from the main entry.

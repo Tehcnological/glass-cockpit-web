@@ -217,7 +217,11 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
   layer.setAttribute("cursor", "pointer");
   // Touch: a press never scrolls, zooms, selects or brings up a callout; a held key stays a long press.
   layer.setAttribute("style", "touch-action:none;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none");
-  layer.addEventListener("contextmenu", (e) => e.preventDefault());
+  // Touch and pen only: a mouse's right-click keeps the browser's menu (a plain MouseEvent has no pointerType).
+  layer.addEventListener("contextmenu", (e) => {
+    const type = (e as PointerEvent).pointerType;
+    if (type && type !== "mouse") e.preventDefault();
+  });
   const boxes = touchBoxes(spots, typeof matchMedia === "function" && matchMedia("(any-pointer: coarse)").matches ? TOUCH_PAD : 0);
   // A slight glow shows where an arrow is, and its drawn arrow brightens.
   layer.appendChild(document.createElementNS(NS, "style")).textContent =
@@ -276,9 +280,10 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
   const stop = () => clearTimeout(timer);
   layer.addEventListener("pointerdown", (e) => {
     const s = spot(e);
+    down = undefined; // a press that is not the primary button's, or began off the bezel, lifts on no key
+    tapped = false;
     if (e.button !== 0) return;
     held = false; // a long press released off the bezel never got its click: don't swallow this gesture's
-    tapped = false;
     down = s;
     // A touch is captured by the spot it starts on; released, sliding off fires pointerout and stops an arrow.
     const t = e.target as Element;
@@ -303,7 +308,9 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
     const s = spot(e);
     if (e.pointerType === "mouse") return;
     tapped = true; // a touch's late click, if one comes, is never a press: this lift decided it
-    if (!s || s !== down || s.arrow || held || !s.click) return;
+    const from = down;
+    down = undefined;
+    if (e.button !== 0 || !s || s !== from || s.arrow || held || !s.click) return;
     fire(s, s.click);
   });
   layer.addEventListener("click", (e) => {

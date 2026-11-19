@@ -111,3 +111,25 @@ test("a touch slid from one key to another does nothing, and its late click on t
   layer.fire("click", { button: 0, pointerId: 1, target: layer, shiftKey: false }); // a mouse click between spots
   assert.deepEqual(inputs, [], "an element with no data-spot is no spot (Number(null) is 0, NAV's volume knob)");
 });
+
+test("a pen's barrel button, or a press begun off the bezel, fires no key on lift", () => {
+  const { inputs, rect, press } = bezel();
+  const ent = rect("ENT");
+  press(ent, "pointerdown", { pointerType: "pen" });
+  press(ent, "pointerup", { pointerType: "pen" });
+  assert.deepEqual(inputs, ["ENT"]);
+  press(ent, "pointerdown", { pointerType: "pen", button: 2 });
+  press(ent, "pointerup", { pointerType: "pen", button: 2 });
+  assert.deepEqual(inputs, ["ENT"], "barrel button");
+  press(ent, "pointerup", { pointerType: "pen" }); // went down off the layer
+  assert.deepEqual(inputs, ["ENT"], "no press on the bezel");
+});
+
+test("right-click keeps the browser's menu for the mouse; touch and pen get none", () => {
+  const { layer } = bezel();
+  const menu = (pointerType) => { let prevented = false; layer.fire("contextmenu", { pointerType, preventDefault: () => (prevented = true) }); return prevented; };
+  assert.equal(menu("mouse"), false);
+  assert.equal(menu(undefined), false, "a plain MouseEvent (no pointerType) is the mouse");
+  assert.equal(menu("touch"), true);
+  assert.equal(menu("pen"), true);
+});
