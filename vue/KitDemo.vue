@@ -80,8 +80,8 @@ onUnmounted(() => cancelAnimationFrame(raf));
     </form>
     <Cockpit :state="s" :mfd="mfd" :vspeeds="vspeeds" :afcs="out?.display" :fd="out?.fd" :layout="layout" :autopilot="autopilot"
       @layout="(l) => (shown = l)" @aligned="onAligned" @key="press" @change="(p) => Object.assign(s, p)" @mfd="(p) => Object.assign(mfd, p)">
-      <!-- With one display the cockpit covers the window, so the credit line goes in its bar. -->
-      <template v-if="shown === 'single'" #bar><small><a href="/credits/">FAA NASR {{ cycle }}</a> · Not for navigation</small></template>
+      <!-- With one display the cockpit covers the window and the site's nav, so its bar has the way out and the credit line. -->
+      <template v-if="shown === 'single'" #bar><small><a href="/">Exit</a> · <a href="/credits/">FAA NASR {{ cycle }}</a> · Not for navigation</small></template>
     </Cockpit>
     <small v-if="shown !== 'single'"><a href="/credits/">FAA NASR {{ cycle }}</a> · Not for navigation</small>
     <template v-if="shown === 'both'">

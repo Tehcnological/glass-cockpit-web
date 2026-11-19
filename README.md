@@ -277,7 +277,7 @@ Keep the output small for the client: `near` once at build time, and ship only i
 
   To change it: pass `layout` to force one (`both` on a tablet, say), fill the `phone` slot with your own message, or lay out `Glass.vue` units yourself with `DisplayBackup` from the main entry.
 - `Steam.vue`: steam gauges. Needs the [OpenAttitude](https://github.com/OpenAttitude/library) `@openattitude/*` packages it imports (LGPL-3.0-or-later), which this package does not install.
-- `KitDemo.vue`: every instrument on one state, with sliders, and a working GFC 700 (`autopilot: false` drops it), on `Cockpit.vue` (`layout` passes through; the sliders and steam gauges show only with both displays): its keys on the MFD engage once the PFD's AHRS has aligned (45 s) and the preflight test has passed, and with the autopilot engaged the sliders fly toward the command bars (`toyFly`). It reads the page's CSS variables and links to the site's credits page.
+- `KitDemo.vue`: every instrument on one state, with sliders, and a working GFC 700 (`autopilot: false` drops it), on `Cockpit.vue` (`layout` passes through; the sliders and steam gauges show only with both displays; over the whole window its bar has Exit, to the site's home `/`, and the credit line): its keys on the MFD engage once the PFD's AHRS has aligned (45 s) and the preflight test has passed, and with the autopilot engaged the sliders fly toward the command bars (`toyFly`). It reads the page's CSS variables and links to the site's credits page.
 
 ## Demo
 
