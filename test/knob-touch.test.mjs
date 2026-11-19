@@ -408,3 +408,18 @@ test("a popout key answers only the finger that pressed it", (t) => {
   ev(key("▶"), "pointerup", 0, 0, 0);
   assert.deepEqual(inputs, ["FMS_INNER 1", "FMS_INNER 1"], "the hold kept repeating");
 });
+
+test("each held popout key keeps its own repeat; closing the popout stops them all", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { inputs, knob, key, ev, tap } = bezel();
+  tap(knob("ALT_PRESS"));
+  ev(key("▶"), "pointerdown", 0, 0, GUARD_MS); // finger 1 holds inner +
+  ev(key("◀◀"), "pointerdown", 0, 0, 10, "touch", { pointerId: 2 }); // finger 2 taps outer -
+  ev(key("◀◀"), "pointerup", 0, 0, 10, "touch", { pointerId: 2 });
+  t.mock.timers.tick(350);
+  assert.deepEqual(inputs, ["ALT_INNER 1", "ALT_OUTER -1", "ALT_INNER 1"], "finger 1's key still repeats");
+  inputs.length = 0;
+  tap(knob("ENT")); // a tap outside closes the popout
+  t.mock.timers.tick(1000);
+  assert.deepEqual(inputs, [], "and its repeat stopped with it");
+});

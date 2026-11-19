@@ -97,12 +97,13 @@ export function knobTouch(
   // `fromArrow`: it began on one of the knob's arrows, bezel art by touch, so a tap there pushes nothing.
   let press: { s: Spot; id: number; x: number; y: number; t: number; axis?: "x" | "y"; travel: number; moved: boolean; fromArrow: boolean; last: number } | undefined;
   let pop: { s: Spot; g: SVGGElement; at: number } | undefined;
-  let repeat = 0;
+  // Each held key's repeat timer; closing the popout clears them all.
+  const repeats = new Set<number>();
   let idle = 0;
   const send = (k: { input: Input; also?: Input }) => (onInput(k.input), k.also && onInput(k.also));
-  const stopRepeat = () => clearTimeout(repeat);
+  const stopRepeats = () => (repeats.forEach((t) => clearTimeout(t)), repeats.clear());
   const close = () => {
-    stopRepeat();
+    stopRepeats();
     clearTimeout(idle);
     pop?.g.remove();
     pop = undefined;
@@ -151,6 +152,8 @@ export function knobTouch(
   function keyEvents(r: SVGRectElement, k: Key) {
     // The pointer that pressed this key, if one holds it: other fingers neither act on it nor end it.
     let downId: number | undefined;
+    let repeat = 0;
+    const stopRepeat = () => (clearTimeout(repeat), repeats.delete(repeat));
     const lit = (on: boolean) => r.setAttribute("fill", on ? "rgba(255,255,255,.35)" : "rgba(0,0,0,.45)");
     const release = (e: Ev) => {
       if (e.pointerId !== downId) return;
@@ -171,7 +174,11 @@ export function knobTouch(
       send(k);
       const fast = FAST[k.input.control];
       const step = fast ? { ...k, input: { ...k.input, value: k.input.value * fast } } : k;
-      const again = (wait: number) => (repeat = window.setTimeout(() => (send(step), wake(), again(REPEAT_EVERY)), wait));
+      const again = (wait: number) => {
+        stopRepeat();
+        repeat = window.setTimeout(() => (send(step), wake(), again(REPEAT_EVERY)), wait);
+        repeats.add(repeat);
+      };
       again(REPEAT_DELAY);
     });
     r.addEventListener("pointerup", (e: Ev) => {
