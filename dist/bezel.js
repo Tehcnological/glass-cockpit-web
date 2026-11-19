@@ -2,7 +2,8 @@
 // GPL-2.0-or-later): the wheel turns a knob (with shift, the outer ring of a dual knob), a click pushes it or a
 // button (with shift, a long press), and the twelve keys under the screen are softkeys 1 to 12.
 // v13 trainer: a click on an arrow beside a knob turns it, and holding it keeps turning (FG1000 has the wheel only).
-// Touch (this package's, not FG1000's): taps and holds act as clicks and holds; arrows get bigger hotspots (TOUCH_PAD).
+// Touch (this package's, not FG1000's): taps and holds act as clicks and holds; arrows get bigger hotspots (TOUCH_PAD)
+// wherever any input is touch, so a touch-screen laptop's mouse sees a slightly bigger hover glow on them.
 // Knob and button behavior: Nasal/MFDPages/Surround/SurroundController.nas.
 import { clamp, mod } from "./page.js";
 // v13 trainer: arrows beside each knob turn it a detent per click, the left ones counterclockwise; on a dual knob the
@@ -178,7 +179,7 @@ export function bezelInput(svg, onInput, afcs = false) {
     // Touch: a press never scrolls, zooms, selects or brings up a callout; a held key stays a long press.
     layer.setAttribute("style", "touch-action:none;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none");
     layer.addEventListener("contextmenu", (e) => e.preventDefault());
-    const boxes = touchBoxes(spots, typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? TOUCH_PAD : 0);
+    const boxes = touchBoxes(spots, typeof matchMedia === "function" && matchMedia("(any-pointer: coarse)").matches ? TOUCH_PAD : 0);
     // A slight glow shows where an arrow is, and its drawn arrow brightens.
     layer.appendChild(document.createElementNS(NS, "style")).textContent =
         ".gcw-arrow:hover{fill:rgba(255,255,255,.14)}.gcw-arrow:hover+path{fill-opacity:1}";

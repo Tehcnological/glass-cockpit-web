@@ -78,3 +78,9 @@ test("a display never double-tap zooms, wherever the browser honours touch-actio
   const src = readFileSync(new URL("../src/display.ts", import.meta.url), "utf8");
   assert.match(src, /role="img" style="\$\{NO_SELECT\};touch-action:manipulation"/);
 });
+
+test("arrows grow wherever any input is touch, not only when touch is the primary pointer", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../src/bezel.ts", import.meta.url), "utf8");
+  assert.match(src, /matchMedia\("\(any-pointer: coarse\)"\)\.matches \? TOUCH_PAD : 0/);
+});
