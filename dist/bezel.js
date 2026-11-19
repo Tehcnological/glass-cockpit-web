@@ -242,8 +242,9 @@ export function bezelInput(svg, onInput, afcs = false) {
         tapped = false;
         down = s;
         // A touch is captured by the spot it starts on; released, sliding off fires pointerout and stops an arrow.
-        if (e.pointerType !== "mouse")
-            e.target.releasePointerCapture?.(e.pointerId);
+        const t = e.target;
+        if (t.hasPointerCapture?.(e.pointerId))
+            t.releasePointerCapture(e.pointerId); // a pen or mouse is not captured: releasing it throws
         if (s?.shiftClick && !s.arrow) {
             stop();
             const control = s.shiftClick;

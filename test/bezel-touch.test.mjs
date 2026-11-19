@@ -13,7 +13,10 @@ function el() {
     getAttribute(k) { return k === "data-spot" ? this.dataset.spot ?? null : this.attrs[k] ?? null; },
     addEventListener(t, f) { (on[t] ??= []).push(f); },
     fire(t, e) { for (const f of on[t] ?? []) f(e); },
-    releasePointerCapture() { this.released = true; },
+    // As Chrome: only a touch is captured on press; releasing a pointer that is not captured throws.
+    captured: false,
+    hasPointerCapture() { return this.captured; },
+    releasePointerCapture() { if (!this.captured) throw new Error("NotFoundError"); this.captured = false; this.released = true; },
   };
 }
 globalThis.document = { createElementNS: () => el() };
@@ -25,7 +28,10 @@ function bezel() {
   bezelInput(svg, (i) => inputs.push(i.control));
   const layer = svg.children[0];
   const rect = (click) => layer.children.find((c) => c.dataset.spot === String(SPOTS.findIndex((s) => s.click === click && !s.arrow)));
-  const press = (target, type, extra = {}) => layer.fire(type, { button: 0, pointerId: 1, target, shiftKey: false, ...extra });
+  const press = (target, type, extra = {}) => {
+    if (type === "pointerdown" && extra.pointerType === "touch") target.captured = true;
+    layer.fire(type, { button: 0, pointerId: 1, target, shiftKey: false, ...extra });
+  };
   return { inputs, layer, rect, press };
 }
 
@@ -83,4 +89,15 @@ test("arrows grow wherever any input is touch, not only when touch is the primar
   const { readFileSync } = await import("node:fs");
   const src = readFileSync(new URL("../src/bezel.ts", import.meta.url), "utf8");
   assert.match(src, /matchMedia\("\(any-pointer: coarse\)"\)\.matches \? TOUCH_PAD : 0/);
+});
+
+test("a pen press, which the browser does not capture, still turns an arrow and long-presses", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { inputs, layer, rect, press } = bezel();
+  const arrow = layer.children.find((c) => c.dataset.spot === String(SPOTS.findIndex((s) => s.arrow === "drawn" && s.click === "HEADING" && s.value === 1)));
+  press(arrow, "pointerdown", { pointerType: "pen" });
+  press(arrow, "pointerup", { pointerType: "pen" });
+  press(rect("CLR"), "pointerdown", { pointerType: "pen" });
+  t.mock.timers.tick(2000);
+  assert.deepEqual(inputs, ["HEADING", "CLR_HOLD"]);
 });
