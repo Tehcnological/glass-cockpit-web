@@ -4,7 +4,7 @@
 // or for RANGE the joystick's eight directions, PAN and range - and +. A tap anywhere outside its keys, its own knob
 // included, closes it and does nothing else; it also closes after IDLE_MS without input. Turn and direction keys act on
 // press and repeat while held (CRS 5° a repeat, as a fast wheel spin); PUSH and PAN act on lift, over the same key.
-// On a touch-capable device each single knob shows its slide: a vertical line with a dot in the middle (up clockwise).
+// While a single knob is pressed it shows its slide: a long vertical line with a dot in the middle (up clockwise).
 import type { Control, Input, Spot } from "./bezel.js";
 
 /** A press that moves less than this (CSS px) is a tap; past it a single knob's press is a slide and never a push. */
@@ -64,16 +64,18 @@ const NS = "http://www.w3.org/2000/svg";
  * and `width` the viewBox's. The bezel's own handlers call `down` and `up` first and skip the press when they return
  * true, and skip a whole gesture while `swallowed()` (a tap outside an open popout closes it and does nothing else).
  */
-export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offset: [number, number], width: number, spots: Spot[], hints: boolean) {
+export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offset: [number, number], width: number) {
   const [DX, DY] = offset;
-  // Where any input is touch, each single knob shows which way to slide: a vertical line, a dot in its middle.
-  if (hints) for (const s of spots.filter(slides)) {
+  // While a single knob is pressed, which way to slide: a vertical line twice its height, a dot in the middle.
+  let hint: SVGGElement | undefined;
+  const showHint = (s: Spot) => {
     const [x1, y1, x2, y2] = s.box;
-    const cx = (x1 + x2) / 2 + DX, cy = (y1 + y2) / 2 + DY, h = (y2 - y1) * 0.42;
-    const g = el("g", { "data-gcw-slide": "", "pointer-events": "none" }, svg);
-    el("line", { x1: cx, y1: cy - h, x2: cx, y2: cy + h, stroke: "rgba(255,255,255,.55)", "stroke-width": 2, "stroke-linecap": "round" }, g);
-    el("circle", { cx, cy, r: 3.5, fill: "rgba(255,255,255,.85)" }, g);
-  }
+    const cx = (x1 + x2) / 2 + DX, cy = (y1 + y2) / 2 + DY, h = y2 - y1;
+    hint = el("g", { "data-gcw-slide": "", "pointer-events": "none" }, svg);
+    el("line", { x1: cx, y1: cy - h, x2: cx, y2: cy + h, stroke: "rgba(255,255,255,.7)", "stroke-width": 5, "stroke-linecap": "round" }, hint);
+    el("circle", { cx, cy, r: 8, fill: "#fff", stroke: "rgba(0,0,0,.5)", "stroke-width": 1.5 }, hint);
+  };
+  const hideHint = () => (hint?.remove(), (hint = undefined));
   let press: { s: Spot; x: number; y: number; t: number; axis?: "x" | "y"; travel: number } | undefined;
   let pop: { s: Spot; g: SVGGElement; at: number } | undefined;
   let swallow = false;
@@ -178,7 +180,7 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
     }
   };
   // A press lifted off the bezel, or taken over by the browser, ends here (after the bezel's own pointerup).
-  const end = () => (press = undefined);
+  const end = () => ((press = undefined), hideHint());
   window.addEventListener("pointerdown", outside, true);
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", end);
@@ -190,12 +192,15 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
     down(e: Ev, s: Spot | undefined): boolean {
       if (!s || s.arrow || !(slides(s) || popKeys(s))) return false;
       press = { s, x: e.clientX, y: e.clientY, t: e.timeStamp, travel: 0 };
+      hideHint();
+      if (slides(s)) showHint(s);
       return true;
     },
     /** The press lifted; true when it was a knob's. */
     up(e: Ev): boolean {
       const p = press;
       press = undefined;
+      hideHint();
       if (!p) return false;
       const still = !p.axis && Math.hypot(e.clientX - p.x, e.clientY - p.y) < MOVE_PX && e.timeStamp - p.t < TAP_MS;
       if (!still) return true;
@@ -205,6 +210,7 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
     },
     destroy() {
       close();
+      hideHint();
       window.removeEventListener("pointerdown", outside, true);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);

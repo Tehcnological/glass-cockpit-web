@@ -249,7 +249,7 @@ export function bezelInput(svg, onInput, afcs = false) {
     // pointercancel). Chrome reads touch-action on the svg root only, not on its children.
     svg.style.touchAction = "none";
     // Knobs by touch or pen: slides, taps and popouts (knob-touch.ts).
-    const touch = knobTouch(svg, onInput, [DX, DY], 1407, spots, touchy);
+    const touch = knobTouch(svg, onInput, [DX, DY], 1407);
     layer.addEventListener("pointerdown", (e) => {
         const s = spot(e);
         down = undefined; // a press that is not the primary button's, or began off the bezel, lifts on no key

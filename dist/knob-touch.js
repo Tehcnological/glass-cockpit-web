@@ -49,17 +49,18 @@ const NS = "http://www.w3.org/2000/svg";
  * and `width` the viewBox's. The bezel's own handlers call `down` and `up` first and skip the press when they return
  * true, and skip a whole gesture while `swallowed()` (a tap outside an open popout closes it and does nothing else).
  */
-export function knobTouch(svg, onInput, offset, width, spots, hints) {
+export function knobTouch(svg, onInput, offset, width) {
     const [DX, DY] = offset;
-    // Where any input is touch, each single knob shows which way to slide: a vertical line, a dot in its middle.
-    if (hints)
-        for (const s of spots.filter(slides)) {
-            const [x1, y1, x2, y2] = s.box;
-            const cx = (x1 + x2) / 2 + DX, cy = (y1 + y2) / 2 + DY, h = (y2 - y1) * 0.42;
-            const g = el("g", { "data-gcw-slide": "", "pointer-events": "none" }, svg);
-            el("line", { x1: cx, y1: cy - h, x2: cx, y2: cy + h, stroke: "rgba(255,255,255,.55)", "stroke-width": 2, "stroke-linecap": "round" }, g);
-            el("circle", { cx, cy, r: 3.5, fill: "rgba(255,255,255,.85)" }, g);
-        }
+    // While a single knob is pressed, which way to slide: a vertical line twice its height, a dot in the middle.
+    let hint;
+    const showHint = (s) => {
+        const [x1, y1, x2, y2] = s.box;
+        const cx = (x1 + x2) / 2 + DX, cy = (y1 + y2) / 2 + DY, h = y2 - y1;
+        hint = el("g", { "data-gcw-slide": "", "pointer-events": "none" }, svg);
+        el("line", { x1: cx, y1: cy - h, x2: cx, y2: cy + h, stroke: "rgba(255,255,255,.7)", "stroke-width": 5, "stroke-linecap": "round" }, hint);
+        el("circle", { cx, cy, r: 8, fill: "#fff", stroke: "rgba(0,0,0,.5)", "stroke-width": 1.5 }, hint);
+    };
+    const hideHint = () => (hint?.remove(), (hint = undefined));
     let press;
     let pop;
     let swallow = false;
@@ -169,7 +170,7 @@ export function knobTouch(svg, onInput, offset, width, spots, hints) {
         }
     };
     // A press lifted off the bezel, or taken over by the browser, ends here (after the bezel's own pointerup).
-    const end = () => (press = undefined);
+    const end = () => ((press = undefined), hideHint());
     window.addEventListener("pointerdown", outside, true);
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
@@ -181,12 +182,16 @@ export function knobTouch(svg, onInput, offset, width, spots, hints) {
             if (!s || s.arrow || !(slides(s) || popKeys(s)))
                 return false;
             press = { s, x: e.clientX, y: e.clientY, t: e.timeStamp, travel: 0 };
+            hideHint();
+            if (slides(s))
+                showHint(s);
             return true;
         },
         /** The press lifted; true when it was a knob's. */
         up(e) {
             const p = press;
             press = undefined;
+            hideHint();
             if (!p)
                 return false;
             const still = !p.axis && Math.hypot(e.clientX - p.x, e.clientY - p.y) < MOVE_PX && e.timeStamp - p.t < TAP_MS;
@@ -200,6 +205,7 @@ export function knobTouch(svg, onInput, offset, width, spots, hints) {
         },
         destroy() {
             close();
+            hideHint();
             window.removeEventListener("pointerdown", outside, true);
             window.removeEventListener("pointermove", move);
             window.removeEventListener("pointerup", end);

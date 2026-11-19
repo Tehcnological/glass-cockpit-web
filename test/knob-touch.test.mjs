@@ -203,19 +203,28 @@ test("holding CRS turns 5° a repeat, as a fast wheel spin does; a tap is still 
   assert.deepEqual(inputs, ["CRS 1", "CRS 5", "CRS 5", "BARO -1", "BARO -1", "BARO -1"]);
 });
 
-test("on a touch-capable device each single knob shows its slide: a line with a dot in the middle", () => {
-  globalThis.matchMedia = (q) => ({ matches: q === "(any-pointer: coarse)" });
-  try {
-    const { svg } = bezel();
-    const hints = svg.children.filter((c) => c.attrs["data-gcw-slide"] !== undefined);
-    assert.equal(hints.length, 3, "HDG, NAV VOL, COM VOL");
-    for (const h of hints) {
-      const [line, dot] = h.children;
-      assert.equal(line.attrs.x1, line.attrs.x2, "vertical: slide up to turn clockwise");
-      assert.equal(dot.attrs.cx, line.attrs.x1);
-      assert.equal(+dot.attrs.cy, (+line.attrs.y1 + +line.attrs.y2) / 2);
-      assert.equal(h.attrs["pointer-events"], "none");
-    }
-  } finally { delete globalThis.matchMedia; }
-  assert.equal(bezel().svg.children.filter((c) => c.attrs["data-gcw-slide"] !== undefined).length, 0, "none for a mouse alone");
+test("a single knob shows its slide only while pressed: a long vertical line with a dot in the middle", () => {
+  const { svg, knob, ev } = bezel();
+  const hints = () => svg.children.filter((c) => c.attrs["data-gcw-slide"] !== undefined);
+  const hdg = knob("HEADING_PRESS");
+  assert.equal(hints().length, 0, "none until a knob is in use");
+  ev(hdg, "pointerdown", 0, 0);
+  assert.equal(hints().length, 1);
+  const [line, dot] = hints()[0].children;
+  const box = SPOTS.find((s) => s.click === "HEADING_PRESS").box;
+  assert.equal(line.attrs.x1, line.attrs.x2, "vertical: slide up to turn clockwise");
+  assert.ok(+line.attrs.y2 - +line.attrs.y1 >= 1.8 * (box[3] - box[1]), "longer than the knob, to show past a finger");
+  assert.equal(dot.attrs.cx, line.attrs.x1);
+  assert.equal(+dot.attrs.cy, (+line.attrs.y1 + +line.attrs.y2) / 2);
+  assert.equal(hints()[0].attrs["pointer-events"], "none");
+  ev(hdg, "pointermove", 0, -40);
+  assert.equal(hints().length, 1, "stays through the slide");
+  ev(hdg, "pointerup", 0, -40, 20);
+  for (const f of winOn.pointerup ?? []) f({});
+  assert.equal(hints().length, 0, "gone on lift");
+  ev(hdg, "pointerdown", 0, 0);
+  for (const f of winOn.pointercancel ?? []) f({});
+  assert.equal(hints().length, 0, "gone when the browser takes the press");
+  ev(knob("ALT_PRESS"), "pointerdown", 0, 0);
+  assert.equal(hints().length, 0, "dual knobs have none");
 });
