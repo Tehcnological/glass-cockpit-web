@@ -8,7 +8,7 @@ const winOn = {};
 function el() {
   const on = {};
   return {
-    children: [], dataset: {}, attrs: {}, classList: { add() {} }, textContent: "", parent: null,
+    children: [], dataset: {}, attrs: {}, style: {}, classList: { add() {} }, textContent: "", parent: null,
     appendChild(c) { c.parent = this; this.children.push(c); return c; },
     remove() { const p = this.parent; if (p) p.children.splice(p.children.indexOf(this), 1); this.parent = null; },
     contains(n) { for (; n; n = n.parent) if (n === this) return true; return false; },
@@ -168,4 +168,27 @@ test("the mouse never opens a popout: a click pushes the knob", () => {
   for (const type of ["pointerdown", "pointerup", "click"]) ev(alt, type, 0, 0, 10, "mouse");
   assert.equal(pop(), undefined);
   assert.deepEqual(inputs, ["ALT_PRESS 1"]);
+});
+
+test("a slide the browser cancels, or a pen hovering after it, turns nothing more", () => {
+  const { inputs, knob, ev } = bezel();
+  const hdg = knob("HEADING_PRESS");
+  ev(hdg, "pointerdown", 0, 0);
+  ev(hdg, "pointermove", 0, -(MOVE_PX + SLIDE_PX));
+  ev(hdg, "pointercancel");
+  for (const f of winOn.pointercancel ?? []) f({});
+  ev(hdg, "pointermove", 0, -200); // the pen hovers on
+  assert.deepEqual(inputs, ["HEADING 1"]);
+  inputs.length = 0;
+  ev(hdg, "pointerdown", 0, 0);
+  ev(hdg, "pointermove", 0, -(MOVE_PX + SLIDE_PX));
+  ev(knob("ENT"), "pointerup", 0, -(MOVE_PX + SLIDE_PX), 20); // lifted off the knob, not over the layer's knob
+  for (const f of winOn.pointerup ?? []) f({});
+  ev(hdg, "pointermove", 0, -300);
+  assert.deepEqual(inputs, ["HEADING 1"]);
+});
+
+test("a display drawn with its bezel takes no pan or zoom from a press anywhere on it", async () => {
+  const { readFileSync } = await import("node:fs");
+  assert.match(readFileSync(new URL("../src/bezel.ts", import.meta.url), "utf8"), /svg\.style\.touchAction = "none"/);
 });

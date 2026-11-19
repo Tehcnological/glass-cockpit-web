@@ -279,6 +279,9 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
   let down: Spot | undefined;
   let tapped = false; // a touch acted on pointerup: skip the click that may follow
   const stop = () => clearTimeout(timer);
+  // A display with its bezel is a control surface: a press on it never pans or zooms the page (and so never ends in a
+  // pointercancel). Chrome reads touch-action on the svg root only, not on its children.
+  svg.style.touchAction = "none";
   // Knobs by touch or pen: slides, taps and popouts (knob-touch.ts).
   const touch = knobTouch(svg, onInput, [DX, DY], 1407);
   touch.spots((s) => spots.indexOf(s));

@@ -102,10 +102,13 @@ export function knobTouch(svg, onInput, offset, width) {
     }
     function keyEvents(r, k) {
         let downHere = false;
+        const lit = (on) => r.setAttribute("fill", on ? "rgba(255,255,255,.35)" : "rgba(0,0,0,.45)");
+        const release = () => (stopRepeat(), (downHere = false), lit(false));
         r.addEventListener("pointerdown", (e) => {
             downHere = false;
             if (!pop || e.timeStamp - pop.at < GUARD_MS)
                 return;
+            lit(true);
             const t = e.target;
             if (t.hasPointerCapture?.(e.pointerId))
                 t.releasePointerCapture(e.pointerId);
@@ -119,13 +122,12 @@ export function knobTouch(svg, onInput, offset, width) {
             again(REPEAT_DELAY);
         });
         r.addEventListener("pointerup", () => {
-            stopRepeat();
             if (downHere && !k.hold)
                 send(k);
-            downHere = false;
+            release();
         });
-        r.addEventListener("pointerout", () => (stopRepeat(), (downHere = false)));
-        r.addEventListener("pointercancel", () => (stopRepeat(), (downHere = false)));
+        r.addEventListener("pointerout", release);
+        r.addEventListener("pointercancel", release);
     }
     // A press outside an open popout, and not on its knob, closes it and is swallowed whole.
     const outside = (e) => {
@@ -139,7 +141,8 @@ export function knobTouch(svg, onInput, offset, width) {
     };
     let spotIndex = () => -1;
     const move = (e) => {
-        if (!press || !slides(press.s))
+        // A pen hovering sends moves with no button down.
+        if (!press || !slides(press.s) || e.buttons === 0)
             return;
         const dx = e.clientX - press.x, dy = e.clientY - press.y;
         if (!press.axis) {
@@ -155,8 +158,12 @@ export function knobTouch(svg, onInput, offset, width) {
             onInput({ control: press.s.wheel, value: dir });
         }
     };
+    // A press lifted off the bezel, or taken over by the browser, ends here (after the bezel's own pointerup).
+    const end = () => (press = undefined);
     window.addEventListener("pointerdown", outside, true);
     window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
     return {
         /** For the bezel's spots, to tell a press on the popout's own knob from one outside. */
         spots(index) { spotIndex = index; },
@@ -189,6 +196,8 @@ export function knobTouch(svg, onInput, offset, width) {
             close();
             window.removeEventListener("pointerdown", outside, true);
             window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", end);
+            window.removeEventListener("pointercancel", end);
         },
     };
 }

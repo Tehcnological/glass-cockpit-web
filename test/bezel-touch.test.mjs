@@ -7,7 +7,7 @@ import { SPOTS, bezelInput } from "../dist/bezel.js";
 function el() {
   const on = {};
   return {
-    children: [], dataset: {}, attrs: {}, classList: { add() {} }, textContent: "",
+    children: [], dataset: {}, attrs: {}, style: {}, classList: { add() {} }, textContent: "",
     appendChild(c) { this.children.push(c); return c; },
     setAttribute(k, v) { this.attrs[k] = v; },
     getAttribute(k) { return k === "data-spot" ? this.dataset.spot ?? null : this.attrs[k] ?? null; },
