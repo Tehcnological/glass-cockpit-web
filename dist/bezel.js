@@ -2,6 +2,7 @@
 // GPL-2.0-or-later): the wheel turns a knob (with shift, the outer ring of a dual knob), a click pushes it or a
 // button (with shift, a long press), and the twelve keys under the screen are softkeys 1 to 12.
 // v13 trainer: a click on an arrow beside a knob turns it, and holding it keeps turning (FG1000 has the wheel only).
+// Touch (this package's, not FG1000's): taps and holds act as clicks and holds; arrows get bigger hotspots (TOUCH_PAD).
 // Knob and button behavior: Nasal/MFDPages/Surround/SurroundController.nas.
 import { clamp, mod } from "./page.js";
 // v13 trainer: arrows beside each knob turn it a detent per click, the left ones counterclockwise; on a dual knob the
@@ -76,6 +77,46 @@ export const AFCS_SPOTS = [["AP", "FD"], ["HDG", "ALT"], ["NAV", "VNV"], ["APR",
     const [x, y] = [90 + (j - 0.5) * 69, 477 + i * 52];
     return { box: [x - 25, y - 20, x + 25, y + 20], click, label: click.replace("_", " ") };
 })).sort((a, b) => a.box[0] - b.box[0]);
+// On a touch screen each arrow's hotspot grows by up to this much a side (viewBox units), for a finger. This package's
+// addition: FG1000 has the mouse wheel only.
+export const TOUCH_PAD = 8;
+/**
+ * Each spot's box, arrows grown by up to `pad` a side. A side stops at any spot the arrow did not already overlap; facing
+ * another arrow, which grows too, it stops halfway across the gap. Other spots keep their boxes.
+ */
+export function touchBoxes(spots, pad) {
+    const hit = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+    return spots.map((s) => {
+        if (!s.arrow || !pad)
+            return s.box;
+        const [x1, y1, x2, y2] = s.box;
+        const g = [x1 - pad, y1 - pad, x2 + pad, y2 + pad];
+        for (const o of spots) {
+            const [a1, b1, a2, b2] = o.box;
+            // An arrow grows too: test against as far as it could reach.
+            const reach = o.arrow ? [a1 - pad, b1 - pad, a2 + pad, b2 + pad] : o.box;
+            if (o === s || hit(s.box, o.box) || !hit(g, reach))
+                continue;
+            const edge = (mine, theirs) => (o.arrow ? (mine + theirs) / 2 : theirs);
+            // Pull in the side facing it. For a diagonal neighbour: against an arrow, the axis with the wider gap, so both
+            // arrows cut the same one; against anything else, whichever side gives up less.
+            const cuts = [];
+            if (a2 <= x1)
+                cuts.push([0, edge(x1, a2)]);
+            if (a1 >= x2)
+                cuts.push([2, edge(x2, a1)]);
+            if (b2 <= y1)
+                cuts.push([1, edge(y1, b2)]);
+            if (b1 >= y2)
+                cuts.push([3, edge(y2, b1)]);
+            const wideX = Math.max(a1 - x2, x1 - a2) >= Math.max(b1 - y2, y1 - b2);
+            const cost = (c) => (o.arrow ? +((c[0] % 2 === 0) !== wideX) : Math.abs(g[c[0]] - c[1]));
+            const [side, at] = cuts.sort((p, q) => cost(p) - cost(q))[0];
+            g[side] = side < 2 ? Math.max(g[side], at) : Math.min(g[side], at);
+        }
+        return g;
+    });
+}
 const NS = "http://www.w3.org/2000/svg";
 // fascia.svg draws the bezel 1 px right of and 132 px below GUI.nas's coordinates.
 const DX = 1;
@@ -134,13 +175,18 @@ export function bezelInput(svg, onInput, afcs = false) {
         drawKeys(svg, layer);
     layer.setAttribute("fill", "transparent");
     layer.setAttribute("cursor", "pointer");
+    // Touch: a press never scrolls, zooms, selects or brings up a callout; a held key stays a long press.
+    layer.setAttribute("style", "touch-action:none;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none");
+    layer.addEventListener("contextmenu", (e) => e.preventDefault());
+    const boxes = touchBoxes(spots, typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? TOUCH_PAD : 0);
     // A slight glow shows where an arrow is, and its drawn arrow brightens.
     layer.appendChild(document.createElementNS(NS, "style")).textContent =
         ".gcw-arrow:hover{fill:rgba(255,255,255,.14)}.gcw-arrow:hover+path{fill-opacity:1}";
     for (const [i, s] of spots.entries()) {
         const [x1, y1, x2, y2] = s.box;
+        const [h1, v1, h2, v2] = boxes[i];
         const r = layer.appendChild(document.createElementNS(NS, "rect"));
-        for (const [k, v] of Object.entries({ x: x1 + DX, y: y1 + DY, width: x2 - x1, height: y2 - y1, rx: s.arrow ? 3 : 0 }))
+        for (const [k, v] of Object.entries({ x: h1 + DX, y: v1 + DY, width: h2 - h1, height: v2 - v1, rx: s.arrow ? 3 : 0 }))
             r.setAttribute(k, String(v));
         r.dataset.spot = String(i);
         if (!s.arrow)
