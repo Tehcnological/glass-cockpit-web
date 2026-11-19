@@ -60,6 +60,9 @@ export const slides = (s: Spot) => !!s.wheel && !s.shiftWheel && s.wheel !== "RA
 
 type Ev = PointerEvent;
 const NS = "http://www.w3.org/2000/svg";
+// A press outside an open popout closes it and does nothing else, on every display: the displays share whether the
+// current press (the one event every display's capture listener sees) is being swallowed.
+let dismissal: { down?: Event; on: boolean } = { on: false };
 
 /**
  * Touch and pen on the knobs of a display drawn by `bezelInput`. `offset` is the art's offset from the spots' coordinates
@@ -85,9 +88,9 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
     el("circle", { cx, cy, r: 8, fill: "#fff", stroke: "rgba(0,0,0,.5)", "stroke-width": 1.5 }, hint);
   };
   const hideHint = () => (hint?.remove(), (hint = undefined));
-  let press: { s: Spot; x: number; y: number; t: number; axis?: "x" | "y"; travel: number } | undefined;
+  // `id`: the pointer that pressed; `moved`: it has been MOVE_PX from where it went down, so it is not a tap.
+  let press: { s: Spot; id: number; x: number; y: number; t: number; axis?: "x" | "y"; travel: number; moved: boolean } | undefined;
   let pop: { s: Spot; g: SVGGElement; at: number } | undefined;
-  let swallow = false;
   let repeat = 0;
   let idle = 0;
   const send = (k: { input: Input; also?: Input }) => (onInput(k.input), k.also && onInput(k.also));
@@ -143,7 +146,7 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
     const release = () => (stopRepeat(), (downHere = false), lit(false));
     r.addEventListener("pointerdown", (e: Ev) => {
       downHere = false;
-      if (!pop || e.timeStamp - pop.at < GUARD_MS) return;
+      if (e.button !== 0 || !pop || e.timeStamp - pop.at < GUARD_MS) return;
       lit(true);
       const t = e.target as Element;
       if (t.hasPointerCapture?.(e.pointerId)) t.releasePointerCapture(e.pointerId);
@@ -167,15 +170,17 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
 
   // A press anywhere outside an open popout's keys, its own knob included, closes it and is swallowed whole.
   const outside = (e: Ev) => {
-    swallow = false;
+    if (dismissal.down !== e) dismissal = { down: e, on: false };
     if (!pop || pop.g.contains(e.target as Node)) return;
     close();
-    swallow = true;
+    dismissal.on = true;
   };
   const move = (e: Ev) => {
-    // A pen hovering sends moves with no button down.
-    if (!press || !slides(press.s) || e.buttons === 0) return;
+    // A pen hovering sends moves with no button down; another finger is its own gesture.
+    if (!press || e.pointerId !== press.id || e.buttons === 0) return;
     const dx = e.clientX - press.x, dy = e.clientY - press.y;
+    if (Math.hypot(dx, dy) >= MOVE_PX) press.moved = true;
+    if (!slides(press.s)) return;
     if (!press.axis) {
       if (Math.hypot(dx, dy) < MOVE_PX) return;
       press.axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
@@ -189,19 +194,19 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
     }
   };
   // A press lifted off the bezel, or taken over by the browser, ends here (after the bezel's own pointerup).
-  const end = () => ((press = undefined), hideHint());
+  const end = (e: Ev) => press && e.pointerId === press.id && ((press = undefined), hideHint());
   window.addEventListener("pointerdown", outside, true);
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", end);
   window.addEventListener("pointercancel", end);
 
   return {
-    swallowed: () => swallow,
+    swallowed: () => dismissal.on,
     /** A touch or pen press on a spot; true when it is a knob's, handled here. */
     down(e: Ev, spot: Spot | undefined): boolean {
       const s = spot?.arrow ? owner(spot) : spot;
       if (!s || !(slides(s) || popKeys(s))) return false;
-      press = { s, x: e.clientX, y: e.clientY, t: e.timeStamp, travel: 0 };
+      press = { s, id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, travel: 0, moved: false };
       hideHint();
       if (slides(s)) showHint(s);
       return true;
@@ -209,10 +214,10 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
     /** The press lifted; true when it was a knob's. */
     up(e: Ev): boolean {
       const p = press;
+      if (!p || e.pointerId !== p.id) return false;
       press = undefined;
       hideHint();
-      if (!p) return false;
-      const still = !p.axis && Math.hypot(e.clientX - p.x, e.clientY - p.y) < MOVE_PX && e.timeStamp - p.t < TAP_MS;
+      const still = !p.moved && Math.hypot(e.clientX - p.x, e.clientY - p.y) < MOVE_PX && e.timeStamp - p.t < TAP_MS;
       if (!still) return true;
       if (slides(p.s)) onInput({ control: p.s.click!, value: 1 });
       else open(p.s, e.timeStamp);

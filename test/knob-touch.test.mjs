@@ -27,8 +27,8 @@ globalThis.window = {
 };
 
 let now = 0;
-function bezel() {
-  for (const k of Object.keys(winOn)) delete winOn[k];
+function bezel(keep = false) {
+  if (!keep) for (const k of Object.keys(winOn)) delete winOn[k];
   const inputs = [];
   const svg = el();
   bezelInput(svg, (i) => inputs.push(`${i.control} ${i.value}`));
@@ -37,9 +37,9 @@ function bezel() {
   const pop = () => svg.children.find((c) => c.attrs["data-gcw-pop"] !== undefined);
   const key = (label) => { const g = pop(); const i = g.children.findIndex((c) => c.textContent === label); return g.children[i - 1]; };
   // A pointer event as the browser sends it: window (capture) first, then the target, bubbling to the layer.
-  const ev = (target, type, x = 0, y = 0, dt = 0, pointerType = "touch") => {
+  const ev = (target, type, x = 0, y = 0, dt = 0, pointerType = "touch", extra = {}) => {
     now += dt;
-    const e = { button: 0, pointerId: 1, pointerType, target, clientX: x, clientY: y, timeStamp: now, shiftKey: false };
+    const e = { button: 0, pointerId: 1, buttons: type === "pointerup" ? 0 : 1, ...extra, pointerType, target, clientX: x, clientY: y, timeStamp: now, shiftKey: false };
     if (type === "pointerdown") for (const f of winOn.pointerdown ?? []) f(e);
     if (type === "pointermove") for (const f of winOn.pointermove ?? []) f(e);
     target.fire?.(type, e);
@@ -178,14 +178,14 @@ test("a slide the browser cancels, or a pen hovering after it, turns nothing mor
   ev(hdg, "pointerdown", 0, 0);
   ev(hdg, "pointermove", 0, -(MOVE_PX + SLIDE_PX));
   ev(hdg, "pointercancel");
-  for (const f of winOn.pointercancel ?? []) f({});
+  for (const f of winOn.pointercancel ?? []) f({ pointerId: 1 });
   ev(hdg, "pointermove", 0, -200); // the pen hovers on
   assert.deepEqual(inputs, ["HEADING 1"]);
   inputs.length = 0;
   ev(hdg, "pointerdown", 0, 0);
   ev(hdg, "pointermove", 0, -(MOVE_PX + SLIDE_PX));
   ev(knob("ENT"), "pointerup", 0, -(MOVE_PX + SLIDE_PX), 20); // lifted off the knob, not over the layer's knob
-  for (const f of winOn.pointerup ?? []) f({});
+  for (const f of winOn.pointerup ?? []) f({ pointerId: 1 });
   ev(hdg, "pointermove", 0, -300);
   assert.deepEqual(inputs, ["HEADING 1"]);
 });
@@ -222,10 +222,10 @@ test("a single knob shows its slide only while pressed: a long vertical line wit
   ev(hdg, "pointermove", 0, -40);
   assert.equal(hints().length, 1, "stays through the slide");
   ev(hdg, "pointerup", 0, -40, 20);
-  for (const f of winOn.pointerup ?? []) f({});
+  for (const f of winOn.pointerup ?? []) f({ pointerId: 1 });
   assert.equal(hints().length, 0, "gone on lift");
   ev(hdg, "pointerdown", 0, 0);
-  for (const f of winOn.pointercancel ?? []) f({});
+  for (const f of winOn.pointercancel ?? []) f({ pointerId: 1 });
   assert.equal(hints().length, 0, "gone when the browser takes the press");
   ev(knob("ALT_PRESS"), "pointerdown", 0, 0);
   assert.equal(hints().length, 0, "dual knobs have none");
@@ -264,4 +264,65 @@ test("the arrows are part of the bezel: always drawn, highlighted on hover only 
   const css = layer.children.find((c) => c.textContent.includes(".gcw-arrow")).textContent;
   assert.match(css, /^\[data-input="mouse"\] \.gcw-arrow:hover\{[^}]+\}\[data-input="mouse"\] \.gcw-arrow:hover\+path\{[^}]+\}$/, "hover lights only for the mouse");
   assert.doesNotMatch(css, /display:none/, "never hidden");
+});
+
+
+test("a slide lifted off the bezel ends there; later moves turn nothing", () => {
+  const { inputs, svg, knob, ev } = bezel();
+  const hdg = knob("HEADING_PRESS");
+  ev(hdg, "pointerdown", 0, 0);
+  ev(hdg, "pointermove", 0, -(MOVE_PX + SLIDE_PX));
+  ev(svg, "pointerup", 0, -(MOVE_PX + SLIDE_PX), 20); // over the art, not the layer
+  ev(svg, "pointermove", 0, -300, 10, "mouse", { buttons: 1, pointerId: 9 });
+  ev(svg, "pointermove", 0, -300, 10, "touch", { buttons: 1 });
+  assert.deepEqual(inputs, ["HEADING 1"]);
+});
+
+test("a press on a dual knob that wanders past MOVE_PX and comes back is not a tap", () => {
+  const { inputs, knob, pop, ev, tap } = bezel();
+  const alt = knob("ALT_PRESS");
+  ev(alt, "pointerdown", 0, 0);
+  ev(alt, "pointermove", MOVE_PX + 20, 0);
+  ev(alt, "pointermove", 0, 0);
+  ev(alt, "pointerup", 0, 0, 100);
+  assert.equal(pop(), undefined, "no popout");
+  tap(knob("FMS_CRSR"));
+  const fms = knob("FMS_CRSR");
+  ev(fms, "pointerdown", 0, 0, GUARD_MS);
+  ev(fms, "pointermove", 0, MOVE_PX + 5);
+  ev(fms, "pointerup", 0, 0, 100);
+  assert.deepEqual(inputs, []);
+});
+
+test("with two displays, a tap on the other one while a popout is open only closes it", () => {
+  const a = bezel();
+  const b = bezel(true);
+  a.tap(a.knob("FMS_CRSR"));
+  assert.ok(a.pop());
+  b.tap(b.knob("ENT"));
+  assert.equal(a.pop(), undefined);
+  assert.deepEqual([...a.inputs, ...b.inputs], []);
+  b.tap(b.knob("ENT"));
+  assert.deepEqual(b.inputs, ["ENT 1"], "the next tap works");
+});
+
+test("a knob's gesture is its own pointer's: a second finger neither turns it nor ends it", () => {
+  const { inputs, svg, knob, ev } = bezel();
+  const hdg = knob("HEADING_PRESS");
+  ev(hdg, "pointerdown", 100, 400);
+  ev(svg, "pointermove", 100, 100, 10, "touch", { pointerId: 2 });
+  ev(svg, "pointerup", 100, 100, 10, "touch", { pointerId: 2 });
+  assert.deepEqual(inputs, [], "the second finger turned nothing");
+  ev(hdg, "pointermove", 100, 400 - MOVE_PX - SLIDE_PX);
+  assert.deepEqual(inputs, ["HEADING 1"], "the first finger still slides");
+});
+
+test("a right-click on a popout key does nothing", () => {
+  const { inputs, knob, key, ev, tap } = bezel();
+  tap(knob("ALT_PRESS"));
+  for (const label of ["◀◀", "PUSH"]) {
+    ev(key(label), "pointerdown", 0, 0, GUARD_MS, "mouse", { button: 2, buttons: 2 });
+    ev(key(label), "pointerup", 0, 0, 10, "mouse", { button: 2 });
+  }
+  assert.deepEqual(inputs, []);
 });
