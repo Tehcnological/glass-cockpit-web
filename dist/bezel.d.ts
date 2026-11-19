@@ -43,6 +43,12 @@ export declare const SPOTS: Spot[];
  * knobs. FG1000's bezel is the GDU 1040's, without them, so they are drawn here as copies of its FPL key.
  */
 export declare const AFCS_SPOTS: Spot[];
+export declare const TOUCH_PAD = 8;
+/**
+ * Each spot's box, arrows grown by up to `pad` a side. A side stops at any spot the arrow did not already overlap; facing
+ * another arrow, which grows too, it stops halfway across the gap. Other spots keep their boxes.
+ */
+export declare function touchBoxes(spots: Spot[], pad: number): Spot["box"][];
 /** Detents one wheel notch turns: HDG and CRS turn 5 when the wheel spins fast (`gap`, ms since the last notch), as a quick twist does. */
 export declare function wheelStep(control: Control, gap: number): number;
 /**

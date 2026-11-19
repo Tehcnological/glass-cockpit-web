@@ -1,16 +1,22 @@
 <script setup lang="ts">
 // Every instrument in the kit on one state, with sliders. The GFC 700's keys on the MFD work once the PFD's AHRS has
 // aligned and the preflight test has passed; with the autopilot engaged the sliders fly toward the command bars.
-import { onMounted, onUnmounted, reactive, shallowRef } from "vue";
+// The displays are Cockpit.vue's: `layout` and `autopilot` pass through. The sliders and steam gauges show only with
+// both displays (a desktop); a tablet gets one display, a phone a notice.
+import { onMounted, onUnmounted, reactive, ref, shallowRef } from "vue";
 import Steam from "./Steam.vue";
-import Glass from "./Glass.vue";
+import Cockpit from "./Cockpit.vue";
 import type { MfdState } from "glass-cockpit-web";
 // Not the main entry: that would pull the displays (Glass.vue loads them on its own) into this chunk.
 import { Afcs, toyFly, type AfcsKey, type AfcsOutput } from "glass-cockpit-web/afcs";
 import { LEVEL, type FlightState } from "./state";
 
 const s = reactive<FlightState>({ ...LEVEL, gs: 0, adf: 30 });
-const props = defineProps<{ nav: Pick<MfdState, "points" | "airspaces" | "airports" | "stations" | "procedures">; cycle: string }>();
+const props = withDefaults(defineProps<{
+  nav: Pick<MfdState, "points" | "airspaces" | "airports" | "stations" | "procedures">; cycle: string;
+  layout?: "auto" | "both" | "single" | "none"; autopilot?: boolean;
+}>(), { layout: "auto", autopilot: true });
+const shown = ref<"both" | "single" | "none">();
 // Cessna 172S POH speeds, for the PFD's speed references.
 const vspeeds = { Vglide: 68, Vr: 55, Vx: 62, Vy: 74 };
 const mfd = reactive<Partial<MfdState>>({
@@ -56,13 +62,14 @@ function loop(now: number) {
 }
 const press = (k: AfcsKey) => (tick(), afcs.press(k), tick()); // a key acts on the last update's state: the sliders as they are now
 const onAligned = () => ((aligned = true), tick()); // starts the preflight test
-onMounted(() => (raf = requestAnimationFrame(loop)));
+// Without the autopilot nothing runs between slider moves.
+onMounted(() => props.autopilot && (raf = requestAnimationFrame(loop)));
 onUnmounted(() => cancelAnimationFrame(raf));
 </script>
 
 <template>
-  <div class="kit">
-    <form class="ctl" @submit.prevent>
+  <div class="kit" :class="shown">
+    <form v-if="shown === 'both'" class="ctl" @submit.prevent>
       <label v-for="[k, min, max, step] in sliders" :key="k">
         <span>{{ k }}</span>
         <input type="range" :min="min" :max="max" :step="step" v-model.number="(s as any)[k]" />
@@ -71,16 +78,22 @@ onUnmounted(() => cancelAnimationFrame(raf));
       <label><span>from</span><input type="checkbox" v-model="s.from" /></label>
       <label><span>range</span><input type="range" min="1" max="200" v-model.number="mfd.range" /><output>{{ mfd.range }}</output></label>
     </form>
-    <Glass :state="s" :mfd="mfd" :vspeeds="vspeeds" :afcs="out?.display" :fd="out?.fd" @aligned="onAligned" @change="(p) => Object.assign(s, p)" @mfd="(p) => Object.assign(mfd, p)" />
-    <Glass :state="s" unit="mfd" :mfd="mfd" @key="press" @change="(p) => Object.assign(s, p)" @mfd="(p) => Object.assign(mfd, p)" />
-    <small><a href="/credits/">FAA NASR {{ cycle }}</a> · Not for navigation</small>
-    <Steam :state="s" />
-    <Steam :state="s" :gauges="['vor', 'adf']" />
+    <Cockpit :state="s" :mfd="mfd" :vspeeds="vspeeds" :afcs="out?.display" :fd="out?.fd" :layout="layout" :autopilot="autopilot"
+      @layout="(l) => (shown = l)" @aligned="onAligned" @key="press" @change="(p) => Object.assign(s, p)" @mfd="(p) => Object.assign(mfd, p)">
+      <!-- With one display the cockpit covers the window, so the credit line goes in its bar. -->
+      <template v-if="shown === 'single'" #bar><small><a href="/credits/">FAA NASR {{ cycle }}</a> · Not for navigation</small></template>
+    </Cockpit>
+    <small v-if="shown !== 'single'"><a href="/credits/">FAA NASR {{ cycle }}</a> · Not for navigation</small>
+    <template v-if="shown === 'both'">
+      <Steam :state="s" />
+      <Steam :state="s" :gauges="['vor', 'adf']" />
+    </template>
   </div>
 </template>
 
 <style scoped>
   .kit { display: grid; gap: 16px; max-width: 900px; }
+  .kit.single { max-width: none; }
   .ctl { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 18px; }
   label { display: grid; grid-template-columns: 84px 1fr 52px; gap: 8px; align-items: center; font: 500 13px var(--mono); color: var(--muted); }
   output { text-align: right; color: var(--ink); }

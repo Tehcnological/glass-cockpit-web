@@ -2,6 +2,8 @@
 // GPL-2.0-or-later): the wheel turns a knob (with shift, the outer ring of a dual knob), a click pushes it or a
 // button (with shift, a long press), and the twelve keys under the screen are softkeys 1 to 12.
 // v13 trainer: a click on an arrow beside a knob turns it, and holding it keeps turning (FG1000 has the wheel only).
+// Touch (this package's, not FG1000's): taps and holds act as clicks and holds; arrows get bigger hotspots (TOUCH_PAD)
+// wherever any input is touch, so a touch-screen laptop's mouse sees a slightly bigger hover glow on them.
 // Knob and button behavior: Nasal/MFDPages/Surround/SurroundController.nas.
 import { clamp, mod } from "./page.js";
 import type { Radios } from "./surround.js";
@@ -120,6 +122,42 @@ export const AFCS_SPOTS: Spot[] = (
   return { box: [x - 25, y - 20, x + 25, y + 20], click, label: click.replace("_", " ") };
 })).sort((a, b) => a.box[0] - b.box[0]);
 
+// On a touch screen each arrow's hotspot grows by up to this much a side (viewBox units), for a finger. This package's
+// addition: FG1000 has the mouse wheel only.
+export const TOUCH_PAD = 8;
+
+/**
+ * Each spot's box, arrows grown by up to `pad` a side. A side stops at any spot the arrow did not already overlap; facing
+ * another arrow, which grows too, it stops halfway across the gap. Other spots keep their boxes.
+ */
+export function touchBoxes(spots: Spot[], pad: number): Spot["box"][] {
+  const hit = (a: Spot["box"], b: Spot["box"]) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+  return spots.map((s) => {
+    if (!s.arrow || !pad) return s.box;
+    const [x1, y1, x2, y2] = s.box;
+    const g: Spot["box"] = [x1 - pad, y1 - pad, x2 + pad, y2 + pad];
+    for (const o of spots) {
+      const [a1, b1, a2, b2] = o.box;
+      // An arrow grows too: test against as far as it could reach.
+      const reach: Spot["box"] = o.arrow ? [a1 - pad, b1 - pad, a2 + pad, b2 + pad] : o.box;
+      if (o === s || hit(s.box, o.box) || !hit(g, reach)) continue;
+      const edge = (mine: number, theirs: number) => (o.arrow ? (mine + theirs) / 2 : theirs);
+      // Pull in the side facing it. For a diagonal neighbour: against an arrow, the axis with the wider gap, so both
+      // arrows cut the same one; against anything else, whichever side gives up less.
+      const cuts: [number, number][] = [];
+      if (a2 <= x1) cuts.push([0, edge(x1, a2)]);
+      if (a1 >= x2) cuts.push([2, edge(x2, a1)]);
+      if (b2 <= y1) cuts.push([1, edge(y1, b2)]);
+      if (b1 >= y2) cuts.push([3, edge(y2, b1)]);
+      const wideX = Math.max(a1 - x2, x1 - a2) >= Math.max(b1 - y2, y1 - b2);
+      const cost = (c: [number, number]) => (o.arrow ? +((c[0] % 2 === 0) !== wideX) : Math.abs(g[c[0]] - c[1]));
+      const [side, at] = cuts.sort((p, q) => cost(p) - cost(q))[0];
+      g[side] = side < 2 ? Math.max(g[side], at) : Math.min(g[side], at);
+    }
+    return g;
+  });
+}
+
 const NS = "http://www.w3.org/2000/svg";
 // fascia.svg draws the bezel 1 px right of and 132 px below GUI.nas's coordinates.
 const DX = 1;
@@ -177,13 +215,22 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
   if (afcs) drawKeys(svg, layer);
   layer.setAttribute("fill", "transparent");
   layer.setAttribute("cursor", "pointer");
+  // Touch: a press never scrolls, zooms, selects or brings up a callout; a held key stays a long press.
+  layer.setAttribute("style", "touch-action:none;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none");
+  // Touch and pen only: a mouse's right-click keeps the browser's menu (a plain MouseEvent has no pointerType).
+  layer.addEventListener("contextmenu", (e) => {
+    const type = (e as PointerEvent).pointerType;
+    if (type && type !== "mouse") e.preventDefault();
+  });
+  const boxes = touchBoxes(spots, typeof matchMedia === "function" && matchMedia("(any-pointer: coarse)").matches ? TOUCH_PAD : 0);
   // A slight glow shows where an arrow is, and its drawn arrow brightens.
   layer.appendChild(document.createElementNS(NS, "style")).textContent =
     ".gcw-arrow:hover{fill:rgba(255,255,255,.14)}.gcw-arrow:hover+path{fill-opacity:1}";
   for (const [i, s] of spots.entries()) {
     const [x1, y1, x2, y2] = s.box;
+    const [h1, v1, h2, v2] = boxes[i];
     const r = layer.appendChild(document.createElementNS(NS, "rect"));
-    for (const [k, v] of Object.entries({ x: x1 + DX, y: y1 + DY, width: x2 - x1, height: y2 - y1, rx: s.arrow ? 3 : 0 })) r.setAttribute(k, String(v));
+    for (const [k, v] of Object.entries({ x: h1 + DX, y: v1 + DY, width: h2 - h1, height: v2 - v1, rx: s.arrow ? 3 : 0 })) r.setAttribute(k, String(v));
     r.dataset.spot = String(i);
     if (!s.arrow) continue;
     r.classList.add("gcw-arrow");
@@ -196,7 +243,11 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
     p.setAttribute("fill-opacity", "0.6");
     p.setAttribute("pointer-events", "none");
   }
-  const spot = (e: Event): Spot | undefined => spots[Number((e.target as Element).getAttribute("data-spot"))];
+  // No data-spot is no spot (Number(null) would be 0, NAV's volume knob): a click can land on the layer itself.
+  const spot = (e: Event): Spot | undefined => {
+    const i = (e.target as Element).getAttribute?.("data-spot");
+    return i == null ? undefined : spots[Number(i)];
+  };
   const fire = (s: Spot, control: Control) => {
     onInput({ control, value: s.value ?? 1 });
     if (s.also) onInput(s.also);
@@ -220,14 +271,23 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
     }
   }, { passive: false });
 
-  // Arrows turn on press and keep turning while held; other spots act on click.
+  // Arrows turn on press and keep turning while held; other spots act on click, or for touch on lifting the finger
+  // over the spot it went down on (a touch held past about half a second gets no click).
   let timer = 0;
   let held = false;
+  let down: Spot | undefined;
+  let tapped = false; // a touch acted on pointerup: skip the click that may follow
   const stop = () => clearTimeout(timer);
   layer.addEventListener("pointerdown", (e) => {
     const s = spot(e);
+    down = undefined; // a press that is not the primary button's, or began off the bezel, lifts on no key
+    tapped = false;
     if (e.button !== 0) return;
     held = false; // a long press released off the bezel never got its click: don't swallow this gesture's
+    down = s;
+    // A touch is captured by the spot it starts on; released, sliding off fires pointerout and stops an arrow.
+    const t = e.target as Element;
+    if (t.hasPointerCapture?.(e.pointerId)) t.releasePointerCapture(e.pointerId); // a pen or mouse is not captured: releasing it throws
     if (s?.shiftClick && !s.arrow) {
       stop();
       const control = s.shiftClick;
@@ -244,8 +304,18 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
   layer.addEventListener("pointerout", stop);
   layer.addEventListener("pointercancel", stop);
   window.addEventListener("pointerup", stop);
+  layer.addEventListener("pointerup", (e) => {
+    const s = spot(e);
+    if (e.pointerType === "mouse") return;
+    tapped = true; // a touch's late click, if one comes, is never a press: this lift decided it
+    const from = down;
+    down = undefined;
+    if (e.button !== 0 || !s || s !== from || s.arrow || held || !s.click) return;
+    fire(s, s.click);
+  });
   layer.addEventListener("click", (e) => {
     const s = spot(e);
+    if (tapped) return void (tapped = false);
     if (!s || s.arrow) return;
     if (held) return void (held = false); // the long press already acted
     const control = e.shiftKey ? s.shiftClick : s.click;

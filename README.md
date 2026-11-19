@@ -153,6 +153,8 @@ With `bezel: true`, the mouse works the controls as FlightGear's FG1000 window d
 | Click an arrow beside a knob | Turns the knob one detent, left counterclockwise. On a dual knob the upper pair turns the outer ring and the lower pair the inner knob. Holding an arrow keeps turning. RANGE uses the - and + printed beside it. |
 | Click the joystick's arrows | Moves the pan pointer: up, down, left, right and the four diagonals. Holding keeps moving it. |
 
+On a touch screen (this package's, not FG1000's) a tap is a click and holding is holding: a key or knob acts when the finger lifts over it (a browser sends no click after a long touch), the arrows turn and repeat while held and stop when the finger slides off, a 2 s hold is a long press. A press never scrolls, zooms, selects text or brings up a callout. Where any input is touch (`any-pointer: coarse`, so a touch-screen laptop or a pen tablet with touch too), each arrow's hotspot grows by up to `TOUCH_PAD` (8 units a side; `touchBoxes` in `bezel.ts`), stopping short of its neighbours; nothing drawn changes. Shift+wheel and Shift+click have no touch form: the upper arrows turn the outer ring, and holding is the long press.
+
 The keyboard works the display last clicked (not on the real unit or in FG1000; NXi takes its keypad the same way): a letter or digit types into the identifier under the cursor and moves on, Backspace clears back, Enter is ENT and Escape is CLR. It types where the small FMS knob would spell: DIRECT TO, waypoint entry, the WPT pages, PROC and Closest Point Of FPL, on both units. Bezel inputs report a typed key as `{ control: "CHAR", value: <character code> }`, 8 for Backspace; `keyInput` maps a key event.
 
 A fast spin of the wheel turns HDG and CRS 5° a notch; a slow one turns 1°. Every knob pushes, ALT included (its push does nothing).
@@ -263,8 +265,15 @@ Keep the output small for the client: `near` once at build time, and ship only i
 [`vue/`](vue/) holds the Vue components [instrumentready.com](https://instrumentready.com) uses, driven by one `FlightState` ([`vue/state.ts`](vue/state.ts)). Import them as `glass-cockpit-web/vue/Glass.vue`. They are shipped as source, so the site's own Vue build compiles them.
 
 - `Glass.vue`: the PFD or MFD. It emits `change` and `mfd` for state the bezel changed, `key` for an AFCS key, and `aligned` once when the PFD's AHRS has aligned; the host owns the `Afcs` and passes its `afcs` and `fd` back (see [Autopilot](#autopilot)).
+- `Cockpit.vue`: both units, the red DISPLAY BACKUP button and a layout for the device. Same props and events as `Glass.vue` (`state`, `mfd`, `vspeeds`, `afcs`, `fd`, `startup`; `change`, `mfd`, `key`, `aligned`), plus:
+  - `layout`: `auto` (default), `both`, `single` or `none`. `auto` picks `none` on a phone (primary pointer coarse and the window's short side under 600 px), `single` on another touch screen, `both` otherwise, once on mount; the `layout` event reports which. `both` is the PFD over the MFD. `single` is one at a time with a PFD | MFD switcher, over the whole window with the unit as large as fits (no scrolling; the page under it does not scroll while it is up); the hidden one keeps running, and the PFD draws the GFC 700 keys. The `bar` slot fills the middle of the bar (KitDemo puts its credit and "Not for navigation" line there). `none` shows the `phone` slot, by default "Open this on a tablet or computer."
+  - `autopilot` (default `true`): `false` is a G1000 without the GFC 700, with no AFCS keys on either bezel and no annunciations.
+  - `layout` and `autopilot` are read once, on mount: to change either, re-key the component.
+  - DISPLAY BACKUP puts the PFD in reversionary mode and lays a reversionary PFD over the MFD, which keeps its pages.
+
+  To change it: pass `layout` to force one (`both` on a tablet, say), fill the `phone` slot with your own message, or lay out `Glass.vue` units yourself with `DisplayBackup` from the main entry.
 - `Steam.vue`: steam gauges. Needs the [OpenAttitude](https://github.com/OpenAttitude/library) `@openattitude/*` packages it imports (LGPL-3.0-or-later), which this package does not install.
-- `KitDemo.vue`: every instrument on one state, with sliders, and a working GFC 700: its keys on the MFD engage once the PFD's AHRS has aligned (45 s) and the preflight test has passed, and with the autopilot engaged the sliders fly toward the command bars (`toyFly`). It reads the page's CSS variables and links to the site's credits page.
+- `KitDemo.vue`: every instrument on one state, with sliders, and a working GFC 700 (`autopilot: false` drops it), on `Cockpit.vue` (`layout` passes through; the sliders and steam gauges show only with both displays): its keys on the MFD engage once the PFD's AHRS has aligned (45 s) and the preflight test has passed, and with the autopilot engaged the sliders fly toward the command bars (`toyFly`). It reads the page's CSS variables and links to the site's credits page.
 
 ## Demo
 

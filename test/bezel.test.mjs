@@ -1,7 +1,7 @@
 // Knob math from SurroundController.nas: node --test (after npm run build).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SPOTS, adjust, wheelStep } from "../dist/bezel.js";
+import { SPOTS, AFCS_SPOTS, TOUCH_PAD, adjust, touchBoxes, wheelStep } from "../dist/bezel.js";
 
 const k = {
   heading: 359.6, headingBug: 359, course: 0, baro: 29.92, alt: 3040, selectedAlt: null,
@@ -120,4 +120,23 @@ test("GFC 700 keys: two columns of six in the left column between the HDG and AL
   // None overlap the knobs' own spots.
   const hit = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
   for (const s of AFCS_SPOTS) for (const t of [...SPOTS, ...AFCS_SPOTS]) if (s !== t) assert.ok(!hit(s.box, t.box), `${s.label} overlaps`);
+});
+
+test("touch boxes never reach a spot they did not already overlap", () => {
+  const all = [...SPOTS, ...AFCS_SPOTS];
+  const t = touchBoxes(all, TOUCH_PAD);
+  const hit = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+  for (let i = 0; i < all.length; i++) for (let j = 0; j < all.length; j++)
+    if (i !== j && !hit(all[i].box, all[j].box)) assert.ok(!hit(t[i], t[j]), `${i} grows into ${j}`);
+});
+
+test("touch boxes grow arrows and keep everything else", () => {
+  const t = touchBoxes(SPOTS, TOUCH_PAD);
+  SPOTS.forEach((s, i) => {
+    const [x1, y1, x2, y2] = t[i];
+    if (!s.arrow) assert.deepEqual(t[i], s.box);
+    else assert.ok(x1 <= s.box[0] && y1 <= s.box[1] && x2 >= s.box[2] && y2 >= s.box[3], `${i} shrank`);
+  });
+  assert.ok(SPOTS.some((s, i) => s.arrow && t[i][2] - t[i][0] > s.box[2] - s.box[0]));
+  assert.deepEqual(touchBoxes(SPOTS, 0), SPOTS.map((s) => s.box));
 });
