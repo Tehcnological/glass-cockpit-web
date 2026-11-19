@@ -27,3 +27,10 @@ test("ids nothing references keep their names for Page.el and the bezel", () => 
   const s = scopeIds(BEZEL, "glass-d1-");
   for (const id of ["g13091", "rect8520", "path12508"]) assert.ok(ids(s).includes(id), id);
 });
+
+test("the bezel's lettering draws once, clean: no outline over its fill and no squeezed letters, screens untouched", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../src/display.ts", import.meta.url), "utf8");
+  assert.match(src, /\.gcw-display>:not\(\.gcw-screen\) text,\.gcw-display>:not\(\.gcw-screen\) tspan\{stroke:none!important;letter-spacing:normal!important\}/);
+  assert.match(src, /svg\.setAttribute\("class", "gcw-display"\)/);
+});

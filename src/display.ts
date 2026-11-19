@@ -42,6 +42,7 @@ export function buildDisplay(container: HTMLElement, pages: string[], label: str
   container.innerHTML = `<svg xmlns="${NS}" viewBox="${bezel ? "1 132 1407 918" : "0 0 1024 768"}" role="img" style="${NO_SELECT};touch-action:manipulation"></svg>`;
   const svg = container.querySelector("svg")!;
   svg.setAttribute("aria-label", label);
+  svg.setAttribute("class", "gcw-display");
   if (bezel) {
     svg.innerHTML = scopeIds(BEZEL, tag);
     // fascia.svg shades its two side columns unevenly (the left has an extra black overlay and a fainter edge strip), so
@@ -61,7 +62,11 @@ export function buildDisplay(container: HTMLElement, pages: string[], label: str
   // font-src 'self': bundlers (Vite, webpack 5) emit it as an asset.
   const style = svg.appendChild(document.createElementNS(NS, "style"));
   style.textContent = `@font-face{font-family:"Saira Semi Condensed";src:url(${FONT}) format("truetype")}` +
-    `.gcw-screen text,.gcw-screen tspan{font-family:"Saira Semi Condensed",sans-serif!important;font-stretch:normal!important;font-variant-numeric:tabular-nums}`;
+    `.gcw-screen text,.gcw-screen tspan{font-family:"Saira Semi Condensed",sans-serif!important;font-stretch:normal!important;font-variant-numeric:tabular-nums}` +
+    // Departs from fascia.svg: its lettering has a white outline over its white fill, which subpixel smoothing draws as a
+    // second, offset copy, and letter-spacing tuned for another font that squeezes D into G and L into T. Plain fill,
+    // normal spacing; the bezel only (the screens are .gcw-screen).
+    `.gcw-display>:not(.gcw-screen) text,.gcw-display>:not(.gcw-screen) tspan{stroke:none!important;letter-spacing:normal!important}`;
   const screen = svg.appendChild(document.createElementNS(NS, "g"));
   screen.setAttribute("class", "gcw-screen");
   if (bezel) screen.setAttribute("transform", "translate(187 177)");

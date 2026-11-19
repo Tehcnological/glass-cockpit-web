@@ -6,6 +6,7 @@
 // wherever any input is touch, so a touch-screen laptop's mouse sees a slightly bigger hover glow on them.
 // Knob and button behavior: Nasal/MFDPages/Surround/SurroundController.nas.
 import { clamp, mod } from "./page.js";
+import { knobTouch } from "./knob-touch.js";
 // v13 trainer: arrows beside each knob turn it a detent per click, the left ones counterclockwise; on a dual knob the
 // upper pair turns the outer ring and the lower pair the inner knob. Here they sit in the top corners of the knob's
 // box (its label is above it), the inner pair below the outer. The wheel works over them too.
@@ -184,10 +185,11 @@ export function bezelInput(svg, onInput, afcs = false) {
         if (type && type !== "mouse")
             e.preventDefault();
     });
-    const boxes = touchBoxes(spots, typeof matchMedia === "function" && matchMedia("(any-pointer: coarse)").matches ? TOUCH_PAD : 0);
-    // A slight glow shows where an arrow is, and its drawn arrow brightens.
+    const touchy = typeof matchMedia === "function" && matchMedia("(any-pointer: coarse)").matches;
+    const boxes = touchBoxes(spots, touchy ? TOUCH_PAD : 0);
+    // For the mouse, a slight glow shows where an arrow is, and its drawn arrow brightens.
     layer.appendChild(document.createElementNS(NS, "style")).textContent =
-        ".gcw-arrow:hover{fill:rgba(255,255,255,.14)}.gcw-arrow:hover+path{fill-opacity:1}";
+        '[data-input="mouse"] .gcw-arrow:hover{fill:rgba(255,255,255,.14)}[data-input="mouse"] .gcw-arrow:hover+path{fill-opacity:1}';
     for (const [i, s] of spots.entries()) {
         const [x1, y1, x2, y2] = s.box;
         const [h1, v1, h2, v2] = boxes[i];
@@ -243,11 +245,25 @@ export function bezelInput(svg, onInput, afcs = false) {
     let down;
     let tapped = false; // a touch acted on pointerup: skip the click that may follow
     const stop = () => clearTimeout(timer);
+    // A display with its bezel is a control surface: a press on it never pans or zooms the page (and so never ends in a
+    // pointercancel). Chrome reads touch-action on the svg root only, not on its children.
+    svg.style.touchAction = "none";
+    // Knobs by touch or pen: slides, taps and popouts (knob-touch.ts).
+    const touch = knobTouch(svg, onInput, [DX, DY], 1407, spots, wheelStep);
+    // Arrows light on hover only for the mouse; by touch or pen they are bezel art, their presses the knob's (knob-touch.ts).
+    const mode = (e) => {
+        const m = e.pointerType === "mouse" ? "mouse" : "touch";
+        if (layer.getAttribute("data-input") !== m)
+            layer.setAttribute("data-input", m); // moves come dozens a second
+    };
+    layer.setAttribute("data-input", typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? "touch" : "mouse");
+    svg.addEventListener("pointerdown", mode);
+    svg.addEventListener("pointermove", mode);
     layer.addEventListener("pointerdown", (e) => {
         const s = spot(e);
         down = undefined; // a press that is not the primary button's, or began off the bezel, lifts on no key
         tapped = false;
-        if (e.button !== 0)
+        if (e.button !== 0 || touch.swallowed())
             return;
         held = false; // a long press released off the bezel never got its click: don't swallow this gesture's
         down = s;
@@ -255,6 +271,8 @@ export function bezelInput(svg, onInput, afcs = false) {
         const t = e.target;
         if (t.hasPointerCapture?.(e.pointerId))
             t.releasePointerCapture(e.pointerId); // a pen or mouse is not captured: releasing it throws
+        if (e.pointerType !== "mouse" && touch.down(e, s))
+            return void (down = undefined);
         if (s?.shiftClick && !s.arrow) {
             stop();
             const control = s.shiftClick;
@@ -274,17 +292,23 @@ export function bezelInput(svg, onInput, afcs = false) {
     window.addEventListener("pointerup", stop);
     layer.addEventListener("pointerup", (e) => {
         const s = spot(e);
+        if (touch.swallowed())
+            return;
         if (e.pointerType === "mouse")
             return;
         tapped = true; // a touch's late click, if one comes, is never a press: this lift decided it
         const from = down;
         down = undefined;
+        if (touch.up(e))
+            return;
         if (e.button !== 0 || !s || s !== from || s.arrow || held || !s.click)
             return;
         fire(s, s.click);
     });
     layer.addEventListener("click", (e) => {
         const s = spot(e);
+        if (touch.swallowed())
+            return;
         if (tapped)
             return void (tapped = false);
         if (!s || s.arrow)
@@ -306,6 +330,7 @@ export function bezelInput(svg, onInput, afcs = false) {
     });
     return () => {
         stop();
+        touch.destroy();
         window.removeEventListener("pointerup", stop);
     };
 }
