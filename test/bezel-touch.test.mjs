@@ -101,3 +101,13 @@ test("a pen press, which the browser does not capture, still turns an arrow and 
   t.mock.timers.tick(2000);
   assert.deepEqual(inputs, ["HEADING", "CLR_HOLD"]);
 });
+
+test("a touch slid from one key to another does nothing, and its late click on the layer finds no key", () => {
+  const { inputs, layer, rect, press } = bezel();
+  press(rect("ENT"), "pointerdown", { pointerType: "touch" });
+  press(rect("MENU"), "pointerup", { pointerType: "touch" });
+  layer.fire("click", { button: 0, pointerId: 1, target: layer, shiftKey: false }); // the common ancestor
+  assert.deepEqual(inputs, []);
+  layer.fire("click", { button: 0, pointerId: 1, target: layer, shiftKey: false }); // a mouse click between spots
+  assert.deepEqual(inputs, [], "an element with no data-spot is no spot (Number(null) is 0, NAV's volume knob)");
+});

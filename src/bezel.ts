@@ -239,7 +239,11 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
     p.setAttribute("fill-opacity", "0.6");
     p.setAttribute("pointer-events", "none");
   }
-  const spot = (e: Event): Spot | undefined => spots[Number((e.target as Element).getAttribute("data-spot"))];
+  // No data-spot is no spot (Number(null) would be 0, NAV's volume knob): a click can land on the layer itself.
+  const spot = (e: Event): Spot | undefined => {
+    const i = (e.target as Element).getAttribute?.("data-spot");
+    return i == null ? undefined : spots[Number(i)];
+  };
   const fire = (s: Spot, control: Control) => {
     onInput({ control, value: s.value ?? 1 });
     if (s.also) onInput(s.also);
@@ -297,8 +301,9 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
   window.addEventListener("pointerup", stop);
   layer.addEventListener("pointerup", (e) => {
     const s = spot(e);
-    if (e.pointerType === "mouse" || !s || s !== down || s.arrow || held || !s.click) return;
-    tapped = true;
+    if (e.pointerType === "mouse") return;
+    tapped = true; // a touch's late click, if one comes, is never a press: this lift decided it
+    if (!s || s !== down || s.arrow || held || !s.click) return;
     fire(s, s.click);
   });
   layer.addEventListener("click", (e) => {
