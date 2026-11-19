@@ -114,12 +114,12 @@ test("PUSH acts on lift over the same key", () => {
   assert.deepEqual(inputs, ["FMS_CRSR 1"]);
 });
 
-test("a tap on the popout's knob closes it and pushes the knob", () => {
+test("a tap on the popout's knob, inside its ring, closes it and pushes nothing", () => {
   const { inputs, knob, pop, tap } = bezel();
   tap(knob("CRS_CENTER"));
   tap(knob("CRS_CENTER"));
   assert.equal(pop(), undefined);
-  assert.deepEqual(inputs, ["CRS_CENTER 1"]);
+  assert.deepEqual(inputs, []);
 });
 
 test("a tap outside closes the popout and does nothing else", () => {
@@ -191,4 +191,31 @@ test("a slide the browser cancels, or a pen hovering after it, turns nothing mor
 test("a display drawn with its bezel takes no pan or zoom from a press anywhere on it", async () => {
   const { readFileSync } = await import("node:fs");
   assert.match(readFileSync(new URL("../src/bezel.ts", import.meta.url), "utf8"), /svg\.style\.touchAction = "none"/);
+});
+
+test("holding CRS turns 5° a repeat, as a fast wheel spin does; a tap is still 1°, and BARO stays 1", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { inputs, knob, key, ev, tap } = bezel();
+  tap(knob("CRS_CENTER"));
+  const hold = (label) => { ev(key(label), "pointerdown", 0, 0, GUARD_MS); t.mock.timers.tick(350); t.mock.timers.tick(90); ev(key(label), "pointerup"); };
+  hold("▶");
+  hold("◀◀");
+  assert.deepEqual(inputs, ["CRS 1", "CRS 5", "CRS 5", "BARO -1", "BARO -1", "BARO -1"]);
+});
+
+test("on a touch-capable device each single knob shows its slide: a line with a dot in the middle", () => {
+  globalThis.matchMedia = (q) => ({ matches: q === "(any-pointer: coarse)" });
+  try {
+    const { svg } = bezel();
+    const hints = svg.children.filter((c) => c.attrs["data-gcw-slide"] !== undefined);
+    assert.equal(hints.length, 3, "HDG, NAV VOL, COM VOL");
+    for (const h of hints) {
+      const [line, dot] = h.children;
+      assert.equal(line.attrs.x1, line.attrs.x2, "vertical: slide up to turn clockwise");
+      assert.equal(dot.attrs.cx, line.attrs.x1);
+      assert.equal(+dot.attrs.cy, (+line.attrs.y1 + +line.attrs.y2) / 2);
+      assert.equal(h.attrs["pointer-events"], "none");
+    }
+  } finally { delete globalThis.matchMedia; }
+  assert.equal(bezel().svg.children.filter((c) => c.attrs["data-gcw-slide"] !== undefined).length, 0, "none for a mouse alone");
 });

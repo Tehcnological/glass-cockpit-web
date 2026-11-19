@@ -223,7 +223,8 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
     const type = (e as PointerEvent).pointerType;
     if (type && type !== "mouse") e.preventDefault();
   });
-  const boxes = touchBoxes(spots, typeof matchMedia === "function" && matchMedia("(any-pointer: coarse)").matches ? TOUCH_PAD : 0);
+  const touchy = typeof matchMedia === "function" && matchMedia("(any-pointer: coarse)").matches;
+  const boxes = touchBoxes(spots, touchy ? TOUCH_PAD : 0);
   // A slight glow shows where an arrow is, and its drawn arrow brightens.
   layer.appendChild(document.createElementNS(NS, "style")).textContent =
     ".gcw-arrow:hover{fill:rgba(255,255,255,.14)}.gcw-arrow:hover+path{fill-opacity:1}";
@@ -283,8 +284,7 @@ export function bezelInput(svg: SVGSVGElement, onInput: (input: Input) => void, 
   // pointercancel). Chrome reads touch-action on the svg root only, not on its children.
   svg.style.touchAction = "none";
   // Knobs by touch or pen: slides, taps and popouts (knob-touch.ts).
-  const touch = knobTouch(svg, onInput, [DX, DY], 1407);
-  touch.spots((s) => spots.indexOf(s));
+  const touch = knobTouch(svg, onInput, [DX, DY], 1407, spots, touchy);
   layer.addEventListener("pointerdown", (e) => {
     const s = spot(e);
     down = undefined; // a press that is not the primary button's, or began off the bezel, lifts on no key

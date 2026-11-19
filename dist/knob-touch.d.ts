@@ -32,9 +32,7 @@ type Ev = PointerEvent;
  * and `width` the viewBox's. The bezel's own handlers call `down` and `up` first and skip the press when they return
  * true, and skip a whole gesture while `swallowed()` (a tap outside an open popout closes it and does nothing else).
  */
-export declare function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offset: [number, number], width: number): {
-    /** For the bezel's spots, to tell a press on the popout's own knob from one outside. */
-    spots(index: (s: Spot) => number): void;
+export declare function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offset: [number, number], width: number, spots: Spot[], hints: boolean): {
     swallowed: () => boolean;
     /** A touch or pen press on a spot; true when it is a knob's, handled here. */
     down(e: Ev, s: Spot | undefined): boolean;

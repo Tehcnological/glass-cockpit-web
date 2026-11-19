@@ -12,6 +12,8 @@ export const IDLE_MS = 5000;
 export const KEY_PX = 46;
 const REPEAT_DELAY = 350;
 const REPEAT_EVERY = 90;
+// Detents a held key's repeats turn: CRS as a fast spin of the wheel does (wheelStep). A tap stays one.
+const FAST = { CRS: 5 };
 // The outer and inner rings' labels, and the push's.
 const DUAL = {
     NAV_INNER: ["MHz", "kHz", "1-2"], COM_INNER: ["MHz", "kHz", "1-2"], CRS: ["BARO", "CRS", "CRS CTR"],
@@ -47,8 +49,17 @@ const NS = "http://www.w3.org/2000/svg";
  * and `width` the viewBox's. The bezel's own handlers call `down` and `up` first and skip the press when they return
  * true, and skip a whole gesture while `swallowed()` (a tap outside an open popout closes it and does nothing else).
  */
-export function knobTouch(svg, onInput, offset, width) {
+export function knobTouch(svg, onInput, offset, width, spots, hints) {
     const [DX, DY] = offset;
+    // Where any input is touch, each single knob shows which way to slide: a vertical line, a dot in its middle.
+    if (hints)
+        for (const s of spots.filter(slides)) {
+            const [x1, y1, x2, y2] = s.box;
+            const cx = (x1 + x2) / 2 + DX, cy = (y1 + y2) / 2 + DY, h = (y2 - y1) * 0.42;
+            const g = el("g", { "data-gcw-slide": "", "pointer-events": "none" }, svg);
+            el("line", { x1: cx, y1: cy - h, x2: cx, y2: cy + h, stroke: "rgba(255,255,255,.55)", "stroke-width": 2, "stroke-linecap": "round" }, g);
+            el("circle", { cx, cy, r: 3.5, fill: "rgba(255,255,255,.85)" }, g);
+        }
     let press;
     let pop;
     let swallow = false;
@@ -118,7 +129,9 @@ export function knobTouch(svg, onInput, offset, width) {
                 return;
             stopRepeat();
             send(k);
-            const again = (wait) => (repeat = window.setTimeout(() => (send(k), wake(), again(REPEAT_EVERY)), wait));
+            const fast = FAST[k.input.control];
+            const step = fast ? { ...k, input: { ...k.input, value: k.input.value * fast } } : k;
+            const again = (wait) => (repeat = window.setTimeout(() => (send(step), wake(), again(REPEAT_EVERY)), wait));
             again(REPEAT_DELAY);
         });
         r.addEventListener("pointerup", () => {
@@ -129,17 +142,14 @@ export function knobTouch(svg, onInput, offset, width) {
         r.addEventListener("pointerout", release);
         r.addEventListener("pointercancel", release);
     }
-    // A press outside an open popout, and not on its knob, closes it and is swallowed whole.
+    // A press anywhere outside an open popout's keys, its own knob included, closes it and is swallowed whole.
     const outside = (e) => {
         swallow = false;
         if (!pop || pop.g.contains(e.target))
             return;
-        if (e.target?.getAttribute?.("data-spot") === String(spotIndex(pop.s)))
-            return;
         close();
         swallow = true;
     };
-    let spotIndex = () => -1;
     const move = (e) => {
         // A pen hovering sends moves with no button down.
         if (!press || !slides(press.s) || e.buttons === 0)
@@ -165,8 +175,6 @@ export function knobTouch(svg, onInput, offset, width) {
     window.addEventListener("pointerup", end);
     window.addEventListener("pointercancel", end);
     return {
-        /** For the bezel's spots, to tell a press on the popout's own knob from one outside. */
-        spots(index) { spotIndex = index; },
         swallowed: () => swallow,
         /** A touch or pen press on a spot; true when it is a knob's, handled here. */
         down(e, s) {
@@ -186,10 +194,8 @@ export function knobTouch(svg, onInput, offset, width) {
                 return true;
             if (slides(p.s))
                 onInput({ control: p.s.click, value: 1 });
-            else if (pop?.s === p.s)
-                close(), onInput({ control: p.s.click, value: 1 });
             else
-                close(), open(p.s, e.timeStamp);
+                open(p.s, e.timeStamp);
             return true;
         },
         destroy() {

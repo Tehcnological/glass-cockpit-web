@@ -88,7 +88,8 @@ test("a display never double-tap zooms, wherever the browser honours touch-actio
 test("arrows grow wherever any input is touch, not only when touch is the primary pointer", async () => {
   const { readFileSync } = await import("node:fs");
   const src = readFileSync(new URL("../src/bezel.ts", import.meta.url), "utf8");
-  assert.match(src, /matchMedia\("\(any-pointer: coarse\)"\)\.matches \? TOUCH_PAD : 0/);
+  assert.match(src, /const touchy = [^\n]*matchMedia\("\(any-pointer: coarse\)"\)\.matches;/);
+  assert.match(src, /touchBoxes\(spots, touchy \? TOUCH_PAD : 0\)/);
 });
 
 test("a pen press, which the browser does not capture, still turns an arrow and long-presses", (t) => {
