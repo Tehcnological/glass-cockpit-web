@@ -5,6 +5,8 @@
 // included, closes it and does nothing else; it also closes after IDLE_MS without input. Turn and direction keys act on
 // press and repeat while held (CRS 5° a repeat, as a fast wheel spin); PUSH and PAN act on lift, over the same key.
 // While a single knob is pressed it shows its slide: a long vertical line with a dot in the middle (up clockwise).
+// A knob's arrows (and RANGE's printed joystick arrows, - and +) are its own here: a press on one is a press on the
+// knob, so nothing small turns by touch. bezelInput hides the drawn arrows while touch or pen is in use.
 import type { Control, Input, Spot } from "./bezel.js";
 
 /** A press that moves less than this (CSS px) is a tap; past it a single knob's press is a slide and never a push. */
@@ -64,8 +66,15 @@ const NS = "http://www.w3.org/2000/svg";
  * and `width` the viewBox's. The bezel's own handlers call `down` and `up` first and skip the press when they return
  * true, and skip a whole gesture while `swallowed()` (a tap outside an open popout closes it and does nothing else).
  */
-export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offset: [number, number], width: number) {
+export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offset: [number, number], width: number, spots: Spot[]) {
   const [DX, DY] = offset;
+  // The knob an arrow belongs to: the nearest knob to it.
+  const knobs = spots.filter((s) => !s.arrow && (slides(s) || popKeys(s)));
+  const mid = (s: Spot) => [(s.box[0] + s.box[2]) / 2, (s.box[1] + s.box[3]) / 2];
+  const owner = (a: Spot) => {
+    const [x, y] = mid(a);
+    return knobs.reduce((best, k) => (Math.hypot(mid(k)[0] - x, mid(k)[1] - y) < Math.hypot(mid(best)[0] - x, mid(best)[1] - y) ? k : best));
+  };
   // While a single knob is pressed, which way to slide: a vertical line twice its height, a dot in the middle.
   let hint: SVGGElement | undefined;
   const showHint = (s: Spot) => {
@@ -189,8 +198,9 @@ export function knobTouch(svg: SVGSVGElement, onInput: (i: Input) => void, offse
   return {
     swallowed: () => swallow,
     /** A touch or pen press on a spot; true when it is a knob's, handled here. */
-    down(e: Ev, s: Spot | undefined): boolean {
-      if (!s || s.arrow || !(slides(s) || popKeys(s))) return false;
+    down(e: Ev, spot: Spot | undefined): boolean {
+      const s = spot?.arrow ? owner(spot) : spot;
+      if (!s || !(slides(s) || popKeys(s))) return false;
       press = { s, x: e.clientX, y: e.clientY, t: e.timeStamp, travel: 0 };
       hideHint();
       if (slides(s)) showHint(s);

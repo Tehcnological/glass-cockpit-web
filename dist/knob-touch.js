@@ -49,8 +49,15 @@ const NS = "http://www.w3.org/2000/svg";
  * and `width` the viewBox's. The bezel's own handlers call `down` and `up` first and skip the press when they return
  * true, and skip a whole gesture while `swallowed()` (a tap outside an open popout closes it and does nothing else).
  */
-export function knobTouch(svg, onInput, offset, width) {
+export function knobTouch(svg, onInput, offset, width, spots) {
     const [DX, DY] = offset;
+    // The knob an arrow belongs to: the nearest knob to it.
+    const knobs = spots.filter((s) => !s.arrow && (slides(s) || popKeys(s)));
+    const mid = (s) => [(s.box[0] + s.box[2]) / 2, (s.box[1] + s.box[3]) / 2];
+    const owner = (a) => {
+        const [x, y] = mid(a);
+        return knobs.reduce((best, k) => (Math.hypot(mid(k)[0] - x, mid(k)[1] - y) < Math.hypot(mid(best)[0] - x, mid(best)[1] - y) ? k : best));
+    };
     // While a single knob is pressed, which way to slide: a vertical line twice its height, a dot in the middle.
     let hint;
     const showHint = (s) => {
@@ -178,8 +185,9 @@ export function knobTouch(svg, onInput, offset, width) {
     return {
         swallowed: () => swallow,
         /** A touch or pen press on a spot; true when it is a knob's, handled here. */
-        down(e, s) {
-            if (!s || s.arrow || !(slides(s) || popKeys(s)))
+        down(e, spot) {
+            const s = spot?.arrow ? owner(spot) : spot;
+            if (!s || !(slides(s) || popKeys(s)))
                 return false;
             press = { s, x: e.clientX, y: e.clientY, t: e.timeStamp, travel: 0 };
             hideHint();

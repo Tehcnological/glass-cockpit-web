@@ -8,7 +8,8 @@ function el() {
   const on = {};
   return {
     children: [], dataset: {}, attrs: {}, style: {}, classList: { add() {} }, textContent: "",
-    appendChild(c) { this.children.push(c); return c; },
+    appendChild(c) { c.parent = this; this.children.push(c); return c; },
+    remove() { const p = this.parent; if (p) p.children.splice(p.children.indexOf(this), 1); },
     setAttribute(k, v) { this.attrs[k] = v; },
     getAttribute(k) { return k === "data-spot" ? this.dataset.spot ?? null : this.attrs[k] ?? null; },
     addEventListener(t, f) { (on[t] ??= []).push(f); },
@@ -92,7 +93,7 @@ test("arrows grow wherever any input is touch, not only when touch is the primar
   assert.match(src, /touchBoxes\(spots, touchy \? TOUCH_PAD : 0\)/);
 });
 
-test("a pen press, which the browser does not capture, still turns an arrow and long-presses", (t) => {
+test("a pen press, which the browser does not capture, does not throw: an arrow goes to its knob, a key long-presses", (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { inputs, layer, rect, press } = bezel();
   const arrow = layer.children.find((c) => c.dataset.spot === String(SPOTS.findIndex((s) => s.arrow === "drawn" && s.click === "HEADING" && s.value === 1)));
@@ -100,7 +101,7 @@ test("a pen press, which the browser does not capture, still turns an arrow and 
   press(arrow, "pointerup", { pointerType: "pen" });
   press(rect("CLR"), "pointerdown", { pointerType: "pen" });
   t.mock.timers.tick(2000);
-  assert.deepEqual(inputs, ["HEADING", "CLR_HOLD"]);
+  assert.deepEqual(inputs, ["CLR_HOLD"]); // the arrow is HDG's by pen (knob-touch.ts); it threw before
 });
 
 test("a touch slid from one key to another does nothing, and its late click on the layer finds no key", () => {

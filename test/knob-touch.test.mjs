@@ -44,6 +44,8 @@ function bezel() {
     if (type === "pointermove") for (const f of winOn.pointermove ?? []) f(e);
     target.fire?.(type, e);
     if (layer.contains(target) && target !== layer) layer.fire(type, e);
+    // Then on up to the window, as the browser bubbles them.
+    if (type === "pointerup" || type === "pointercancel") for (const f of winOn[type] ?? []) f(e);
   };
   const tap = (target, ms = 100) => (ev(target, "pointerdown"), ev(target, "pointerup", 0, 0, ms), ev(target, "click"));
   return { inputs, svg, layer, knob, pop, key, ev, tap };
@@ -227,4 +229,38 @@ test("a single knob shows its slide only while pressed: a long vertical line wit
   assert.equal(hints().length, 0, "gone when the browser takes the press");
   ev(knob("ALT_PRESS"), "pointerdown", 0, 0);
   assert.equal(hints().length, 0, "dual knobs have none");
+});
+
+test("by touch or pen a knob's arrows belong to the knob: they open its popout or push it, never turn it", () => {
+  const { inputs, layer, pop, ev, tap } = bezel();
+  const arrow = (pred) => layer.children.find((c) => c.dataset.spot === String(SPOTS.findIndex(pred)));
+  tap(arrow((s) => s.arrow === "drawn" && s.click === "ALT_OUTER" && s.value === 1));
+  assert.ok(pop(), "ALT's arrow opened ALT's popout");
+  tap(layer); // close (a press outside)
+  tap(arrow((s) => s.arrow === "printed" && s.click === "JOYSTICK_VERTICAL" && s.value === -1));
+  assert.ok(pop(), "a printed joystick arrow opened RANGE's popout");
+  tap(layer);
+  tap(arrow((s) => s.arrow === "printed" && s.click === "RANGE" && s.value === 1));
+  assert.ok(pop(), "RANGE's printed + opened RANGE's popout");
+  tap(layer);
+  tap(arrow((s) => s.arrow === "drawn" && s.click === "HEADING" && s.value === -1));
+  assert.deepEqual(inputs, ["HEADING_PRESS 1"], "HDG's arrow is HDG: a tap pushes it");
+  inputs.length = 0;
+  const vol = arrow((s) => s.arrow === "drawn" && s.click === "COM_VOL" && s.value === 1);
+  for (const type of ["pointerdown", "pointerup", "click"]) ev(vol, type, 0, 0, 10, "mouse");
+  assert.deepEqual(inputs, ["COM_VOL 1"], "the mouse still turns with the arrows");
+});
+
+test("the drawn arrows hide while touch or pen is in use, and show again for the mouse", () => {
+  const { svg, layer } = bezel();
+  const mode = () => layer.attrs["data-input"];
+  assert.equal(mode(), "mouse", "a fine primary pointer starts with them shown");
+  svg.fire("pointermove", { pointerType: "pen" });
+  assert.equal(mode(), "touch");
+  svg.fire("pointerdown", { pointerType: "mouse" });
+  assert.equal(mode(), "mouse");
+  svg.fire("pointerdown", { pointerType: "touch" });
+  assert.equal(mode(), "touch");
+  const css = layer.children.find((c) => c.textContent.includes(".gcw-arrow")).textContent;
+  assert.match(css, /\[data-input="touch"\] \.gcw-arrow-art\{display:none\}/);
 });

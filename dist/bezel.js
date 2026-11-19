@@ -189,7 +189,8 @@ export function bezelInput(svg, onInput, afcs = false) {
     const boxes = touchBoxes(spots, touchy ? TOUCH_PAD : 0);
     // A slight glow shows where an arrow is, and its drawn arrow brightens.
     layer.appendChild(document.createElementNS(NS, "style")).textContent =
-        ".gcw-arrow:hover{fill:rgba(255,255,255,.14)}.gcw-arrow:hover+path{fill-opacity:1}";
+        ".gcw-arrow:hover{fill:rgba(255,255,255,.14)}.gcw-arrow:hover+path{fill-opacity:1}" +
+            '[data-input="touch"] .gcw-arrow-art{display:none}';
     for (const [i, s] of spots.entries()) {
         const [x1, y1, x2, y2] = s.box;
         const [h1, v1, h2, v2] = boxes[i];
@@ -209,6 +210,7 @@ export function bezelInput(svg, onInput, afcs = false) {
         p.setAttribute("fill", "#e6e6e6");
         p.setAttribute("fill-opacity", "0.6");
         p.setAttribute("pointer-events", "none");
+        p.setAttribute("class", "gcw-arrow-art");
     }
     // No data-spot is no spot (Number(null) would be 0, NAV's volume knob): a click can land on the layer itself.
     const spot = (e) => {
@@ -249,7 +251,12 @@ export function bezelInput(svg, onInput, afcs = false) {
     // pointercancel). Chrome reads touch-action on the svg root only, not on its children.
     svg.style.touchAction = "none";
     // Knobs by touch or pen: slides, taps and popouts (knob-touch.ts).
-    const touch = knobTouch(svg, onInput, [DX, DY], 1407);
+    const touch = knobTouch(svg, onInput, [DX, DY], 1407, spots);
+    // The drawn arrows show for the mouse and hide while touch or pen is in use (their presses go to the knob then).
+    const mode = (e) => layer.setAttribute("data-input", e.pointerType === "mouse" ? "mouse" : "touch");
+    layer.setAttribute("data-input", typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? "touch" : "mouse");
+    svg.addEventListener("pointerdown", mode);
+    svg.addEventListener("pointermove", mode);
     layer.addEventListener("pointerdown", (e) => {
         const s = spot(e);
         down = undefined; // a press that is not the primary button's, or began off the bezel, lifts on no key
