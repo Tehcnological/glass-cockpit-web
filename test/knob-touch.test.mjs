@@ -251,10 +251,10 @@ test("by touch or pen a knob's arrows belong to the knob: they open its popout o
   assert.deepEqual(inputs, ["COM_VOL 1"], "the mouse still turns with the arrows");
 });
 
-test("the drawn arrows hide while touch or pen is in use, and show again for the mouse", () => {
+test("the arrows are part of the bezel: always drawn, highlighted on hover only for the mouse", () => {
   const { svg, layer } = bezel();
   const mode = () => layer.attrs["data-input"];
-  assert.equal(mode(), "mouse", "a fine primary pointer starts with them shown");
+  assert.equal(mode(), "mouse", "a fine primary pointer starts as the mouse");
   svg.fire("pointermove", { pointerType: "pen" });
   assert.equal(mode(), "touch");
   svg.fire("pointerdown", { pointerType: "mouse" });
@@ -262,5 +262,6 @@ test("the drawn arrows hide while touch or pen is in use, and show again for the
   svg.fire("pointerdown", { pointerType: "touch" });
   assert.equal(mode(), "touch");
   const css = layer.children.find((c) => c.textContent.includes(".gcw-arrow")).textContent;
-  assert.match(css, /\[data-input="touch"\] \.gcw-arrow-art\{display:none\}/);
+  assert.match(css, /^\[data-input="mouse"\] \.gcw-arrow:hover\{[^}]+\}\[data-input="mouse"\] \.gcw-arrow:hover\+path\{[^}]+\}$/, "hover lights only for the mouse");
+  assert.doesNotMatch(css, /display:none/, "never hidden");
 });

@@ -6,7 +6,7 @@
 // press and repeat while held (CRS 5° a repeat, as a fast wheel spin); PUSH and PAN act on lift, over the same key.
 // While a single knob is pressed it shows its slide: a long vertical line with a dot in the middle (up clockwise).
 // A knob's arrows (and RANGE's printed joystick arrows, - and +) are its own here: a press on one is a press on the
-// knob, so nothing small turns by touch. bezelInput hides the drawn arrows while touch or pen is in use.
+// knob, so nothing small turns by touch. They stay drawn, as bezel art; bezelInput lights them on hover for the mouse only.
 import type { Control, Input, Spot } from "./bezel.js";
 
 /** A press that moves less than this (CSS px) is a tap; past it a single knob's press is a slide and never a push. */
