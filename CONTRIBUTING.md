@@ -33,7 +33,3 @@ npm run build   # regenerates src/svg/ and dist/
 ## Pull requests
 
 One change per pull request, against `main`. CI (`build-and-test`) must pass. The PR template lists the checks.
-
-## Code of Conduct
-
-Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
